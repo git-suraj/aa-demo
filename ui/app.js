@@ -569,6 +569,7 @@ function renderFinalOutput(result) {
     <section class="output-hero">
       <p class="output-kicker">Final Output</p>
       <h3>${escapeHtml(result.headline)}</h3>
+      <p class="output-section-copy">Executive summary created by the orchestrator LLM after combining orchestrator context, support-agent output, and success-agent output.</p>
       <div class="output-summary">${escapeHtml(executiveSummary)}</div>
     </section>
     <div class="output-grid">
@@ -653,10 +654,12 @@ function renderFinalOutput(result) {
         <div class="output-subgrid">
           <div class="output-subsection output-subsection-wide">
             <span>Draft Customer Reply</span>
+            <p class="output-section-copy">Created by the success agent using the MCP tool <code>draft_customer_reply</code>. This is the customer-facing message draft.</p>
             ${renderTextBlock(successReply?.draft)}
           </div>
           <div class="output-subsection">
             <span>Follow-up Task</span>
+            <p class="output-section-copy">Created by the success agent using the MCP tool <code>create_followup_task</code>. This is the internal account-team follow-up record.</p>
             ${renderDefinitionList([
               ["Task ID", successTask?.task_id],
               ["Status", successTask?.status],
@@ -667,6 +670,7 @@ function renderFinalOutput(result) {
           </div>
           <div class="output-subsection">
             <span>Success LLM Summary</span>
+            <p class="output-section-copy">Created by the success-agent Gemini step after reviewing the reply draft and follow-up task. This is the concise business summary of customer posture and next actions.</p>
             ${renderTextBlock(result.success_track?.llm_summary?.summary)}
           </div>
         </div>
