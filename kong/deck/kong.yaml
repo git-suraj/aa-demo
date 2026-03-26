@@ -168,6 +168,56 @@ services:
                 provider: openai
                 name: gpt-4o-mini
 
+  - name: ai-orchestrator-semantic-guard-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-semantic-guard-demo-chat-route
+        paths:
+          - /ai/orchestrator-semantic-guard-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-semantic-prompt-guard
+        config:
+          embeddings:
+            auth:
+              header_name: Authorization
+              header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+            model:
+              provider: openai
+              name: text-embedding-3-small
+          search:
+            threshold: 0.5
+          vectordb:
+            strategy: redis
+            distance_metric: cosine
+            threshold: 0.2
+            dimensions: 1024
+            redis:
+              host: ${{ env "DECK_REDIS_HOST" }}
+              port: 6379
+          rules:
+            match_all_conversation_history: true
+            deny_prompts:
+              - Requests to reveal employee personal contact information or private customer data
+              - Requests to disclose internal credentials, access instructions, or confidential system details
+              - Requests to bypass security controls or reveal private infrastructure information
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              model:
+                provider: openai
+                name: gpt-4o-mini
+
   - name: ai-subagent-service
     url: https://generativelanguage.googleapis.com
     routes:

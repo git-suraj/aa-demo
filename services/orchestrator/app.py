@@ -96,6 +96,7 @@ def ai_route_for_scenario(scenario: str) -> str:
         "llm_failover": f"{KONG_PROXY_URL}/ai/orchestrator-failover-demo",
         "token_limit": f"{KONG_PROXY_URL}/ai/orchestrator-token-demo",
         "prompt_enhancement": f"{KONG_PROXY_URL}/ai/orchestrator-prompt-enhance-demo",
+        "semantic_guard": f"{KONG_PROXY_URL}/ai/orchestrator-semantic-guard-demo",
     }
     return route_map.get(scenario, route_map["normal"])
 
@@ -106,6 +107,7 @@ def scenario_summary(scenario: str) -> str:
         "llm_failover": "OpenAI primary is expected to fail and Kong should fail over to Gemini.",
         "token_limit": "Kong AI token governance is expected to block a later orchestrator LLM call.",
         "prompt_enhancement": "Kong prompt decoration applies stronger executive-governance instructions so the orchestrator output becomes more structured and enterprise-safe.",
+        "semantic_guard": "Kong semantic guard is expected to block prompts that request sensitive personal or internal system information.",
     }
     return summaries.get(scenario, summaries["normal"])
 
@@ -127,6 +129,11 @@ def build_prompt_decoration(scenario: str, system_prompt: str, user_prompt: str)
 
 
 def prompts_for_scenario(prompts: dict[str, str], scenario: str) -> dict[str, str]:
+    if scenario == "semantic_guard":
+        return {
+            **prompts,
+            "user_prompt": "Requests to disclose internal credentials, access instructions, or confidential system details.",
+        }
     return prompts
 
 
@@ -227,6 +234,16 @@ async def generate_for_scenario(
                 stage="token_limit",
                 llm_stage=stage,
                 summary=f"Kong AI token governance blocked {stage}.",
+                output={"status_code": exc.status_code, "message": str(exc)},
+            )
+        if scenario == "semantic_guard" and exc.status_code == 400:
+            await emit(
+                run_id,
+                "policy_event",
+                actor="orchestrator",
+                stage="semantic_guard",
+                llm_stage=stage,
+                summary=f"Kong semantic prompt guard blocked {stage} because the prompt matched a denied topic.",
                 output={"status_code": exc.status_code, "message": str(exc)},
             )
         raise
@@ -654,10 +671,20 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             }
         )
     except (RateLimitError, APIStatusError) as exc:
-        if scenario != "token_limit":
+        if scenario not in {"token_limit", "semantic_guard"}:
             raise
+        policy_headline = (
+            "Kong semantic guard blocked the orchestrator prompt"
+            if scenario == "semantic_guard"
+            else "Kong token governance blocked the orchestrator"
+        )
+        policy_summary = (
+            "Kong semantic prompt guard blocked the orchestrator because the prompt requested sensitive personal or internal system information."
+            if scenario == "semantic_guard"
+            else "Kong AI token governance blocked the orchestrator before it could complete the escalation brief."
+        )
         blocked_result = {
-            "headline": "Kong token governance blocked the orchestrator",
+            "headline": policy_headline,
             "governance_scenario": scenario,
             "policy_outcome": "blocked",
             "available_tools": [],
@@ -671,9 +698,9 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             "executive_brief": {
                 "llm_used": True,
                 "model": llm.model,
-                "summary": "Kong AI token governance blocked the orchestrator before it could complete the escalation brief.",
+                "summary": policy_summary,
             },
-            "recommended_summary": "Kong AI token governance blocked the orchestrator before it could complete the escalation brief.",
+            "recommended_summary": policy_summary,
             "error": str(exc),
         }
         await emit(run_id, "final_response", headline=blocked_result["headline"], output=blocked_result)

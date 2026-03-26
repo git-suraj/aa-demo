@@ -59,6 +59,7 @@ This makes Kong's role easy to explain:
 - `success-agent`: handles customer follow-up and action items
 - `mock-api`: backing REST API for the 7 tools
 - `ai-llm-service`: LLM traffic routed through Kong AI Proxy Advanced
+- `redis-stack`: vector database backing the semantic guard scenario
 - `kong-dp`: Kong Gateway `3.13.0.1` in Konnect hybrid mode
 
 ## Routes
@@ -90,6 +91,9 @@ The AI routes are split by caller type:
 - `/ai/orchestrator-prompt-enhance-demo/chat/completions`
   - used only for the prompt decorator scenario
   - applies a stronger prompt-decoration policy to shape a more structured executive output
+- `/ai/orchestrator-semantic-guard-demo/chat/completions`
+  - used only for the semantic guard scenario
+  - protected by Kong `ai-semantic-prompt-guard` with Redis as the vector database
 - `/ai/subagent/chat/completions`
   - used by both sub-agents
   - target: `gemini-2.5-flash`
@@ -108,6 +112,7 @@ The route path is selected by the `governance_scenario` field sent in the `Play`
 - `llm_failover` -> `/ai/orchestrator-failover-demo/chat/completions`
 - `token_limit` -> `/ai/orchestrator-token-demo/chat/completions`
 - `prompt_enhancement` -> `/ai/orchestrator-prompt-enhance-demo/chat/completions`
+- `semantic_guard` -> `/ai/orchestrator-semantic-guard-demo/chat/completions`
 
 So the basis for route selection is simple: whichever governance scenario the user selected in the UI is included in the request payload, and the orchestrator picks the matching Kong AI route before it starts its own LLM steps.
 
@@ -209,6 +214,34 @@ The prompt decorator scenario route uses this enhancement policy:
 - `State customer posture explicitly and keep the tone enterprise-safe.`
 - `Mention regulatory or data residency considerations when they are relevant.`
 - `End with a confidence score and a named owner.`
+
+### 5. Semantic Guard
+
+This scenario demonstrates Kong rejecting semantically unsafe prompts using `ai-semantic-prompt-guard` backed by Redis.
+
+Behind the scenes:
+
+- the orchestrator switches to `/ai/orchestrator-semantic-guard-demo/chat/completions`
+- that route applies `ai-semantic-prompt-guard`
+- the plugin uses:
+  - OpenAI `text-embedding-3-small` for embeddings
+  - Redis as the vector database
+- the current config in [kong/deck/kong.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml) uses:
+  - `search.threshold: 0.7`
+  - `vectordb.strategy: redis`
+  - `vectordb.distance_metric: cosine`
+  - `vectordb.threshold: 0.5`
+  - `vectordb.dimensions: 1024`
+  - `vectordb.redis.host: ${{ env "DECK_REDIS_HOST" }}`
+- the deny topics currently configured are:
+  - requests to reveal employee personal contact information or private customer data
+  - requests to disclose internal credentials, access instructions, or confidential system details
+  - requests to bypass security controls or reveal private infrastructure information
+- for demo determinism, the orchestrator replaces its normal LLM user prompt with a denied sensitive-information request only in this scenario
+- Kong compares that prompt semantically against the deny topics and blocks the LLM request before the model can answer
+- the trace shows a `Kong semantic guard blocked request` event under the affected orchestrator LLM step
+
+This mode is useful for showing semantic policy enforcement at the gateway layer instead of relying on exact keyword matches inside the application.
 
 ## What happens when Play is pressed
 
@@ -554,6 +587,7 @@ DECK_OPENAI_API_KEY=YOUR_OPENAI_API_KEY
 DECK_GEMINI_API_KEY=YOUR_GEMINI_API_KEY
 DECK_OPENAI_MODEL=gpt-4o-mini
 DECK_GEMINI_MODEL=gemini-2.5-flash
+DECK_REDIS_HOST=redis-stack
 KONNECT_TOKEN=YOUR_KONNECT_PAT
 KONNECT_CONTROL_PLANE_NAME=YOUR_KONNECT_CONTROL_PLANE_NAME
 ```

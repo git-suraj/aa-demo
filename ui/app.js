@@ -117,6 +117,7 @@ function labelForScenario(scenario) {
     llm_failover: "LLM Failover",
     token_limit: "AI Token Limit",
     prompt_enhancement: "Prompt Decorator",
+    semantic_guard: "Semantic Guard",
   };
   return labels[scenario] || "Normal";
 }
@@ -1036,6 +1037,7 @@ function handleTraceEvent(payload) {
       const titleMap = {
         prompt_decoration: "Decorator policy applied",
         token_limit: "Kong token policy blocked request",
+        semantic_guard: "Kong semantic guard blocked request",
         failover_primary_failed: "Primary model path failed",
         failover: "Kong selected fallback model",
       };
@@ -1087,6 +1089,9 @@ function handleTraceEvent(payload) {
         }
       }
       if (payload.stage === "token_limit") {
+        showFailurePath("openai");
+      }
+      if (payload.stage === "semantic_guard") {
         showFailurePath("openai");
       }
       break;
