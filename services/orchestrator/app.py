@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import time
 import uuid
@@ -8,6 +9,7 @@ from typing import Any
 from typing import TypedDict
 
 import httpx
+from openai import APIStatusError, AuthenticationError, RateLimitError
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.graph import END, START, StateGraph
@@ -34,6 +36,8 @@ KONG_PROXY_URL = os.getenv("KONG_PROXY_URL", "http://kong-dp:8000").rstrip("/")
 AGENT_API_KEY = os.getenv("AGENT_API_KEY", "orchestrator-demo-key")
 os.environ.setdefault("KONG_AI_PROXY_URL", f"{KONG_PROXY_URL}/ai/orchestrator")
 llm = OrchestratorLLM()
+GEMINI_FALLBACK_URL = f"{KONG_PROXY_URL}/ai/subagent"
+GEMINI_FALLBACK_MODEL = os.getenv("DECK_GEMINI_MODEL") or os.getenv("GEMINI_MODEL") or "gemini-2.5-flash"
 
 
 class PlayRequest(BaseModel):
@@ -43,6 +47,7 @@ class PlayRequest(BaseModel):
     product_issue: str = "workflow agent sync delays"
     billing_issue: str = "billing overcharge on enterprise add-ons"
     incident_id: str = "INC-1007"
+    governance_scenario: str = "normal"
 
 
 class ExternalTraceEvent(BaseModel):
@@ -54,6 +59,8 @@ class ExternalTraceEvent(BaseModel):
 class OrchestratorState(TypedDict, total=False):
     request: dict[str, Any]
     run_id: str
+    governance_scenario: str
+    ai_route_base_url: str
     available_tools: list[str]
     selected_tools: list[str]
     tool_plan: dict[str, Any]
@@ -83,6 +90,148 @@ def timed_ms(started_at: float) -> int:
     return round((time.perf_counter() - started_at) * 1000)
 
 
+def ai_route_for_scenario(scenario: str) -> str:
+    route_map = {
+        "normal": f"{KONG_PROXY_URL}/ai/orchestrator",
+        "llm_failover": f"{KONG_PROXY_URL}/ai/orchestrator-failover-demo",
+        "token_limit": f"{KONG_PROXY_URL}/ai/orchestrator-token-demo",
+        "prompt_enhancement": f"{KONG_PROXY_URL}/ai/orchestrator-prompt-enhance-demo",
+    }
+    return route_map.get(scenario, route_map["normal"])
+
+
+def scenario_summary(scenario: str) -> str:
+    summaries = {
+        "normal": "Standard Kong-governed orchestration flow.",
+        "llm_failover": "OpenAI primary is expected to fail and Kong should fail over to Gemini.",
+        "token_limit": "Kong AI token governance is expected to block a later orchestrator LLM call.",
+        "prompt_enhancement": "Kong prompt decoration applies stronger executive-governance instructions so the orchestrator output becomes more structured and enterprise-safe.",
+    }
+    return summaries.get(scenario, summaries["normal"])
+
+
+def build_prompt_decoration(scenario: str, system_prompt: str, user_prompt: str) -> dict[str, str] | None:
+    if scenario != "prompt_enhancement":
+        return None
+    decorator = (
+        "Enhanced escalation policy injected by Kong: respond in an executive escalation format with sections for "
+        "Situation, Risk, Actions, and Next Checkpoint; state customer posture explicitly and keep the tone "
+        "enterprise-safe; mention regulatory or data residency considerations when they are relevant; and end with "
+        "a confidence score and a named owner."
+    )
+    return {
+        "decorator_prompt": decorator,
+        "decorated_system_prompt": f"{system_prompt}\n\n{decorator}",
+        "decorated_user_prompt": user_prompt,
+    }
+
+
+def prompts_for_scenario(prompts: dict[str, str], scenario: str) -> dict[str, str]:
+    return prompts
+
+
+async def choose_next_tool_for_route(
+    *,
+    run_id: str,
+    stage: str,
+    scenario: str,
+    prompts: dict[str, str],
+    available_tools: list[str],
+    remaining_tools: list[str],
+    base_url: str,
+) -> dict[str, Any]:
+    response = await generate_for_scenario(
+        run_id=run_id,
+        stage=stage,
+        scenario=scenario,
+        prompts=prompts,
+        base_url=base_url,
+    )
+    decision = {
+        "llm_used": response["llm_used"],
+        "model": response["model"],
+        "done": False,
+        "next_tool": remaining_tools[0] if remaining_tools else None,
+        "arguments": {},
+        "reasoning": response["summary"],
+    }
+    try:
+        parsed = json.loads(response["summary"])
+    except json.JSONDecodeError:
+        return decision
+
+    candidate_tool = parsed.get("next_tool")
+    if candidate_tool in remaining_tools:
+        decision["next_tool"] = candidate_tool
+    decision["done"] = bool(parsed.get("done")) or not decision["next_tool"]
+    decision["arguments"] = parsed.get("arguments") or {}
+    decision["reasoning"] = parsed.get("reasoning", decision["reasoning"])
+    return decision
+
+
+async def generate_for_scenario(
+    *,
+    run_id: str,
+    stage: str,
+    scenario: str,
+    prompts: dict[str, str],
+    base_url: str,
+) -> dict[str, Any]:
+    try:
+        return await llm.generate(base_url=base_url, **prompts)
+    except AuthenticationError as exc:
+        if scenario != "llm_failover":
+            raise
+        await emit(
+            run_id,
+            "policy_event",
+            actor="orchestrator",
+            stage="failover_primary_failed",
+            llm_stage=stage,
+            summary=f"Kong attempted the primary OpenAI target and received an authentication failure during {stage}.",
+            output={"message": str(exc)},
+        )
+        await emit(
+            run_id,
+            "policy_event",
+            actor="orchestrator",
+            stage="failover",
+            llm_stage=stage,
+            summary=f"Kong is redirecting the orchestrator to Gemini after the primary OpenAI path failed during {stage}.",
+            output={"selected_model": GEMINI_FALLBACK_MODEL, "fallback_route": GEMINI_FALLBACK_URL},
+        )
+        fallback = await llm.generate(
+            base_url=GEMINI_FALLBACK_URL,
+            model=GEMINI_FALLBACK_MODEL,
+            **prompts,
+        )
+        return fallback
+    except RateLimitError as exc:
+        if scenario == "token_limit":
+            await emit(
+                run_id,
+                "policy_event",
+                actor="orchestrator",
+                stage="token_limit",
+                llm_stage=stage,
+                summary=f"Kong AI token governance blocked {stage}.",
+                output={"message": str(exc)},
+            )
+        raise
+    except APIStatusError as exc:
+        if scenario == "token_limit" and exc.status_code == 429:
+            await emit(
+                run_id,
+                "policy_event",
+                actor="orchestrator",
+                stage="token_limit",
+                llm_stage=stage,
+                summary=f"Kong AI token governance blocked {stage}.",
+                output={"status_code": exc.status_code, "message": str(exc)},
+            )
+        raise
+
+
 async def discover_agent(route_prefix: str) -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=10.0) as client:
         response = await client.get(
@@ -102,7 +251,7 @@ async def call_subagent(route_prefix: str, params: dict[str, Any]) -> dict[str, 
         "method": "agent.run",
         "params": params,
     }
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    async with httpx.AsyncClient(timeout=45.0) as client:
         response = await client.post(
             f"{KONG_PROXY_URL}{route_prefix}{endpoint}",
             headers={"apikey": AGENT_API_KEY},
@@ -131,6 +280,8 @@ def build_orchestrator_tool_args(tool_name: str, llm_arguments: dict[str, Any], 
 async def fetch_context(state: OrchestratorState) -> OrchestratorState:
     run_id = state["run_id"]
     request = state["request"]
+    scenario = state.get("governance_scenario", "normal")
+    ai_route_base_url = state.get("ai_route_base_url", ai_route_for_scenario(scenario))
     mcp = KongMCPClient(f"{KONG_PROXY_URL}/mock-mcp", AGENT_API_KEY, "orchestrator")
     await emit(run_id, "planning", message="Fetching account context through Kong MCP.")
     list_started = time.perf_counter()
@@ -159,7 +310,7 @@ async def fetch_context(state: OrchestratorState) -> OrchestratorState:
             "renewal_risk": unwrap_mcp_result(renewal) if renewal else None,
             "open_tickets": unwrap_mcp_result(tickets) if tickets else None,
         }
-        prompts = llm.build_next_tool_prompts(
+        base_prompts = llm.build_next_tool_prompts(
             account_name=request["account_name"],
             issue_summary=request["issue_summary"],
             product_issue=request["product_issue"],
@@ -168,7 +319,20 @@ async def fetch_context(state: OrchestratorState) -> OrchestratorState:
             remaining_tools=remaining_tools,
             current_context=current_context,
         )
+        prompts = prompts_for_scenario(base_prompts, scenario)
         stage = f"tool_selection_{step_number}"
+        decorated = build_prompt_decoration(scenario, prompts["system_prompt"], prompts["user_prompt"])
+        if decorated:
+            await emit(
+                run_id,
+                "policy_event",
+                actor="orchestrator",
+                stage="prompt_decoration",
+                llm_stage=stage,
+                summary=f"Kong prompt decoration applied enhanced executive-governance instructions before {stage}.",
+                input={"original_prompt": prompts},
+                output=decorated,
+            )
         await emit(
             run_id,
             "llm_started",
@@ -177,15 +341,26 @@ async def fetch_context(state: OrchestratorState) -> OrchestratorState:
             input=prompts,
         )
         plan_started = time.perf_counter()
-        tool_decision = await llm.choose_next_tool(
-            account_name=request["account_name"],
-            issue_summary=request["issue_summary"],
-            product_issue=request["product_issue"],
-            billing_issue=request["billing_issue"],
-            available_tools=available_tools,
-            remaining_tools=remaining_tools,
-            current_context=current_context,
-        )
+        try:
+            tool_decision = await llm.choose_next_tool(
+                account_name=request["account_name"],
+                issue_summary=request["issue_summary"],
+                product_issue=request["product_issue"],
+                billing_issue=request["billing_issue"],
+                available_tools=available_tools,
+                remaining_tools=remaining_tools,
+                current_context=current_context,
+            ) if ai_route_base_url == llm.base_url else await choose_next_tool_for_route(
+                run_id=run_id,
+                stage=stage,
+                scenario=scenario,
+                prompts=prompts,
+                available_tools=available_tools,
+                remaining_tools=remaining_tools,
+                base_url=ai_route_base_url,
+            )
+        except (APIStatusError, RateLimitError):
+            raise
         await emit(
             run_id,
             "llm_completed",
@@ -249,21 +424,40 @@ async def fetch_context(state: OrchestratorState) -> OrchestratorState:
 async def generate_triage_brief(state: OrchestratorState) -> OrchestratorState:
     run_id = state["run_id"]
     request = state["request"]
-    llm_input = {
-        **llm.build_executive_prompts(
-            account_name=request["account_name"],
-            issue_summary=request["issue_summary"],
-            renewal_risk=state.get("renewal_risk"),
-            open_tickets=state.get("open_tickets"),
-        ),
-    }
+    scenario = state.get("governance_scenario", "normal")
+    ai_route_base_url = state.get("ai_route_base_url", ai_route_for_scenario(scenario))
+    llm_input = prompts_for_scenario(
+        {
+            **llm.build_executive_prompts(
+                account_name=request["account_name"],
+                issue_summary=request["issue_summary"],
+                renewal_risk=state.get("renewal_risk"),
+                open_tickets=state.get("open_tickets"),
+            ),
+        },
+        scenario,
+    )
+    decorated = build_prompt_decoration(scenario, llm_input["system_prompt"], llm_input["user_prompt"])
+    if decorated:
+        await emit(
+            run_id,
+            "policy_event",
+            actor="orchestrator",
+            stage="prompt_decoration",
+            llm_stage="triage_plan",
+            summary="Kong prompt decoration applied enhanced executive-governance instructions before the triage LLM call.",
+            input={"original_prompt": llm_input},
+            output=decorated,
+        )
     await emit(run_id, "llm_started", actor="orchestrator", stage="triage_plan", input=llm_input)
     started = time.perf_counter()
-    triage_brief = await llm.summarize_escalation(
-        account_name=request["account_name"],
-        issue_summary=request["issue_summary"],
-        renewal_risk=state.get("renewal_risk"),
-        open_tickets=state.get("open_tickets"),
+    triage_prompts = llm_input
+    triage_brief = await generate_for_scenario(
+        run_id=run_id,
+        stage="triage_plan",
+        scenario=scenario,
+        prompts=triage_prompts,
+        base_url=ai_route_base_url,
     )
     await emit(
         run_id,
@@ -342,25 +536,42 @@ async def run_success_agent(state: OrchestratorState) -> OrchestratorState:
 async def finalize_response(state: OrchestratorState) -> OrchestratorState:
     run_id = state["run_id"]
     request = state["request"]
-    llm_input = {
-        **llm.build_executive_prompts(
-            account_name=request["account_name"],
-            issue_summary=request["issue_summary"],
-            renewal_risk=state.get("renewal_risk"),
-            open_tickets=state.get("open_tickets"),
-            support_track=state.get("support_track"),
-            success_track=state.get("success_track"),
-        ),
-    }
+    scenario = state.get("governance_scenario", "normal")
+    ai_route_base_url = state.get("ai_route_base_url", ai_route_for_scenario(scenario))
+    llm_input = prompts_for_scenario(
+        {
+            **llm.build_executive_prompts(
+                account_name=request["account_name"],
+                issue_summary=request["issue_summary"],
+                renewal_risk=state.get("renewal_risk"),
+                open_tickets=state.get("open_tickets"),
+                support_track=state.get("support_track"),
+                success_track=state.get("success_track"),
+            ),
+        },
+        scenario,
+    )
+    decorated = build_prompt_decoration(scenario, llm_input["system_prompt"], llm_input["user_prompt"])
+    if decorated:
+        await emit(
+            run_id,
+            "policy_event",
+            actor="orchestrator",
+            stage="prompt_decoration",
+            llm_stage="executive_summary",
+            summary="Kong prompt decoration applied enhanced executive-governance instructions before the executive summary call.",
+            input={"original_prompt": llm_input},
+            output=decorated,
+        )
     await emit(run_id, "llm_started", actor="orchestrator", stage="executive_summary", input=llm_input)
     started = time.perf_counter()
-    executive_brief = await llm.summarize_escalation(
-        account_name=request["account_name"],
-        issue_summary=request["issue_summary"],
-        renewal_risk=state.get("renewal_risk"),
-        open_tickets=state.get("open_tickets"),
-        support_track=state.get("support_track"),
-        success_track=state.get("success_track"),
+    executive_prompts = llm_input
+    executive_brief = await generate_for_scenario(
+        run_id=run_id,
+        stage="executive_summary",
+        scenario=scenario,
+        prompts=executive_prompts,
+        base_url=ai_route_base_url,
     )
     await emit(
         run_id,
@@ -374,6 +585,7 @@ async def finalize_response(state: OrchestratorState) -> OrchestratorState:
     )
     final_response = {
         "headline": "Executive escalation brief created",
+        "governance_scenario": scenario,
         "available_tools": state.get("available_tools", []),
         "called_mcp_tools": state.get("selected_tools", []),
         "tool_plan_steps": state.get("tool_plan_steps", []),
@@ -415,13 +627,58 @@ orchestrator_graph = (
 async def run_playbook(request: PlayRequest) -> dict[str, Any]:
     run_id = str(uuid.uuid4())
     started = time.perf_counter()
-    await emit(run_id, "run_started", summary=request.issue_summary, input=request.model_dump())
-    graph_result = await orchestrator_graph.ainvoke(
-        {
-            "request": request.model_dump(),
-            "run_id": run_id,
-        }
+    scenario = request.governance_scenario
+    ai_route_base_url = ai_route_for_scenario(scenario)
+    await emit(
+        run_id,
+        "run_started",
+        summary=request.issue_summary,
+        input=request.model_dump(),
+        governance_scenario=scenario,
     )
+    await emit(
+        run_id,
+        "scenario_selected",
+        actor="orchestrator",
+        scenario=scenario,
+        summary=scenario_summary(scenario),
+        output={"ai_route_base_url": ai_route_base_url},
+    )
+    try:
+        graph_result = await orchestrator_graph.ainvoke(
+            {
+                "request": request.model_dump(),
+                "run_id": run_id,
+                "governance_scenario": scenario,
+                "ai_route_base_url": ai_route_base_url,
+            }
+        )
+    except (RateLimitError, APIStatusError) as exc:
+        if scenario != "token_limit":
+            raise
+        blocked_result = {
+            "headline": "Kong token governance blocked the orchestrator",
+            "governance_scenario": scenario,
+            "policy_outcome": "blocked",
+            "available_tools": [],
+            "called_mcp_tools": [],
+            "tool_plan_steps": [],
+            "mcp_tools_by_agent": {
+                "orchestrator": [],
+                "support-agent": [],
+                "success-agent": [],
+            },
+            "executive_brief": {
+                "llm_used": True,
+                "model": llm.model,
+                "summary": "Kong AI token governance blocked the orchestrator before it could complete the escalation brief.",
+            },
+            "recommended_summary": "Kong AI token governance blocked the orchestrator before it could complete the escalation brief.",
+            "error": str(exc),
+        }
+        await emit(run_id, "final_response", headline=blocked_result["headline"], output=blocked_result)
+        await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=blocked_result)
+        return {"run_id": run_id, "result": blocked_result}
     await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=graph_result["result"])
     return {"run_id": run_id, "result": graph_result["result"]}
 

@@ -18,9 +18,9 @@
           </p>
         </div>
         <div class="topbar-actions">
-          <button id="play-button" class="primary">Play</button>
+          <button id="scene-button" class="secondary scene-launch" type="button">View Scene</button>
+          <button id="graph-button" class="secondary" type="button">View LangGraph</button>
           <button id="reset-button" class="secondary" type="button">Reset</button>
-          <button id="scene-button" class="secondary" type="button">View Scene</button>
           <button id="output-button" class="secondary" type="button">View Run Output</button>
         </div>
       </header>
@@ -47,7 +47,7 @@
           <div class="trace-tree" id="trace-tree">
             <div class="trace-empty">
               <h3>No run yet</h3>
-              <p>Press Play to stream the execution tree in real time.</p>
+              <p>Open View Scene to choose the demo input and start the run.</p>
             </div>
           </div>
           <div class="tree-actions">
@@ -159,7 +159,7 @@
             <div class="detail-meta" id="detail-meta">
               <span class="meta-chip">Click a trace row</span>
             </div>
-            <div class="detail-block">
+          <div class="detail-block">
               <strong>Summary</strong>
               <p id="detail-summary">The selected trace step will show timing, request input, and output payload here.</p>
             </div>
@@ -207,6 +207,27 @@
               </label>
             </div>
           </section>
+          <section class="scene-presets">
+            <span class="scene-presets-label">Choose a governance scenario</span>
+            <div class="preset-options" id="scenario-options">
+              <label class="preset-option">
+                <input type="radio" name="scenario_choice" value="normal" checked />
+                <span>Normal</span>
+              </label>
+              <label class="preset-option">
+                <input type="radio" name="scenario_choice" value="llm_failover" />
+                <span>LLM Failover</span>
+              </label>
+              <label class="preset-option">
+                <input type="radio" name="scenario_choice" value="token_limit" />
+                <span>AI Token Limit</span>
+              </label>
+              <label class="preset-option">
+                <input type="radio" name="scenario_choice" value="prompt_enhancement" />
+                <span>Prompt Decorator</span>
+              </label>
+            </div>
+          </section>
           <form id="play-form" class="form-grid">
             <label>
               Customer ID
@@ -232,7 +253,11 @@
               Incident ID
               <input name="incident_id" value="INC-1007" />
             </label>
+            <input type="hidden" name="governance_scenario" value="normal" />
           </form>
+          <div class="modal-actions">
+            <button id="scene-play-button" class="primary" type="button">Play</button>
+          </div>
         </div>
       </dialog>
 
@@ -247,8 +272,101 @@
           </div>
           <div class="result-card" id="final-output">
             <h3>Awaiting run</h3>
-            <p>Click Play to start the orchestrated demo flow.</p>
+            <p>Open View Scene and start the orchestrated demo flow from the scene popup.</p>
           </div>
+        </div>
+      </dialog>
+
+      <dialog id="graph-modal" class="modal">
+        <div class="modal-shell modal-wide">
+          <div class="modal-head">
+            <div>
+              <p class="eyebrow">LangGraph</p>
+              <h2>State Diagrams</h2>
+            </div>
+            <button class="ghost modal-close" data-close-modal="graph-modal" type="button">Close</button>
+          </div>
+          <p class="modal-copy">
+            These are the workflow graphs behind the demo. The orchestrator runs a sequential
+            graph, then hands work to the two sub-agents, each with its own smaller tool-and-LLM
+            flow.
+          </p>
+
+          <section class="graph-diagrams">
+            <article class="graph-card">
+              <div class="graph-card-head">
+                <span class="node-label">Main Graph</span>
+                <h3>Orchestrator</h3>
+              </div>
+              <div class="graph-flow">
+                <div class="graph-node start">START</div>
+                <div class="graph-arrow">→</div>
+                <div class="graph-node">fetch_context</div>
+                <div class="graph-arrow">→</div>
+                <div class="graph-node">generate_triage_brief</div>
+                <div class="graph-arrow">→</div>
+                <div class="graph-node">run_support_agent</div>
+                <div class="graph-arrow">→</div>
+                <div class="graph-node">run_success_agent</div>
+                <div class="graph-arrow">→</div>
+                <div class="graph-node">finalize_response</div>
+                <div class="graph-arrow">→</div>
+                <div class="graph-node end">END</div>
+              </div>
+              <p class="graph-copy">
+                The orchestrator gathers MCP context, produces a triage brief, invokes support,
+                passes that forward to success, and then assembles the final executive response.
+              </p>
+            </article>
+
+            <article class="graph-card">
+              <div class="graph-card-head">
+                <span class="node-label">Sub-agent Graph</span>
+                <h3>Support Agent</h3>
+              </div>
+              <div class="graph-flow compact">
+                <div class="graph-node start">START</div>
+                <div class="graph-arrow">→</div>
+                <div class="graph-node">list_tools</div>
+                <div class="graph-arrow">→</div>
+                <div class="graph-node">get_incident_status</div>
+                <div class="graph-arrow">→</div>
+                <div class="graph-node">search_runbook</div>
+                <div class="graph-arrow">→</div>
+                <div class="graph-node">technical_summary</div>
+                <div class="graph-arrow">→</div>
+                <div class="graph-node end">END</div>
+              </div>
+              <p class="graph-copy">
+                The support agent discovers its MCP tools, chooses which one to call next, gathers
+                incident and runbook evidence, and then generates a technical summary.
+              </p>
+            </article>
+
+            <article class="graph-card">
+              <div class="graph-card-head">
+                <span class="node-label">Sub-agent Graph</span>
+                <h3>Success Agent</h3>
+              </div>
+              <div class="graph-flow compact">
+                <div class="graph-node start">START</div>
+                <div class="graph-arrow">→</div>
+                <div class="graph-node">list_tools</div>
+                <div class="graph-arrow">→</div>
+                <div class="graph-node">draft_customer_reply</div>
+                <div class="graph-arrow">→</div>
+                <div class="graph-node">create_followup_task</div>
+                <div class="graph-arrow">→</div>
+                <div class="graph-node">success_summary</div>
+                <div class="graph-arrow">→</div>
+                <div class="graph-node end">END</div>
+              </div>
+              <p class="graph-copy">
+                The success agent discovers its MCP tools, drafts the customer reply, creates the
+                follow-up task, and then turns those outputs into a customer-facing action plan.
+              </p>
+            </article>
+          </section>
         </div>
       </dialog>
     </div>

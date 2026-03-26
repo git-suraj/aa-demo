@@ -1,9 +1,10 @@
 const config = window.APP_CONFIG;
 
 const playForm = document.getElementById("play-form");
-const playButton = document.getElementById("play-button");
+const playButton = document.getElementById("scene-play-button");
 const resetButton = document.getElementById("reset-button");
 const sceneButton = document.getElementById("scene-button");
+const graphButton = document.getElementById("graph-button");
 const outputButton = document.getElementById("output-button");
 const clearLogButton = document.getElementById("clear-log");
 const finalOutput = document.getElementById("final-output");
@@ -17,8 +18,10 @@ const topologyActivity = document.getElementById("topology-activity");
 const topologyActivityName = document.getElementById("topology-activity-name");
 const traceTree = document.getElementById("trace-tree");
 const presetOptions = document.getElementById("preset-options");
+const scenarioOptions = document.getElementById("scenario-options");
 const sceneModal = document.getElementById("scene-modal");
 const outputModal = document.getElementById("output-modal");
+const graphModal = document.getElementById("graph-modal");
 const detailTitle = document.getElementById("detail-title");
 const detailMeta = document.getElementById("detail-meta");
 const detailSummary = document.getElementById("detail-summary");
@@ -54,6 +57,12 @@ let traceSocket;
 let selectedTraceId = null;
 let traceState = createInitialTraceState();
 let mcpAnimationTimer = null;
+let failoverResetTimer = null;
+let llmSuccessTimer = null;
+let pendingMcpActivationTimer = null;
+let orchestratorLlmVisibleUntil = 0;
+let failoverActivationTimer = null;
+let activeScenario = "normal";
 
 const scenePresets = {
   acme_default: {
@@ -92,6 +101,7 @@ document.querySelectorAll("[data-close-modal]").forEach((button) => {
 function createInitialTraceState() {
   return {
     runId: null,
+    scenario: "normal",
     rootIds: [],
     nodes: {},
     actorRoots: {},
@@ -99,6 +109,16 @@ function createInitialTraceState() {
     llmNodes: {},
     systemNodes: {},
   };
+}
+
+function labelForScenario(scenario) {
+  const labels = {
+    normal: "Normal",
+    llm_failover: "LLM Failover",
+    token_limit: "AI Token Limit",
+    prompt_enhancement: "Prompt Decorator",
+  };
+  return labels[scenario] || "Normal";
 }
 
 function createTraceNode(id, level, title, summary, meta = {}) {
@@ -183,6 +203,14 @@ function applyScenePreset(presetId) {
       field.value = value;
     }
   });
+}
+
+function applyScenarioChoice(scenario) {
+  activeScenario = scenario || "normal";
+  const hiddenField = playForm.elements.namedItem("governance_scenario");
+  if (hiddenField) {
+    hiddenField.value = activeScenario;
+  }
 }
 
 function unwrapStructuredValue(value) {
@@ -449,8 +477,25 @@ function upsertLlmNode(payload) {
 }
 
 function resetTopology() {
-  Object.values(nodes).forEach((node) => node?.classList.remove("active", "complete"));
-  Object.values(lineMap).forEach((line) => line?.classList.remove("active", "complete"));
+  if (failoverResetTimer) {
+    clearTimeout(failoverResetTimer);
+    failoverResetTimer = null;
+  }
+  if (llmSuccessTimer) {
+    clearTimeout(llmSuccessTimer);
+    llmSuccessTimer = null;
+  }
+  if (pendingMcpActivationTimer) {
+    clearTimeout(pendingMcpActivationTimer);
+    pendingMcpActivationTimer = null;
+  }
+  if (failoverActivationTimer) {
+    clearTimeout(failoverActivationTimer);
+    failoverActivationTimer = null;
+  }
+  orchestratorLlmVisibleUntil = 0;
+  Object.values(nodes).forEach((node) => node?.classList.remove("active", "complete", "error"));
+  Object.values(lineMap).forEach((line) => line?.classList.remove("active", "complete", "error"));
   hideTopologyActivity();
 }
 
@@ -460,12 +505,16 @@ function markNode(name, state) {
     return;
   }
   if (state === "active") {
-    node.classList.remove("complete");
+    node.classList.remove("complete", "error");
     node.classList.add("active");
   }
   if (state === "complete") {
-    node.classList.remove("active");
+    node.classList.remove("active", "error");
     node.classList.remove("complete");
+  }
+  if (state === "error") {
+    node.classList.remove("active", "complete");
+    node.classList.add("error");
   }
 }
 
@@ -475,12 +524,16 @@ function markLine(name, state) {
     return;
   }
   if (state === "active") {
-    line.classList.remove("complete");
+    line.classList.remove("complete", "error");
     line.classList.add("active");
   }
   if (state === "complete") {
-    line.classList.remove("active");
+    line.classList.remove("active", "error");
     line.classList.remove("complete");
+  }
+  if (state === "error") {
+    line.classList.remove("active", "complete");
+    line.classList.add("error");
   }
 }
 
@@ -518,13 +571,85 @@ function activateToolPath(actor, state = "active") {
   markLine("mcp-backend", state);
 }
 
+function showModelFailure(model) {
+  if (model === "openai") {
+    markNode("openai", "error");
+    markLine("kong-openai", "error");
+    return;
+  }
+  if (model === "gemini") {
+    markNode("gemini", "error");
+    markLine("kong-gemini", "error");
+  }
+}
+
+function resetModelPath(model, delayMs = 1200) {
+  if (failoverResetTimer) {
+    clearTimeout(failoverResetTimer);
+    failoverResetTimer = null;
+  }
+  failoverResetTimer = window.setTimeout(() => {
+    if (model === "openai") {
+      markNode("openai", "complete");
+      markLine("kong-openai", "complete");
+    }
+    if (model === "gemini") {
+      markNode("gemini", "complete");
+      markLine("kong-gemini", "complete");
+    }
+    failoverResetTimer = null;
+  }, delayMs);
+}
+
+function showFailurePath(kind = "orchestrator") {
+  markNode("ui", "error");
+  markNode("kong", "error");
+  markLine("ui-kong", "error");
+
+  if (kind === "mcp") {
+    markNode("orchestrator", "error");
+    markNode("mcp", "error");
+    markNode("backend-api", "error");
+    markLine("kong-orchestrator", "error");
+    markLine("kong-mcp", "error");
+    markLine("mcp-backend", "error");
+    return;
+  }
+
+  markNode("orchestrator", "error");
+  markLine("kong-orchestrator", "error");
+
+  if (kind === "openai") {
+    showModelFailure("openai");
+    return;
+  }
+
+  if (kind === "gemini") {
+    showModelFailure("gemini");
+  }
+}
+
 function setMcpPathState(state, lingerMs = 0) {
   if (mcpAnimationTimer) {
     clearTimeout(mcpAnimationTimer);
     mcpAnimationTimer = null;
   }
+  if (pendingMcpActivationTimer) {
+    clearTimeout(pendingMcpActivationTimer);
+    pendingMcpActivationTimer = null;
+  }
 
   if (state === "active") {
+    const remainingVisibleMs = Math.max(0, orchestratorLlmVisibleUntil - Date.now());
+    if (remainingVisibleMs > 0) {
+      pendingMcpActivationTimer = window.setTimeout(() => {
+        clearOrchestratorLlmPath();
+        activateToolPath("orchestrator", "active");
+        pendingMcpActivationTimer = null;
+      }, remainingVisibleMs);
+      return;
+    }
+    clearOrchestratorLlmPath();
     activateToolPath("orchestrator", "active");
     return;
   }
@@ -537,23 +662,68 @@ function setMcpPathState(state, lingerMs = 0) {
   }, lingerMs || 900);
 }
 
+function clearModelActiveState(model) {
+  if (model === "openai") {
+    nodes.openai?.classList.remove("active");
+    lineMap["kong-openai"]?.classList.remove("active");
+    return;
+  }
+  if (model === "gemini") {
+    nodes.gemini?.classList.remove("active");
+    lineMap["kong-gemini"]?.classList.remove("active");
+  }
+}
+
+function setOrchestratorModelStates({ openai = "complete", gemini = "complete" } = {}) {
+  markNode("openai", openai);
+  markLine("kong-openai", openai);
+  markNode("gemini", gemini);
+  markLine("kong-gemini", gemini);
+}
+
 function markLlmPath(payload, state = "active") {
   activateActorPath(payload.actor || "orchestrator", state);
   const model = String(payload.model || "").toLowerCase();
   if (payload.actor === "orchestrator") {
     if (model.includes("gemini")) {
-      markNode("openai", "complete");
-      markLine("kong-openai", "complete");
+      clearModelActiveState("openai");
       markNode("gemini", state);
       markLine("kong-gemini", state);
       return;
     }
+    clearModelActiveState("gemini");
     markNode("openai", state);
     markLine("kong-openai", state);
     return;
   }
   markNode("gemini", state);
   markLine("kong-gemini", state);
+}
+
+function lingerLlmSuccessPath(payload, delayMs = 1400) {
+  if (llmSuccessTimer) {
+    clearTimeout(llmSuccessTimer);
+    llmSuccessTimer = null;
+  }
+  orchestratorLlmVisibleUntil = Date.now() + delayMs;
+  markLlmPath(payload, "active");
+  llmSuccessTimer = window.setTimeout(() => {
+    markLlmPath(payload, "complete");
+    orchestratorLlmVisibleUntil = 0;
+    llmSuccessTimer = null;
+  }, delayMs);
+}
+
+function clearOrchestratorLlmPath() {
+  if (llmSuccessTimer) {
+    clearTimeout(llmSuccessTimer);
+    llmSuccessTimer = null;
+  }
+  orchestratorLlmVisibleUntil = 0;
+  markNode("openai", "complete");
+  markLine("kong-openai", "complete");
+  markNode("gemini", "complete");
+  markLine("kong-gemini", "complete");
 }
 
 function renderFinalOutput(result) {
@@ -569,6 +739,7 @@ function renderFinalOutput(result) {
     <section class="output-hero">
       <p class="output-kicker">Final Output</p>
       <h3>${escapeHtml(result.headline)}</h3>
+      <p class="output-section-copy">Governance scenario: <strong>${escapeHtml(labelForScenario(result.governance_scenario || activeScenario))}</strong></p>
       <p class="output-section-copy">Executive summary created by the orchestrator LLM after combining orchestrator context, support-agent output, and success-agent output.</p>
       <div class="output-summary">${escapeHtml(executiveSummary)}</div>
     </section>
@@ -684,6 +855,23 @@ function resetTraceState() {
     clearTimeout(mcpAnimationTimer);
     mcpAnimationTimer = null;
   }
+  if (failoverResetTimer) {
+    clearTimeout(failoverResetTimer);
+    failoverResetTimer = null;
+  }
+  if (llmSuccessTimer) {
+    clearTimeout(llmSuccessTimer);
+    llmSuccessTimer = null;
+  }
+  if (pendingMcpActivationTimer) {
+    clearTimeout(pendingMcpActivationTimer);
+    pendingMcpActivationTimer = null;
+  }
+  if (failoverActivationTimer) {
+    clearTimeout(failoverActivationTimer);
+    failoverActivationTimer = null;
+  }
+  orchestratorLlmVisibleUntil = 0;
   traceState = createInitialTraceState();
   selectedTraceId = null;
   runIdLabel.textContent = "not started";
@@ -700,10 +888,11 @@ function resetTraceState() {
 function initializeRun(payload) {
   traceState = createInitialTraceState();
   traceState.runId = payload.run_id;
+  traceState.scenario = payload.governance_scenario || "normal";
   runIdLabel.textContent = payload.run_id;
   touchActivity(payload.timestamp);
 
-  const runNode = createTraceNode("run", 0, `Run started: ${payload.run_id}`, "Top-level workflow started.", {
+  const runNode = createTraceNode("run", 0, `Run started: ${payload.run_id}`, `Top-level workflow started for ${labelForScenario(traceState.scenario)}.`, {
     timestamp: payload.timestamp,
     status: "active",
   });
@@ -743,13 +932,28 @@ function handleTraceEvent(payload) {
   switch (payload.type) {
     case "run_started":
       setRunState("running");
-      setFlowStage("Request entered Kong", "The hosted UI sent the run into Kong and the orchestrator started.");
+      setFlowStage("Request entered Kong", `${labelForScenario(traceState.scenario)} scenario started through Kong.`);
       markNode("user", "complete");
       markNode("ui", "complete");
       markLine("user-ui", "complete");
       markLine("ui-kong", "active");
       activateActorPath("orchestrator", "active");
       break;
+
+    case "scenario_selected": {
+      const parentId = ensureActorRoot(payload.actor || "orchestrator");
+      const node = upsertSystemNode(
+        `scenario:${payload.scenario}`,
+        parentId,
+        `Scenario selected: ${labelForScenario(payload.scenario)}`,
+        payload.summary || "Governance scenario selected.",
+        payload,
+      );
+      node.output = payload.output;
+      node.status = "complete";
+      setFlowStage(labelForScenario(payload.scenario), payload.summary || "Governance scenario selected.");
+      break;
+    }
 
     case "planning":
       ensureActorRoot("orchestrator");
@@ -792,13 +996,101 @@ function handleTraceEvent(payload) {
     case "llm_started":
       upsertLlmNode(payload);
       setFlowStage(`LLM call: ${payload.stage}`, `${labelForActor(payload.actor || "orchestrator")} is calling its AI route through Kong.`);
+      if (
+        traceState.scenario === "llm_failover" &&
+        payload.actor === "orchestrator" &&
+        !String(payload.model || "").toLowerCase().includes("gemini")
+      ) {
+        activateActorPath("orchestrator", "active");
+        setOrchestratorModelStates({ openai: "active", gemini: "complete" });
+        break;
+      }
       markLlmPath(payload, "active");
       break;
 
     case "llm_completed":
       upsertLlmNode(payload);
-      markLlmPath(payload, "complete");
+      if (
+        traceState.scenario === "llm_failover" &&
+        payload.actor === "orchestrator" &&
+        String(payload.model || "").toLowerCase().includes("gemini")
+      ) {
+        lingerLlmSuccessPath(payload, 1700);
+      } else {
+        markLlmPath(payload, "complete");
+      }
       break;
+
+    case "policy_event": {
+      const actor = payload.actor || "orchestrator";
+      const llmStage = payload.llm_stage;
+      const parentId = llmStage
+        ? upsertLlmNode({ actor, stage: llmStage, timestamp: payload.timestamp }).id
+        : ensureActorRoot(actor);
+      const decoratorPolicy =
+        payload.stage === "prompt_decoration"
+          ? payload.output?.decorator_prompt ||
+            payload.output?.decorated_system_prompt ||
+            payload.summary
+          : null;
+      const titleMap = {
+        prompt_decoration: "Decorator policy applied",
+        token_limit: "Kong token policy blocked request",
+        failover_primary_failed: "Primary model path failed",
+        failover: "Kong selected fallback model",
+      };
+      const node = upsertSystemNode(
+        `policy:${payload.stage}:${llmStage || "actor"}:${payload.timestamp}`,
+        parentId,
+        titleMap[payload.stage] || `Policy event: ${payload.stage}`,
+        decoratorPolicy || payload.summary || "Kong governance policy event.",
+        payload,
+      );
+      node.input = payload.input;
+      node.output =
+        payload.stage === "prompt_decoration"
+          ? {
+              applied_policy: payload.output?.decorator_prompt || null,
+              decorated_system_prompt: payload.output?.decorated_system_prompt || null,
+              decorated_user_prompt: payload.output?.decorated_user_prompt || null,
+            }
+          : payload.output;
+      node.status = "complete";
+      setFlowStage(
+        payload.stage === "prompt_decoration" ? "Decorator policy applied" : `Policy: ${payload.stage}`,
+        decoratorPolicy || payload.summary || "Kong governance policy event.",
+      );
+      if (payload.stage === "failover") {
+        if (failoverActivationTimer) {
+          clearTimeout(failoverActivationTimer);
+          failoverActivationTimer = null;
+        }
+        activateActorPath("orchestrator", "active");
+        setOrchestratorModelStates({ openai: "error", gemini: "active" });
+        orchestratorLlmVisibleUntil = Date.now() + 1200;
+        resetModelPath("openai", 1100);
+        setFlowStage("Failover engaged", payload.summary || "Kong redirected the orchestrator from OpenAI to Gemini.");
+      }
+      if (payload.stage === "failover_primary_failed") {
+        showModelFailure("openai");
+        markNode("gemini", "complete");
+        markLine("kong-gemini", "complete");
+        setFlowStage("Primary model failed", payload.summary || "The OpenAI primary path failed.");
+        if (!failoverActivationTimer) {
+          failoverActivationTimer = window.setTimeout(() => {
+            activateActorPath("orchestrator", "active");
+            setOrchestratorModelStates({ openai: "error", gemini: "active" });
+            orchestratorLlmVisibleUntil = Date.now() + 1200;
+            setFlowStage("Failover engaged", "Kong is redirecting the orchestrator to Gemini.");
+            failoverActivationTimer = null;
+          }, 450);
+        }
+      }
+      if (payload.stage === "token_limit") {
+        showFailurePath("openai");
+      }
+      break;
+    }
 
     case "subagent_invoking": {
       const actorId = ensureActorRoot(payload.agent);
@@ -845,10 +1137,12 @@ function handleTraceEvent(payload) {
       runNode.output = payload.output;
       runNode.durationMs = payload.duration_ms;
       runNode.timestamp = payload.timestamp;
-      runNode.status = "complete";
-      setRunState("complete");
-      if (!outputModal.open) {
-        outputModal.showModal();
+      if (payload.output?.policy_outcome === "blocked") {
+        runNode.status = "error";
+        setRunState("error");
+      } else {
+        runNode.status = "complete";
+        setRunState("complete");
       }
       break;
     }
@@ -869,7 +1163,7 @@ async function play() {
   resetTraceState();
   setRunState("starting");
   setFlowStage("Starting run", "Kong is about to accept the request and begin the orchestrated workflow.");
-  finalOutput.innerHTML = "<h3>Run in progress</h3><p>The output will appear here once the workflow completes.</p>";
+  finalOutput.innerHTML = "<h3>Run in progress</h3><p class=\"result-card-copy\">The output will appear here once the workflow completes.</p>";
 
   try {
     const response = await fetch(`${config.apiBaseUrl}/play`, {
@@ -890,6 +1184,7 @@ async function play() {
   } catch (error) {
     setRunState("error");
     setFlowStage("Run failed", error.message);
+    showFailurePath("orchestrator");
     const runNode = traceState.nodes.run;
     if (runNode) {
       runNode.status = "error";
@@ -904,6 +1199,7 @@ async function play() {
 
 playButton.addEventListener("click", (event) => {
   event.preventDefault();
+  sceneModal.close();
   play();
 });
 
@@ -915,13 +1211,23 @@ presetOptions?.addEventListener("change", (event) => {
   applyScenePreset(target.value);
 });
 
+scenarioOptions?.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement) || target.name !== "scenario_choice") {
+    return;
+  }
+  applyScenarioChoice(target.value);
+});
+
 resetButton.addEventListener("click", () => {
   playForm.reset();
+  const selectedScenario = scenarioOptions?.querySelector('input[name="scenario_choice"]:checked');
+  applyScenarioChoice(selectedScenario?.value || "normal");
   resetTopology();
   resetTraceState();
   setRunState("idle");
   setFlowStage("Waiting for a run", "Press Play to see Kong route the request across AI, sub-agent, and MCP paths.");
-  finalOutput.innerHTML = "<h3>Awaiting run</h3><p>Click Play to start the orchestrated demo flow.</p>";
+  finalOutput.innerHTML = "<h3>Awaiting run</h3><p>Open View Scene and start the orchestrated demo flow from the scene popup.</p>";
 });
 
 clearLogButton.addEventListener("click", () => {
@@ -929,10 +1235,12 @@ clearLogButton.addEventListener("click", () => {
 });
 
 sceneButton.addEventListener("click", () => sceneModal.showModal());
+graphButton.addEventListener("click", () => graphModal.showModal());
 outputButton.addEventListener("click", () => outputModal.showModal());
 
 connectTraceSocket();
 applyScenePreset("acme_default");
+applyScenarioChoice("normal");
 resetTraceState();
 setRunState("idle");
 setFlowStage("Waiting for a run", "Press Play to see Kong route the request across AI, sub-agent, and MCP paths.");

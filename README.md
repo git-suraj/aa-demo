@@ -81,44 +81,169 @@ The AI routes are split by caller type:
   - used only by the orchestrator
   - primary target: `gpt-4o-mini`
   - secondary failover target: `gemini-2.5-flash`
+- `/ai/orchestrator-failover-demo/chat/completions`
+  - used only for the orchestrator failover scenario
+  - intentionally starts with a broken OpenAI primary path so the demo can show fallback behavior
+- `/ai/orchestrator-token-demo/chat/completions`
+  - used only for the AI token limit scenario
+  - protected by Kong `ai-rate-limiting-advanced`
+- `/ai/orchestrator-prompt-enhance-demo/chat/completions`
+  - used only for the prompt decorator scenario
+  - applies a stronger prompt-decoration policy to shape a more structured executive output
 - `/ai/subagent/chat/completions`
   - used by both sub-agents
   - target: `gemini-2.5-flash`
 
 The services use OpenAI-compatible clients pointed at those Kong routes, and Kong forwards the requests using the AI Proxy Advanced plugin.
 
+Prompt decoration is not applied on the standard orchestrator AI routes. It is used only in the dedicated `Prompt Decorator` scenario so the difference is easy to demonstrate.
+
+## Governance scenarios
+
+The UI includes a `Governance Scenario` selector. The customer escalation story stays the same, but the Kong-governed AI path changes depending on what is selected.
+
+The route path is selected by the `governance_scenario` field sent in the `Play` request. In the orchestrator, `PlayRequest.governance_scenario` is mapped by `ai_route_for_scenario()` in [services/orchestrator/app.py](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/orchestrator/app.py):
+
+- `normal` -> `/ai/orchestrator/chat/completions`
+- `llm_failover` -> `/ai/orchestrator-failover-demo/chat/completions`
+- `token_limit` -> `/ai/orchestrator-token-demo/chat/completions`
+- `prompt_enhancement` -> `/ai/orchestrator-prompt-enhance-demo/chat/completions`
+
+So the basis for route selection is simple: whichever governance scenario the user selected in the UI is included in the request payload, and the orchestrator picks the matching Kong AI route before it starts its own LLM steps.
+
+### 1. Normal
+
+This is the default run.
+
+Behind the scenes:
+
+- the orchestrator uses `/ai/orchestrator/chat/completions`
+- the orchestrator planner, triage, and executive-summary LLM calls go through Kong on the standard orchestrator route
+- the sub-agents use `/ai/subagent/chat/completions`
+- MCP routing, ACL filtering, and agent-to-agent traffic still all flow through Kong exactly as in the base demo
+
+This mode is meant to show the standard happy-path behavior.
+
+### 2. LLM Failover
+
+This scenario demonstrates what happens when the orchestrator's primary model path fails.
+
+Behind the scenes:
+
+- the orchestrator switches to `/ai/orchestrator-failover-demo/chat/completions`
+- that route is configured so the OpenAI primary path fails deterministically
+- the run emits explicit policy events showing:
+  - the primary OpenAI path was attempted
+  - the primary path failed
+  - Gemini was selected as the fallback model
+- the orchestrator then continues the rest of the run using Gemini
+- the support and success sub-agents still use their normal Gemini sub-agent route
+
+Important note:
+
+- in the current implementation, the demo shows the failover outcome through Kong-routed calls and orchestrator policy handling after the primary path returns `401`
+- the visible result is still the intended demo story: OpenAI fails, Gemini completes the run
+
+### 3. AI Token Limit
+
+This scenario demonstrates Kong blocking the orchestrator with AI token governance.
+
+Behind the scenes:
+
+- the orchestrator switches to `/ai/orchestrator-token-demo/chat/completions`
+- that route uses `ai-rate-limiting-advanced`
+- the current config in [kong/deck/kong.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml) is:
+  - provider: `openai`
+  - `limit: [1]`
+  - `window_size: [300]`
+- in plain terms, the demo route allows one counted OpenAI budget event in a 300-second window, and later orchestrator AI calls are blocked with `429`
+- the orchestrator planner or later executive-summary calls hit Kong's AI policy and receive `429`
+- instead of crashing the whole demo, the orchestrator converts that into a structured blocked result
+- the trace shows that Kong policy blocked the orchestrator before the executive brief could be completed
+
+This mode is useful for showing governance and protection, not a successful business outcome.
+
+Important note:
+
+- the current demo is not using a human-friendly fixed threshold like "block after 5,000 tokens"
+- it is using the plugin configuration above on the scenario route
+- in live logs, Kong reports `AI token rate limit exceeded for provider(s): openai`
+- for demo purposes, the effect is deterministic: the scenario shows a policy block after the first counted orchestrator AI usage on that route
+
+### 4. Prompt Decorator
+
+This scenario demonstrates how Kong prompt decoration can materially improve and govern the orchestrator output.
+
+Behind the scenes:
+
+- the orchestrator switches to `/ai/orchestrator-prompt-enhance-demo/chat/completions`
+- the normal orchestrator route does not decorate prompts
+- this scenario route applies `ai-prompt-decorator`
+- the application prompt stays the same, but Kong injects extra enterprise-governance instructions before the model sees it
+- the trace shows policy events for:
+  - the original prompt
+  - the Kong-decorated prompt
+  - the resulting LLM output
+- the sub-agents still run through their normal sub-agent Gemini route
+
+This mode is useful for showing that prompt shaping and output governance can happen in the gateway layer rather than inside application code.
+
+The current prompt decorator policy configured in [kong/deck/kong.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml) prepends these instructions:
+
+- `You are responding under AI governance enforced by Kong Gateway.`
+- `Enhanced escalation policy for this demo:`
+- `Respond in an executive escalation format with sections for Situation, Risk, Actions, and Next Checkpoint.`
+- `State customer posture explicitly and keep the tone enterprise-safe.`
+- `Mention regulatory or data residency considerations when they are relevant.`
+- `End with a confidence score and a named owner.`
+
+In the trace tree, this appears as a `Decorator policy applied` step nested under the relevant orchestrator LLM call. Clicking that row shows:
+
+- the original prompt sent by the application
+- the policy text Kong injected
+- the decorated system and user prompts that Kong forwarded upstream
+
+The prompt decorator scenario route uses this enhancement policy:
+
+- `Respond in an executive escalation format with sections for Situation, Risk, Actions, and Next Checkpoint.`
+- `State customer posture explicitly and keep the tone enterprise-safe.`
+- `Mention regulatory or data residency considerations when they are relevant.`
+- `End with a confidence score and a named owner.`
+
 ## What happens when Play is pressed
 
 When the user presses `Play` in the UI, the following flow happens:
 
 1. The UI sends a single request to the orchestrator through Kong.
-2. The orchestrator starts a LangGraph workflow and emits live trace events.
-3. The orchestrator calls Kong's MCP endpoint on `/mock-mcp`.
-4. Through Kong, the orchestrator lists only the MCP tools it is allowed to access:
+2. The UI-selected governance scenario is included in the request payload.
+3. The orchestrator starts a LangGraph workflow and emits live trace events.
+4. Based on the selected governance scenario, the orchestrator chooses the Kong AI route it will use for its own LLM calls.
+5. The orchestrator calls Kong's MCP endpoint on `/mock-mcp`.
+6. Through Kong, the orchestrator lists only the MCP tools it is allowed to access:
    - `get_customer_account`
    - `get_renewal_risk`
    - `get_open_tickets`
-5. The orchestrator gathers account context using those tools:
+7. The orchestrator gathers account context using those tools:
    - customer account details
    - renewal risk
    - open support tickets
-6. The orchestrator creates an executive triage brief using the orchestrator AI route in Kong.
-7. The orchestrator sends that triage brief to both sub-agents as shared escalation context.
-8. The orchestrator invokes the `support-agent` through Kong using explicit HTTP JSON-RPC.
-9. The support agent starts its own LangGraph workflow and calls only its allowed MCP tools through Kong:
+8. The orchestrator creates an executive triage brief using the scenario-specific orchestrator AI route in Kong.
+9. The orchestrator sends that triage brief to both sub-agents as shared escalation context.
+10. The orchestrator invokes the `support-agent` through Kong using explicit HTTP JSON-RPC.
+11. The support agent starts its own LangGraph workflow and calls only its allowed MCP tools through Kong:
    - `get_incident_status`
    - `search_runbook`
-10. The support agent also makes its own LLM call through the sub-agent AI route in Kong to turn the incident and runbook findings into a concise technical summary.
-11. The support agent returns a structured technical response to the orchestrator through Kong.
-12. The orchestrator uses that support output as context and then invokes the `success-agent` through Kong.
-13. The success agent starts its own LangGraph workflow and calls only its allowed MCP tools through Kong:
+12. The support agent also makes its own LLM call through the sub-agent AI route in Kong to turn the incident and runbook findings into a concise technical summary.
+13. The support agent returns a structured technical response to the orchestrator through Kong.
+14. The orchestrator uses that support output as context and then invokes the `success-agent` through Kong.
+15. The success agent starts its own LangGraph workflow and calls only its allowed MCP tools through Kong:
    - `draft_customer_reply`
    - `create_followup_task`
-14. The success agent also makes its own LLM call through the sub-agent AI route in Kong to turn the drafted reply and follow-up task into a concise customer-success summary.
-15. The success agent returns a structured customer-success output to the orchestrator through Kong.
-16. The orchestrator makes a second LLM call through the orchestrator AI route in Kong to turn the gathered context into an executive brief.
-17. The orchestrator merges both tracks into one final recommendation.
-18. The UI shows:
+16. The success agent also makes its own LLM call through the sub-agent AI route in Kong to turn the drafted reply and follow-up task into a concise customer-success summary.
+17. The success agent returns a structured customer-success output to the orchestrator through Kong.
+18. The orchestrator makes a second LLM call through the scenario-specific orchestrator AI route in Kong to turn the gathered context into an executive brief.
+19. The orchestrator merges both tracks into one final recommendation.
+20. The UI shows:
    - live node state changes
    - event log updates
    - the final coordinated response

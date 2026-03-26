@@ -302,7 +302,7 @@ A FastAPI server that simulates GitHub and notification APIs. All data is fake a
 - `GET /notifications/regional` — Lists all sent notifications.
 - `GET /regions` — Lists sales regions.
 
-**The issue pool (`mock-api/data/`)** contains realistic GitHub issues about the NexusWork v8.0 release — each with a title, body, severity, labels, author, reactions, and comment count. The `get_random_issues()` function selects 10 from the pool each time, so the demo shows slightly different issues on each run.
+**The issue pool (`mock-api/data/`)** contains realistic GitHub issues about the demo platform release — each with a title, body, severity, labels, author, reactions, and comment count. The `get_random_issues()` function selects 10 from the pool each time, so the demo shows slightly different issues on each run.
 
 The Mock API never talks to Kong directly — Kong's `ai-mcp-proxy` plugin routes tool calls to it via path-based routing (e.g., tool path `/mock-api/github/issues` maps to the mock-api service).
 

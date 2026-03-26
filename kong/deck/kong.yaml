@@ -53,6 +53,121 @@ services:
                 name: ${{ env "DECK_GEMINI_MODEL" }}
               weight: 50
 
+  - name: ai-orchestrator-failover-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-failover-demo-chat-route
+        paths:
+          - /ai/orchestrator-failover-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-proxy-advanced
+        config:
+          balancer:
+            algorithm: priority
+            retries: 1
+            failover_criteria:
+              - error
+              - timeout
+              - non_idempotent
+              - http_429
+              - http_502
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer invalid-failover-demo-key
+              model:
+                provider: openai
+                name: gpt-4o-mini
+              weight: 100
+            - route_type: llm/v1/chat
+              auth:
+                param_name: key
+                param_value: ${{ env "DECK_GEMINI_API_KEY" }}
+                param_location: query
+              model:
+                provider: gemini
+                name: ${{ env "DECK_GEMINI_MODEL" }}
+              weight: 50
+
+  - name: ai-orchestrator-token-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-token-demo-chat-route
+        paths:
+          - /ai/orchestrator-token-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              model:
+                provider: openai
+                name: gpt-4o-mini
+      - name: ai-rate-limiting-advanced
+        config:
+          llm_providers:
+            - name: openai
+              limit:
+                - 1
+              window_size:
+                - 300
+
+  - name: ai-orchestrator-prompt-enhance-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-prompt-enhance-demo-chat-route
+        paths:
+          - /ai/orchestrator-prompt-enhance-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-prompt-decorator
+        config:
+          prompts:
+            prepend:
+              - role: system
+                content: You are responding under AI governance enforced by Kong Gateway.
+              - role: system
+                content: >-
+                  Enhanced escalation policy for this demo:
+                  1) Respond in an executive escalation format with sections for Situation, Risk, Actions, and Next Checkpoint.
+                  2) State customer posture explicitly and keep the tone enterprise-safe.
+                  3) Mention regulatory or data residency considerations when they are relevant.
+                  4) End with a confidence score and a named owner.
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              model:
+                provider: openai
+                name: gpt-4o-mini
+
   - name: ai-subagent-service
     url: https://generativelanguage.googleapis.com
     routes:

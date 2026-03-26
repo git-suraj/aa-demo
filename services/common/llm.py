@@ -21,17 +21,26 @@ class OrchestratorLLM:
     def enabled(self) -> bool:
         return bool(self.kong_api_key and self.base_url)
 
-    async def generate(self, *, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    async def generate(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        base_url: str | None = None,
+        model: str | None = None,
+    ) -> dict[str, Any]:
         if not self.enabled:
             raise RuntimeError("Kong-routed LLM is not configured")
 
+        resolved_base_url = (base_url or self.base_url or "").rstrip("/")
+        resolved_model = model or self.model
         client = AsyncOpenAI(
             api_key="kong-ai-proxy",
-            base_url=self.base_url.rstrip("/"),
+            base_url=resolved_base_url,
             default_headers={"apikey": self.kong_api_key},
         )
         response = await client.chat.completions.create(
-            model=self.model,
+            model=resolved_model,
             temperature=0.2,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -41,7 +50,7 @@ class OrchestratorLLM:
         text = response.choices[0].message.content or ""
         return {
             "llm_used": True,
-            "model": self.model,
+            "model": resolved_model,
             "summary": text.strip(),
         }
 

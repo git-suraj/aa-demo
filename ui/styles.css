@@ -13,6 +13,8 @@
   --white-soft: rgba(255, 255, 255, 0.88);
   --blue: #7cc0ff;
   --amber: #f3b354;
+  --red: #ff6b6b;
+  --red-soft: rgba(255, 107, 107, 0.18);
   --shadow: 0 30px 90px rgba(0, 0, 0, 0.42);
 }
 
@@ -116,6 +118,32 @@ button:hover {
   gap: 10px;
 }
 
+.scene-launch {
+  position: relative;
+  border-color: rgba(131, 255, 94, 0.42);
+  background:
+    linear-gradient(180deg, rgba(131, 255, 94, 0.2), rgba(131, 255, 94, 0.08)),
+    rgba(255, 255, 255, 0.04);
+  box-shadow:
+    0 0 0 1px rgba(131, 255, 94, 0.08),
+    0 0 0 0 rgba(131, 255, 94, 0.32);
+  animation: scene-launch-pulse 2.2s ease-in-out infinite;
+}
+
+.scene-launch:hover {
+  border-color: rgba(131, 255, 94, 0.56);
+}
+
+.scene-launch::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  border: 1px solid rgba(131, 255, 94, 0.28);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
 .dashboard-layout {
   display: grid;
   grid-template-columns: 360px minmax(0, 1fr);
@@ -155,6 +183,10 @@ button:hover {
 .trace-empty h3,
 .result-card h3 {
   margin: 0;
+}
+
+.result-card h3 {
+  color: var(--text);
 }
 
 .trace-summary {
@@ -406,6 +438,7 @@ button:hover {
   stroke-linecap: round;
   stroke-linejoin: round;
   opacity: 0.72;
+  transition: stroke 600ms ease, opacity 600ms ease, filter 600ms ease;
 }
 
 .topology-lines path.active {
@@ -414,6 +447,13 @@ button:hover {
   filter: drop-shadow(0 0 10px rgba(131, 255, 94, 0.6));
   stroke-dasharray: 14 10;
   animation: dash-flow 1s linear infinite;
+}
+
+.topology-lines path.error {
+  stroke: var(--red);
+  opacity: 1;
+  filter: drop-shadow(0 0 10px rgba(255, 107, 107, 0.55));
+  animation: none;
 }
 
 .topology-lines path.complete {
@@ -429,7 +469,7 @@ button:hover {
   border: 2px solid rgba(255, 255, 255, 0.82);
   background: rgba(11, 13, 18, 0.94);
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.32);
-  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+  transition: transform 180ms ease, box-shadow 600ms ease, border-color 600ms ease;
 }
 
 .topology-node h3 {
@@ -464,6 +504,15 @@ button:hover {
   box-shadow:
     0 0 0 1px rgba(131, 255, 94, 0.42),
     0 0 36px rgba(131, 255, 94, 0.34),
+    0 18px 40px rgba(0, 0, 0, 0.34);
+}
+
+.topology-node.error {
+  transform: translateY(-4px) scale(1.01);
+  border-color: rgba(255, 107, 107, 0.92);
+  box-shadow:
+    0 0 0 1px rgba(255, 107, 107, 0.36),
+    0 0 32px rgba(255, 107, 107, 0.22),
     0 18px 40px rgba(0, 0, 0, 0.34);
 }
 
@@ -588,13 +637,17 @@ button:hover {
 }
 
 .modal-shell {
+  position: relative;
   display: grid;
   gap: 16px;
+  width: min(940px, calc(100vw - 32px));
+  max-width: 100%;
   padding: 24px;
   border-radius: 28px;
   background: #101319;
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
+  overflow-x: clip;
 }
 
 .modal-wide {
@@ -610,10 +663,23 @@ button:hover {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+  padding-right: 72px;
 }
 
 .modal-head h2 {
   margin: 8px 0 0;
+  color: var(--text);
+}
+
+.modal-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 2;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--text);
 }
 
@@ -696,10 +762,83 @@ button:hover {
   resize: vertical;
 }
 
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.graph-diagrams {
+  display: grid;
+  gap: 16px;
+}
+
+.graph-card {
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+}
+
+.graph-card-head h3 {
+  margin: 8px 0 0;
+  color: var(--text);
+}
+
+.graph-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 14px;
+}
+
+.graph-flow.compact .graph-node {
+  min-width: 140px;
+}
+
+.graph-node {
+  min-width: 156px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.graph-node.start,
+.graph-node.end {
+  border-color: rgba(131, 255, 94, 0.34);
+  background: rgba(131, 255, 94, 0.09);
+  color: #f6ffeb;
+}
+
+.graph-arrow {
+  color: var(--green);
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.graph-copy {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
 .result-card {
   max-height: min(72vh, 920px);
   overflow: auto;
   min-height: 320px;
+}
+
+.result-card > p {
+  color: var(--text);
+}
+
+.result-card-copy {
+  color: var(--text);
 }
 
 .output-hero {
@@ -846,6 +985,22 @@ button:hover {
 @keyframes dash-flow {
   to {
     stroke-dashoffset: -48;
+  }
+}
+
+@keyframes scene-launch-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(131, 255, 94, 0.08),
+      0 0 0 0 rgba(131, 255, 94, 0.32),
+      0 0 26px rgba(131, 255, 94, 0.12);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(131, 255, 94, 0.18),
+      0 0 0 10px rgba(131, 255, 94, 0.04),
+      0 0 34px rgba(131, 255, 94, 0.22);
   }
 }
 
