@@ -97,6 +97,12 @@ The AI routes are split by caller type:
 - `/ai/orchestrator-semantic-cache-demo/chat/completions`
   - used only for the semantic cache scenario
   - protected by Kong `ai-semantic-cache` with Redis as the vector database
+- `/ai/orchestrator-pii-placeholder-demo/chat/completions`
+  - used only for the PII Sanitization placeholder scenario
+  - protected by Kong `ai-sanitizer` in `BOTH` mode with `redact_type: placeholder`
+- `/ai/orchestrator-pii-synthetic-demo/chat/completions`
+  - used only for the PII Sanitization synthetic scenario
+  - protected by Kong `ai-sanitizer` in `BOTH` mode with `redact_type: synthetic`
 - `/ai/subagent/chat/completions`
   - used by both sub-agents
   - target: `gemini-2.5-flash`
@@ -117,6 +123,7 @@ The route path is selected by the `governance_scenario` field sent in the `Play`
 - `prompt_enhancement` -> `/ai/orchestrator-prompt-enhance-demo/chat/completions`
 - `semantic_guard` -> `/ai/orchestrator-semantic-guard-demo/chat/completions`
 - `semantic_cache` -> `/ai/orchestrator-semantic-cache-demo/chat/completions`
+- `pii_sanitizer` -> `/ai/orchestrator-pii-placeholder-demo/chat/completions` or `/ai/orchestrator-pii-synthetic-demo/chat/completions`
 
 So the basis for route selection is simple: whichever governance scenario the user selected in the UI is included in the request payload, and the orchestrator picks the matching Kong AI route before it starts its own LLM steps.
 
@@ -299,6 +306,54 @@ When `Semantic Cache` is selected in `View Scene`, the scene popup changes from 
   - calls the orchestrator cache-clear endpoint: `/orchestrator/semantic-cache/clear`
   - the orchestrator deletes all Redis keys matching `semantic_cache:*`
   - this button is independent of the send-request buttons and is intended to reset the semantic-cache demo back to a clean state before another first request
+
+### 7. PII Sanitization
+
+This scenario demonstrates Kong anonymizing sensitive information in both the upstream request body and the downstream LLM response body.
+
+Behind the scenes:
+
+- the orchestrator switches to one of two dedicated routes:
+  - `/ai/orchestrator-pii-placeholder-demo/chat/completions`
+  - `/ai/orchestrator-pii-synthetic-demo/chat/completions`
+- each route applies `ai-sanitizer` before `ai-proxy-advanced`
+- the plugin is configured with:
+  - `anonymize: [all_and_credentials]`
+  - `sanitization_mode: BOTH`
+  - `recover_redacted: false`
+- the placeholder route uses `redact_type: placeholder`
+- the synthetic route uses `redact_type: synthetic`
+- both routes call the external Kong AI PII service at:
+  - `docker.cloudsmith.io/kong/ai-pii/service:v0.1.4-en`
+- the probe sends a prompt containing multiple categories of sensitive values and asks the model to restate them
+- Kong sanitizes the request before it reaches the upstream model, and sanitizes the response before it is returned to the client
+
+The demo intentionally uses the focused-probe pattern instead of the full MCP/sub-agent orchestration flow so the request/response anonymization is easy to see.
+
+When `PII Sanitization` is selected in `View Scene`, the scene popup changes from a single `Play` action to two explicit PII-mode controls:
+
+- `Send Placeholder Request`
+  - sends `governance_scenario: "pii_sanitizer"` with `pii_sanitizer_mode: "placeholder"`
+  - Kong replaces detected values with fixed placeholders in both request and response handling
+
+- `Send Synthetic Request`
+  - sends `governance_scenario: "pii_sanitizer"` with `pii_sanitizer_mode: "synthetic"`
+  - Kong replaces detected values with synthetic category-matched values in both request and response handling
+
+The final output shows:
+
+- the selected anonymization mode
+- the effective sanitization policy
+- the original request prompt
+- the sanitized response returned through Kong
+
+Important setup note:
+
+- the AI PII service image is hosted in Kong's private Cloudsmith registry
+- you must authenticate with `docker login docker.cloudsmith.io`
+- the docs show:
+  - username: `kong/ai-pii`
+  - password: your support-provided token
 
 ## What happens when Play is pressed
 

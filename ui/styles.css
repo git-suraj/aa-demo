@@ -784,21 +784,25 @@ button:hover {
   gap: 12px;
 }
 
+.probe-controls,
 .semantic-cache-controls {
   display: grid;
   gap: 14px;
 }
 
+.probe-controls[hidden],
 .semantic-cache-controls[hidden] {
   display: none;
 }
 
+.probe-grid,
 .semantic-cache-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
+.probe-card,
 .semantic-cache-card {
   display: grid;
   gap: 10px;
@@ -808,6 +812,7 @@ button:hover {
   background: var(--panel-2);
 }
 
+.probe-label,
 .semantic-cache-label {
   color: #d6ffbe;
   font-size: 0.82rem;
@@ -815,11 +820,13 @@ button:hover {
   text-transform: uppercase;
 }
 
+.probe-copy,
 .semantic-cache-copy {
   margin: 0;
   color: var(--muted);
 }
 
+.probe-payload,
 .semantic-cache-payload {
   margin: 0;
   max-height: 220px;
@@ -856,6 +863,16 @@ button:hover {
   filter: brightness(1.08);
 }
 
+.graph-section {
+  display: grid;
+  gap: 16px;
+}
+
+.graph-section-head h3 {
+  margin: 8px 0 0;
+  color: var(--text);
+}
+
 .graph-diagrams {
   display: grid;
   gap: 16px;
@@ -881,6 +898,143 @@ button:hover {
   margin: 18px 0 14px;
 }
 
+.scenario-diagram {
+  position: relative;
+  margin: 18px 0 14px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(0deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    rgba(255, 255, 255, 0.02);
+  background-size: 22px 22px;
+  overflow: hidden;
+}
+
+.scenario-static-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scenario-diagram-lg {
+  min-height: 280px;
+}
+
+.scenario-diagram-xl {
+  min-height: 320px;
+}
+
+.scenario-diagram-xxl {
+  min-height: 340px;
+}
+
+.scenario-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.scenario-lines path {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.72);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.scenario-lines text {
+  text-anchor: middle;
+  dominant-baseline: middle;
+  font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+}
+
+.scenario-lines .step {
+  fill: var(--muted);
+  font-size: 12px;
+  paint-order: stroke;
+  stroke: rgba(16, 19, 25, 0.94);
+  stroke-width: 6px;
+  stroke-linejoin: round;
+}
+
+.scenario-lines .box rect {
+  stroke-width: 1.2;
+}
+
+.scenario-lines .box text {
+  fill: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.scenario-lines .box-client rect,
+.scenario-lines .box-kong rect,
+.scenario-lines .box-policy rect,
+.scenario-lines .box-store rect,
+.scenario-lines .box-llm rect,
+.scenario-lines .box-external rect,
+.scenario-lines .box-error rect,
+.scenario-lines .box-allow rect {
+  fill: rgba(255, 255, 255, 0.03);
+  stroke: rgba(255, 255, 255, 0.18);
+}
+
+.scenario-lines .box-kong rect {
+  fill: rgba(131, 255, 94, 0.12);
+  stroke: rgba(131, 255, 94, 0.45);
+}
+
+.scenario-lines .box-kong-guard rect {
+  fill: rgba(197, 255, 102, 0.16);
+  stroke: rgba(197, 255, 102, 0.88);
+}
+
+.scenario-lines .box-kong-guard text {
+  fill: #f7ffe7;
+}
+
+.scenario-lines .box-client rect,
+.scenario-lines .box-allow rect {
+  fill: rgba(131, 255, 94, 0.09);
+  stroke: rgba(131, 255, 94, 0.34);
+}
+
+.scenario-lines .box-policy rect {
+  fill: rgba(124, 192, 255, 0.08);
+  stroke: rgba(124, 192, 255, 0.42);
+  stroke-dasharray: 4 4;
+}
+
+.scenario-lines .box-policy-guard rect {
+  fill: rgba(197, 255, 102, 0.1);
+  stroke: rgba(197, 255, 102, 0.66);
+}
+
+.scenario-lines .box-policy-guard text {
+  fill: #f0ffd1;
+}
+
+.scenario-lines .box-store rect {
+  fill: rgba(243, 179, 84, 0.08);
+  stroke: rgba(243, 179, 84, 0.34);
+}
+
+.scenario-lines .box-store text {
+  fill: #ffe9c7;
+}
+
+.scenario-lines .box-error rect {
+  fill: rgba(255, 107, 107, 0.08);
+  stroke: rgba(255, 107, 107, 0.45);
+}
+
+.scenario-lines .box-error text {
+  fill: #ffdede;
+}
+
 .graph-flow.compact .graph-node {
   min-width: 140px;
 }
@@ -894,6 +1048,51 @@ button:hover {
   color: var(--text);
   text-align: center;
   font-size: 0.9rem;
+}
+
+.graph-node.kong {
+  border-color: rgba(131, 255, 94, 0.45);
+  background: linear-gradient(180deg, rgba(131, 255, 94, 0.16), rgba(131, 255, 94, 0.06));
+  box-shadow: 0 0 0 1px rgba(131, 255, 94, 0.08) inset;
+}
+
+.graph-node.policy {
+  border-style: dashed;
+  border-color: rgba(124, 192, 255, 0.42);
+  background: rgba(124, 192, 255, 0.08);
+  color: #d9ecff;
+}
+
+.graph-node.store {
+  border-color: rgba(243, 179, 84, 0.34);
+  background: rgba(243, 179, 84, 0.08);
+  color: #ffe9c7;
+}
+
+.graph-node.llm {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.graph-node.external {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.graph-node.decision {
+  border-color: rgba(186, 199, 218, 0.28);
+  background: rgba(186, 199, 218, 0.06);
+}
+
+.graph-node.decision.allow {
+  border-color: rgba(131, 255, 94, 0.34);
+  background: rgba(131, 255, 94, 0.08);
+}
+
+.graph-node.decision.error {
+  border-color: rgba(255, 107, 107, 0.45);
+  background: rgba(255, 107, 107, 0.08);
+  color: #ffdede;
 }
 
 .graph-node.start,

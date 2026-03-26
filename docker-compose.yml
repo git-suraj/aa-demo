@@ -6,6 +6,14 @@ services:
     expose:
       - "6379"
 
+  ai-pii-service:
+    image: docker.cloudsmith.io/kong/ai-pii/service:v0.1.4-en
+    platform: linux/amd64
+    container_name: ai-pii-service
+    restart: unless-stopped
+    expose:
+      - "8080"
+
   kong-dp:
     image: kong/kong-gateway:3.13.0.1
     container_name: kong-dp
@@ -36,6 +44,8 @@ services:
       - ./kong/certs:/etc/kong/certs:ro
     depends_on:
       redis-stack:
+        condition: service_started
+      ai-pii-service:
         condition: service_started
       orchestrator:
         condition: service_started

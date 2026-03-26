@@ -29,6 +29,10 @@ const semanticCacheHitPayload = document.getElementById("semantic-cache-hit-payl
 const semanticCacheSeedButton = document.getElementById("semantic-cache-seed-button");
 const semanticCacheHitButton = document.getElementById("semantic-cache-hit-button");
 const semanticCacheClearButton = document.getElementById("semantic-cache-clear-button");
+const piiSanitizerControls = document.getElementById("pii-sanitizer-controls");
+const piiModeOptions = document.getElementById("pii-mode-options");
+const piiModePayload = document.getElementById("pii-mode-payload");
+const piiSendButton = document.getElementById("pii-send-button");
 const noticeKicker = document.getElementById("notice-kicker");
 const noticeTitle = document.getElementById("notice-title");
 const noticeMessage = document.getElementById("notice-message");
@@ -129,6 +133,7 @@ function labelForScenario(scenario) {
     prompt_enhancement: "Prompt Decorator",
     semantic_guard: "Semantic Guard",
     semantic_cache: "Semantic Cache",
+    pii_sanitizer: "PII Sanitization",
   };
   return labels[scenario] || "Normal";
 }
@@ -227,15 +232,26 @@ function applyScenarioChoice(scenario) {
   if (cacheField) {
     cacheField.value = "single";
   }
+  const piiField = playForm.elements.namedItem("pii_sanitizer_mode");
+  if (piiField) {
+    piiField.value = "placeholder";
+  }
   const isSemanticCache = activeScenario === "semantic_cache";
+  const isPiiSanitizer = activeScenario === "pii_sanitizer";
   if (semanticCacheControls) {
     semanticCacheControls.hidden = !isSemanticCache;
   }
+  if (piiSanitizerControls) {
+    piiSanitizerControls.hidden = !isPiiSanitizer;
+  }
   if (playButton) {
-    playButton.hidden = isSemanticCache;
+    playButton.hidden = isSemanticCache || isPiiSanitizer;
   }
   if (isSemanticCache) {
     renderSemanticCachePayloads();
+  }
+  if (isPiiSanitizer) {
+    renderPiiSanitizerPayloads();
   }
 }
 
@@ -246,19 +262,39 @@ function currentFormPayload() {
 
 function semanticCachePayload(step) {
   const base = currentFormPayload();
-  const reuseVariant =
+  const systemPrompt =
+    "You are an executive escalation triage assistant. Return a concise response with two sections: Situation and Recommended action.";
+  const userPrompt =
     step === "reuse"
-      ? {
-          issue_summary: "Customer reports a pricing disagreement and workflow synchronization lag across agent jobs.",
-          product_issue: "workflow synchronization lag across agent jobs",
-          billing_issue: "pricing discrepancy on enterprise add-ons",
-        }
-      : {};
+      ? [
+          "Create an executive triage note for an enterprise customer escalation.",
+          `Account: ${base.account_name}`,
+          "Context: The customer is disputing recent premium-add-on charges and is also reporting lag in workflow-agent synchronization across production jobs.",
+          "Business summary: Customer leadership wants immediate clarity on the billing dispute and the workflow sync lag before renewal discussions continue.",
+          "Product signal: workflow-agent synchronization lag across production jobs",
+          "Billing signal: disputed premium add-on charges on the current enterprise invoice",
+          "Write two sections only:",
+          "1) Situation",
+          "2) Recommended action",
+          "Keep the wording executive-friendly, concise, and action-oriented.",
+        ].join("\n")
+      : [
+          "Create an executive triage note for an enterprise customer escalation.",
+          `Account: ${base.account_name}`,
+          "Context: The customer has raised a billing dispute on enterprise add-ons and is also seeing workflow-agent synchronization delays in production.",
+          `Business summary: ${base.issue_summary}`,
+          `Product signal: ${base.product_issue}`,
+          `Billing signal: ${base.billing_issue}`,
+          "Write two sections only:",
+          "1) Situation",
+          "2) Recommended action",
+          "Keep the wording executive-friendly, concise, and action-oriented.",
+        ].join("\n");
   return {
-    ...base,
-    ...reuseVariant,
     governance_scenario: "semantic_cache",
     semantic_cache_step: step,
+    system_prompt: systemPrompt,
+    user_prompt: userPrompt,
   };
 }
 
@@ -268,6 +304,44 @@ function renderSemanticCachePayloads() {
   }
   semanticCacheSeedPayload.textContent = pretty(semanticCachePayload("seed"));
   semanticCacheHitPayload.textContent = pretty(semanticCachePayload("reuse"));
+}
+
+function piiSanitizerPayload(mode) {
+  const base = currentFormPayload();
+  const piiRichPrompt = [
+    "Prepare a support note and explicitly repeat the following customer details exactly as written.",
+    "Customer: John Carter from Acme Health, 415-555-0188, john.carter@acme-health.example",
+    "DOB: 1988-04-12, SSN: 123-45-6789, Passport: XH9382014, Driver License: D1234567",
+    "Bank: IBAN GB29NWBK60161331926819, Credit Card: 4111 1111 1111 1111",
+    "Crypto: bc1qw4hrw0v3examplewallet9s2, URL: https://portal.acme-health.example/patient/9381",
+    "IP: 203.0.113.42, Medical ID: NHS 943 476 5919, National ID: Aadhaar 2345 6789 1234",
+    "Nationality / group: Canadian, union member",
+    "Credential: sk-live-ACME-SECRET-KEY-123456",
+    `Account: ${base.account_name}`,
+    `Escalation summary: ${base.issue_summary}`,
+    "Return two sections only: 1) Customer profile recap 2) Immediate next action.",
+  ].join("\n");
+  return {
+    governance_scenario: "pii_sanitizer",
+    pii_sanitizer_mode: mode,
+    sanitization_mode: "BOTH",
+    system_prompt:
+      "You are a support operations assistant. Summarize the provided customer escalation details clearly and directly.",
+    user_prompt: piiRichPrompt,
+  };
+}
+
+function renderPiiSanitizerPayloads() {
+  if (!piiModePayload) {
+    return;
+  }
+  const selectedMode =
+    document.querySelector('input[name="pii_mode_choice"]:checked')?.value || "placeholder";
+  const piiField = playForm.elements.namedItem("pii_sanitizer_mode");
+  if (piiField) {
+    piiField.value = selectedMode;
+  }
+  piiModePayload.textContent = pretty(piiSanitizerPayload(selectedMode));
 }
 
 function showNotice({ kicker = "Status", title, message }) {
@@ -817,6 +891,8 @@ function renderFinalOutput(result) {
   const supportRunbook = unwrapStructuredValue(result.support_track?.runbook);
   const successReply = unwrapStructuredValue(result.success_track?.customer_reply);
   const successTask = unwrapStructuredValue(result.success_track?.followup_task);
+  const piiProbe = result.pii_sanitizer_probe;
+  const isFocusedProbe = Boolean(result.semantic_cache_probe || piiProbe);
 
   finalOutput.innerHTML = `
     <section class="output-hero">
@@ -866,6 +942,38 @@ function renderFinalOutput(result) {
       </section>`
           : ""
       }
+      ${
+        piiProbe
+          ? `
+      <section class="output-section output-section-wide">
+        <strong>PII Sanitizer Probe</strong>
+        <p class="output-section-copy">Created by the orchestrator in the AI PII Sanitizer scenario. Kong sanitizes both the upstream request and downstream response using the selected anonymization mode.</p>
+        <div class="output-subgrid">
+          <div class="output-subsection">
+            <span>Sanitization Policy</span>
+            ${renderDefinitionList([
+              ["Mode", piiProbe.mode],
+              ["Sanitization Direction", piiProbe.sanitization_mode],
+              ["Anonymize", (piiProbe.anonymize || []).join(", ")],
+            ])}
+            ${renderBulletList(piiProbe.anonymized_categories)}
+          </div>
+          <div class="output-subsection output-subsection-wide">
+            <span>Original Request Prompt</span>
+            ${renderTextBlock(piiProbe.original_prompt?.user_prompt)}
+          </div>
+          <div class="output-subsection output-subsection-wide">
+            <span>Sanitized Response Returned Through Kong</span>
+            ${renderTextBlock(piiProbe.sanitized_response)}
+          </div>
+        </div>
+      </section>`
+          : ""
+      }
+      ${
+        isFocusedProbe
+          ? ""
+          : `
       <section class="output-section">
         <strong>Account Context</strong>
         <p class="output-section-copy">Created by the orchestrator using the MCP tool <code>get_customer_account</code> before any sub-agent work starts.</p>
@@ -949,7 +1057,8 @@ function renderFinalOutput(result) {
             ${renderTextBlock(result.success_track?.llm_summary?.summary)}
           </div>
         </div>
-      </section>
+      </section>`
+      }
     </div>
   `;
 }
@@ -1066,6 +1175,11 @@ function handleTraceEvent(payload) {
         hideTopologyActivity();
         clearOrchestratorLlmPath();
         activateToolPath("orchestrator", "complete");
+      } else if (traceState.scenario === "pii_sanitizer") {
+        setFlowStage("PII sanitization probe", payload.message);
+        hideTopologyActivity();
+        clearOrchestratorLlmPath();
+        activateToolPath("orchestrator", "complete");
       } else {
         setFlowStage("Gathering account context", payload.message);
         setMcpPathState("active");
@@ -1150,6 +1264,7 @@ function handleTraceEvent(payload) {
         semantic_guard: "Kong semantic guard blocked request",
         semantic_cache_miss: "Semantic cache miss",
         semantic_cache_hit: "Semantic cache hit",
+        pii_sanitizer: "PII sanitization policy applied",
         failover_primary_failed: "Primary model path failed",
         failover: "Kong selected fallback model",
       };
@@ -1248,7 +1363,7 @@ function handleTraceEvent(payload) {
       completeActorRoot("orchestrator", payload.timestamp);
       markNode("kong", "complete");
       markLine("ui-kong", "complete");
-      if (traceState.scenario === "semantic_cache") {
+      if (traceState.scenario === "semantic_cache" || traceState.scenario === "pii_sanitizer") {
         hideTopologyActivity();
         activateToolPath("orchestrator", "complete");
       }
@@ -1274,7 +1389,7 @@ function handleTraceEvent(payload) {
         setRunState("complete");
       }
       completeActorRoot("orchestrator", payload.timestamp, payload.duration_ms);
-      if (traceState.scenario === "semantic_cache") {
+      if (traceState.scenario === "semantic_cache" || traceState.scenario === "pii_sanitizer") {
         hideTopologyActivity();
         activateToolPath("orchestrator", "complete");
       }
@@ -1381,6 +1496,14 @@ semanticCacheHitButton?.addEventListener("click", (event) => {
   play({ governance_scenario: "semantic_cache", semantic_cache_step: "reuse" });
 });
 
+piiSendButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  const selectedMode =
+    document.querySelector('input[name="pii_mode_choice"]:checked')?.value || "placeholder";
+  sceneModal.close();
+  play({ governance_scenario: "pii_sanitizer", pii_sanitizer_mode: selectedMode });
+});
+
 semanticCacheClearButton?.addEventListener("click", async (event) => {
   event.preventDefault();
   await clearSemanticCache();
@@ -1395,6 +1518,9 @@ presetOptions?.addEventListener("change", (event) => {
   if (activeScenario === "semantic_cache") {
     renderSemanticCachePayloads();
   }
+  if (activeScenario === "pii_sanitizer") {
+    renderPiiSanitizerPayloads();
+  }
 });
 
 scenarioOptions?.addEventListener("change", (event) => {
@@ -1403,6 +1529,14 @@ scenarioOptions?.addEventListener("change", (event) => {
     return;
   }
   applyScenarioChoice(target.value);
+});
+
+piiModeOptions?.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement) || target.name !== "pii_mode_choice") {
+    return;
+  }
+  renderPiiSanitizerPayloads();
 });
 
 resetButton.addEventListener("click", () => {
@@ -1419,6 +1553,9 @@ resetButton.addEventListener("click", () => {
 playForm.addEventListener("input", () => {
   if (activeScenario === "semantic_cache") {
     renderSemanticCachePayloads();
+  }
+  if (activeScenario === "pii_sanitizer") {
+    renderPiiSanitizerPayloads();
   }
 });
 

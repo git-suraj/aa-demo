@@ -19,7 +19,7 @@
         </div>
         <div class="topbar-actions">
           <button id="scene-button" class="secondary scene-launch" type="button">View Scene</button>
-          <button id="graph-button" class="secondary" type="button">View LangGraph</button>
+          <button id="graph-button" class="secondary" type="button">View Diagrams</button>
           <button id="reset-button" class="secondary" type="button">Reset</button>
           <button id="output-button" class="secondary" type="button">View Run Output</button>
         </div>
@@ -234,6 +234,10 @@
                 <input type="radio" name="scenario_choice" value="semantic_cache" />
                 <span>Semantic Cache</span>
               </label>
+              <label class="preset-option">
+                <input type="radio" name="scenario_choice" value="pii_sanitizer" />
+                <span>PII Sanitization</span>
+              </label>
             </div>
           </section>
           <form id="play-form" class="form-grid">
@@ -263,6 +267,7 @@
             </label>
             <input type="hidden" name="governance_scenario" value="normal" />
             <input type="hidden" name="semantic_cache_step" value="single" />
+            <input type="hidden" name="pii_sanitizer_mode" value="placeholder" />
           </form>
           <section id="semantic-cache-controls" class="semantic-cache-controls" hidden>
             <div class="semantic-cache-grid">
@@ -283,6 +288,24 @@
               <button id="semantic-cache-clear-button" class="secondary semantic-cache-clear" type="button">Clear Semantic Cache</button>
               <p class="semantic-cache-copy">Clears all semantic cache entries so the next first request starts from a clean cache.</p>
             </div>
+          </section>
+          <section id="pii-sanitizer-controls" class="probe-controls" hidden>
+            <article class="probe-card">
+              <span class="probe-label">Sanitization Mode</span>
+              <p class="probe-copy">Choose how Kong AI PII Sanitizer should anonymize the request and response. The payload below is the actual PII-rich prompt this scene sends through Kong.</p>
+              <div class="preset-options" id="pii-mode-options">
+                <label class="preset-option">
+                  <input type="radio" name="pii_mode_choice" value="placeholder" checked />
+                  <span>Placeholder</span>
+                </label>
+                <label class="preset-option">
+                  <input type="radio" name="pii_mode_choice" value="synthetic" />
+                  <span>Synthetic</span>
+                </label>
+              </div>
+              <pre id="pii-mode-payload" class="probe-payload"></pre>
+              <button id="pii-send-button" class="primary" type="button">Send PII Sanitization Request</button>
+            </article>
           </section>
           <div class="modal-actions">
             <button id="scene-play-button" class="primary" type="button">Play</button>
@@ -310,17 +333,21 @@
         <div class="modal-shell modal-wide">
           <div class="modal-head">
             <div>
-              <p class="eyebrow">LangGraph</p>
-              <h2>State Diagrams</h2>
+              <p class="eyebrow">Diagrams</p>
+              <h2>Workflow And Scenario Views</h2>
             </div>
             <button class="ghost modal-close" data-close-modal="graph-modal" type="button">Close</button>
           </div>
           <p class="modal-copy">
-            These are the workflow graphs behind the demo. The orchestrator runs a sequential
-            graph, then hands work to the two sub-agents, each with its own smaller tool-and-LLM
-            flow.
+            These diagrams show both the LangGraph workflows and the scenario-specific Kong
+            architecture paths used in the demo.
           </p>
 
+          <section class="graph-section">
+            <div class="graph-section-head">
+              <p class="eyebrow">Workflow Graphs</p>
+              <h3>LangGraph State Diagrams</h3>
+            </div>
           <section class="graph-diagrams">
             <article class="graph-card">
               <div class="graph-card-head">
@@ -396,6 +423,8 @@
               </p>
             </article>
           </section>
+          </section>
+
         </div>
       </dialog>
 

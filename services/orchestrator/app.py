@@ -52,6 +52,7 @@ class PlayRequest(BaseModel):
     incident_id: str = "INC-1007"
     governance_scenario: str = "normal"
     semantic_cache_step: str = "single"
+    pii_sanitizer_mode: str = "placeholder"
 
 
 class ExternalTraceEvent(BaseModel):
@@ -65,6 +66,7 @@ class OrchestratorState(TypedDict, total=False):
     run_id: str
     governance_scenario: str
     semantic_cache_step: str
+    pii_sanitizer_mode: str
     ai_route_base_url: str
     available_tools: list[str]
     selected_tools: list[str]
@@ -74,6 +76,7 @@ class OrchestratorState(TypedDict, total=False):
     renewal_risk: Any
     open_tickets: Any
     semantic_cache_probe: dict[str, Any]
+    pii_sanitizer_probe: dict[str, Any]
     triage_brief: dict[str, Any]
     support_track: dict[str, Any]
     success_track: dict[str, Any]
@@ -96,7 +99,7 @@ def timed_ms(started_at: float) -> int:
     return round((time.perf_counter() - started_at) * 1000)
 
 
-def ai_route_for_scenario(scenario: str) -> str:
+def ai_route_for_scenario(scenario: str, pii_mode: str = "placeholder") -> str:
     route_map = {
         "normal": f"{KONG_PROXY_URL}/ai/orchestrator",
         "llm_failover": f"{KONG_PROXY_URL}/ai/orchestrator-failover-demo",
@@ -104,6 +107,11 @@ def ai_route_for_scenario(scenario: str) -> str:
         "prompt_enhancement": f"{KONG_PROXY_URL}/ai/orchestrator-prompt-enhance-demo",
         "semantic_guard": f"{KONG_PROXY_URL}/ai/orchestrator-semantic-guard-demo",
         "semantic_cache": f"{KONG_PROXY_URL}/ai/orchestrator-semantic-cache-demo",
+        "pii_sanitizer": (
+            f"{KONG_PROXY_URL}/ai/orchestrator-pii-synthetic-demo"
+            if pii_mode == "synthetic"
+            else f"{KONG_PROXY_URL}/ai/orchestrator-pii-placeholder-demo"
+        ),
     }
     return route_map.get(scenario, route_map["normal"])
 
@@ -116,6 +124,7 @@ def scenario_summary(scenario: str) -> str:
         "prompt_enhancement": "Kong prompt decoration applies stronger executive-governance instructions so the orchestrator output becomes more structured and enterprise-safe.",
         "semantic_guard": "Kong semantic guard is expected to block prompts that request sensitive personal or internal system information.",
         "semantic_cache": "Kong semantic cache is expected to serve a repeated orchestrator prompt from Redis after the first miss populates the cache.",
+        "pii_sanitizer": "Kong AI PII Sanitizer is expected to anonymize sensitive fields in both the request sent upstream and the response returned to the client.",
     }
     return summaries.get(scenario, summaries["normal"])
 
@@ -145,19 +154,95 @@ def prompts_for_scenario(prompts: dict[str, str], scenario: str) -> dict[str, st
     return prompts
 
 
+def build_semantic_cache_user_prompt(request: PlayRequest, step: str) -> str:
+    if step == "reuse":
+        return (
+            "Create an executive triage note for an enterprise customer escalation.\n"
+            f"Account: {request.account_name}\n"
+            "Context: The customer is disputing recent premium-add-on charges and is also reporting "
+            "lag in workflow-agent synchronization across production jobs.\n"
+            f"Business summary: {request.issue_summary}\n"
+            f"Product signal: {request.product_issue}\n"
+            f"Billing signal: {request.billing_issue}\n"
+            "Write two sections only:\n"
+            "1) Situation\n"
+            "2) Recommended action\n"
+            "Keep the wording executive-friendly, concise, and action-oriented."
+        )
+
+    return (
+        "Create an executive triage note for an enterprise customer escalation.\n"
+        f"Account: {request.account_name}\n"
+        "Context: The customer has raised a billing dispute on enterprise add-ons and is also seeing "
+        "workflow-agent synchronization delays in production.\n"
+        f"Business summary: {request.issue_summary}\n"
+        f"Product signal: {request.product_issue}\n"
+        f"Billing signal: {request.billing_issue}\n"
+        "Write two sections only:\n"
+        "1) Situation\n"
+        "2) Recommended action\n"
+        "Keep the wording executive-friendly, concise, and action-oriented."
+    )
+
+
 def build_semantic_cache_prompts(request: PlayRequest) -> dict[str, str]:
     return {
         "system_prompt": (
             "You are an executive escalation triage assistant. "
             "Return a concise response with two sections: Situation and Recommended action."
         ),
-        "user_prompt": (
-            f"Account: {request.account_name}\n"
-            f"Issue summary: {request.issue_summary}\n"
-            f"Product issue: {request.product_issue}\n"
-            f"Billing issue: {request.billing_issue}\n"
-            "Summarize the current escalation and the next action."
+        "user_prompt": build_semantic_cache_user_prompt(request, request.semantic_cache_step),
+    }
+
+
+def pii_anonymized_categories() -> list[str]:
+    return [
+        "general",
+        "phone",
+        "email",
+        "creditcard",
+        "crypto",
+        "date",
+        "ip",
+        "nrp",
+        "ssn",
+        "url",
+        "medical",
+        "driverlicense",
+        "passport",
+        "bank",
+        "nationalid",
+        "credentials",
+        "custom (available when custom regex patterns are configured)",
+    ]
+
+
+def without_cache_headers(result: dict[str, Any]) -> dict[str, Any]:
+    cleaned = dict(result)
+    cleaned.pop("cache_headers", None)
+    return cleaned
+
+
+def build_pii_probe_prompts(request: PlayRequest, mode: str) -> dict[str, str]:
+    pii_rich_request = (
+        "Prepare a support note and explicitly repeat the following customer details exactly as written.\n"
+        "Customer: John Carter from Acme Health, 415-555-0188, john.carter@acme-health.example\n"
+        "DOB: 1988-04-12, SSN: 123-45-6789, Passport: XH9382014, Driver License: D1234567\n"
+        "Bank: IBAN GB29NWBK60161331926819, Credit Card: 4111 1111 1111 1111\n"
+        "Crypto: bc1qw4hrw0v3examplewallet9s2, URL: https://portal.acme-health.example/patient/9381\n"
+        "IP: 203.0.113.42, Medical ID: NHS 943 476 5919, National ID: Aadhaar 2345 6789 1234\n"
+        "Nationality / group: Canadian, union member\n"
+        "Credential: sk-live-ACME-SECRET-KEY-123456\n"
+        f"Account: {request.account_name}\n"
+        f"Escalation summary: {request.issue_summary}\n"
+        "Return two sections only: 1) Customer profile recap 2) Immediate next action."
+    )
+    return {
+        "system_prompt": (
+            "You are a support operations assistant. "
+            "Summarize the provided customer escalation details clearly and directly."
         ),
+        "user_prompt": pii_rich_request,
     }
 
 
@@ -701,7 +786,8 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
     started = time.perf_counter()
     scenario = request.governance_scenario
     semantic_cache_step = request.semantic_cache_step
-    ai_route_base_url = ai_route_for_scenario(scenario)
+    pii_sanitizer_mode = request.pii_sanitizer_mode
+    ai_route_base_url = ai_route_for_scenario(scenario, pii_sanitizer_mode)
     await emit(
         run_id,
         "run_started",
@@ -717,6 +803,78 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         summary=scenario_summary(scenario),
         output={"ai_route_base_url": ai_route_base_url},
     )
+    if scenario == "pii_sanitizer":
+        prompts = build_pii_probe_prompts(request, pii_sanitizer_mode)
+        stage = f"pii_{pii_sanitizer_mode}_probe"
+        mode_label = "synthetic" if pii_sanitizer_mode == "synthetic" else "placeholder"
+        await emit(
+            run_id,
+            "planning",
+            message=f"Kong AI PII Sanitizer is anonymizing request and response bodies in {mode_label} mode.",
+        )
+        await emit(
+            run_id,
+            "policy_event",
+            actor="orchestrator",
+            stage="pii_sanitizer",
+            llm_stage=stage,
+            summary=(
+                f"Kong AI PII Sanitizer is protecting both the upstream request and downstream response using "
+                f"{mode_label} anonymization across all supported PII categories and credentials."
+            ),
+            input={
+                "sanitization_mode": "BOTH",
+                "redact_type": pii_sanitizer_mode,
+                "anonymize": ["all_and_credentials"],
+                "original_prompt": prompts,
+            },
+            output={
+                "sanitization_mode": "BOTH",
+                "redact_type": pii_sanitizer_mode,
+                "protected_directions": ["request", "response"],
+                "anonymized_categories": pii_anonymized_categories(),
+            },
+        )
+        await emit(run_id, "llm_started", actor="orchestrator", stage=stage, input=prompts)
+        llm_started = time.perf_counter()
+        pii_result = await llm.generate_with_headers(base_url=ai_route_base_url, **prompts)
+        pii_output = without_cache_headers(pii_result)
+        await emit(
+            run_id,
+            "llm_completed",
+            actor="orchestrator",
+            stage=stage,
+            llm_used=pii_output["llm_used"],
+            model=pii_output["model"],
+            output=pii_output,
+            duration_ms=timed_ms(llm_started),
+        )
+        final_response = {
+            "headline": "PII sanitization probe completed",
+            "governance_scenario": scenario,
+            "pii_sanitizer_probe": {
+                "mode": pii_sanitizer_mode,
+                "sanitization_mode": "BOTH",
+                "anonymize": ["all_and_credentials"],
+                "anonymized_categories": pii_anonymized_categories(),
+                "request_payload": request.model_dump(),
+                "original_prompt": prompts,
+                "sanitized_response": pii_output["summary"],
+            },
+            "executive_brief": pii_output,
+            "recommended_summary": pii_output["summary"],
+            "available_tools": [],
+            "called_mcp_tools": [],
+            "tool_plan_steps": [],
+            "mcp_tools_by_agent": {
+                "orchestrator": [],
+                "support-agent": [],
+                "success-agent": [],
+            },
+        }
+        await emit(run_id, "final_response", headline=final_response["headline"], output=final_response)
+        await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=final_response)
+        return {"run_id": run_id, "result": final_response}
     if scenario == "semantic_cache":
         prompts = build_semantic_cache_prompts(request)
         stage = "semantic_cache_seed" if semantic_cache_step == "seed" else "semantic_cache_reuse"
@@ -784,6 +942,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
                 "run_id": run_id,
                 "governance_scenario": scenario,
                 "semantic_cache_step": semantic_cache_step,
+                "pii_sanitizer_mode": pii_sanitizer_mode,
                 "ai_route_base_url": ai_route_base_url,
             }
         )
