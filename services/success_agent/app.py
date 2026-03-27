@@ -55,7 +55,7 @@ async def emit_trace(run_id: str, event_type: str, **payload: Any) -> None:
 
 async def fetch_tool_inventory(state: SuccessState) -> SuccessState:
     params = state["params"]
-    client = KongMCPClient(MCP_URL, API_KEY, "success-agent")
+    client = KongMCPClient(MCP_URL, API_KEY, "success-agent", run_id=params["run_id"])
     started = time.perf_counter()
     tools = await client.list_tools()
     available_tools = [tool.get("name") for tool in tools]
@@ -104,7 +104,7 @@ def build_success_tool_args(tool_name: str, llm_arguments: dict[str, Any], param
 
 async def prepare_customer_actions(state: SuccessState) -> SuccessState:
     params = state["params"]
-    client = KongMCPClient(MCP_URL, API_KEY, "success-agent")
+    client = KongMCPClient(MCP_URL, API_KEY, "success-agent", run_id=params["run_id"])
     available_tools = state.get("available_tools", [])
     remaining_tools = [tool for tool in available_tools if tool in {"draft_customer_reply", "create_followup_task"}]
     called_mcp_tools: list[str] = []
@@ -233,6 +233,7 @@ async def generate_success_summary(state: SuccessState) -> SuccessState:
     llm_summary = await llm.generate(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
+            run_id=params["run_id"],
         )
     await emit_trace(
         params["run_id"],

@@ -26,10 +26,12 @@ plugins:
           local route = log_payload['route'] or { name = 'noRoute' }
           local consumer = log_payload['consumer'] or {}
           local request = log_payload['request'] or {}
+          local request_headers = request['headers'] or {}
           local response = log_payload['response'] or {}
           local status_code = tonumber(response['status'] or 0) or 0
           local status = tostring(status_code)
           local status_class = tostring(math.floor(status_code / 100)) .. 'xx'
+          local run_id = tostring(request_headers['x-demo-run-id'] or request_headers['X-Demo-Run-Id'] or '')
           local component = 'gateway'
           if route['name'] == 'mock-mcp-route' then
             component = 'mcp'
@@ -43,28 +45,50 @@ plugins:
             component = 'ui'
           end
           local ai = log_payload['ai'] or {}
+          local mcp = ai['mcp'] or {}
+          local mcp_rpc = mcp['rpc'] or {}
+          local mcp_entry = mcp_rpc[1] or {}
           local proxy = ai['proxy'] or {}
           local meta = proxy['meta'] or {}
           local usage = proxy['usage'] or {}
           local prompt_tokens = tonumber(usage['prompt_tokens'] or usage['input_tokens'] or 0) or 0
           local completion_tokens = tonumber(usage['completion_tokens'] or usage['output_tokens'] or 0) or 0
           local total_tokens = tonumber(usage['total_tokens'] or (prompt_tokens + completion_tokens) or 0) or 0
+          local provider_name = tostring(meta['provider_name'] or '')
+          local model_name = tostring(meta['response_model'] or meta['request_model'] or '')
+          local usage_cost = tonumber(usage['cost'])
+          if usage_cost == nil or usage_cost <= 0 then
+            if provider_name == 'openai' and string.find(model_name, 'gpt-4o-mini', 1, true) then
+              usage_cost = ((prompt_tokens * 0.15) + (completion_tokens * 0.60)) / 1000000
+            elseif provider_name == 'gemini' and string.find(model_name, 'gemini-2.5-flash', 1, true) then
+              usage_cost = ((prompt_tokens * 0.30) + (completion_tokens * 2.50)) / 1000000
+            else
+              usage_cost = 0
+            end
+          end
           log_payload['llm_usage'] = {
-            provider_name = tostring(meta['provider_name'] or ''),
+            provider_name = provider_name,
             request_model = tostring(meta['request_model'] or ''),
             response_model = tostring(meta['response_model'] or ''),
             prompt_tokens = prompt_tokens,
             completion_tokens = completion_tokens,
             total_tokens = total_tokens,
-            cost = usage['cost'],
+            cost = usage_cost,
             time_per_token = usage['time_per_token'],
             time_to_first_token = usage['time_to_first_token'],
           }
           log_payload['llm_usage_prompt_tokens'] = prompt_tokens
           log_payload['llm_usage_completion_tokens'] = completion_tokens
           log_payload['llm_usage_total_tokens'] = total_tokens
-          log_payload['llm_usage_model'] = tostring(meta['response_model'] or meta['request_model'] or '')
-          log_payload['llm_usage_provider'] = tostring(meta['provider_name'] or '')
+          log_payload['llm_usage_cost'] = usage_cost
+          log_payload['llm_usage_model'] = model_name
+          log_payload['llm_usage_provider'] = provider_name
+          log_payload['run_id'] = run_id
+          log_payload['mcp_session_id'] = tostring(mcp['mcp_session_id'] or '')
+          log_payload['mcp_method'] = tostring(mcp_entry['method'] or '')
+          log_payload['mcp_tool_name'] = tostring(mcp_entry['tool_name'] or '')
+          log_payload['mcp_tool_latency'] = tonumber(mcp_entry['latency'] or 0) or 0
+          log_payload['mcp_response_body_size'] = tonumber(mcp_entry['response_body_size'] or 0) or 0
           local cjson = require 'cjson'
           local payload_string = cjson.encode(log_payload)
           return {
@@ -78,6 +102,9 @@ plugins:
                 method = tostring(request['method'] or 'UNKNOWN'),
                 status = status,
                 status_class = status_class,
+                run_id = run_id,
+                mcp_method = tostring(mcp_entry['method'] or ''),
+                mcp_tool_name = tostring(mcp_entry['tool_name'] or ''),
               },
               values = {
                 { ts, payload_string }
@@ -125,11 +152,14 @@ services:
                 header_name: Authorization
                 header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
               logging:
-                log_payloads: false
+                log_payloads: true
                 log_statistics: true
               model:
                 provider: openai
                 name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
               weight: 100
             - route_type: llm/v1/chat
               auth:
@@ -137,11 +167,14 @@ services:
                 param_value: ${{ env "DECK_GEMINI_API_KEY" }}
                 param_location: query
               logging:
-                log_payloads: false
+                log_payloads: true
                 log_statistics: true
               model:
                 provider: gemini
                 name: ${{ env "DECK_GEMINI_MODEL" }}
+                options:
+                  input_cost: 0.30
+                  output_cost: 2.50
               weight: 50
 
   - name: ai-orchestrator-failover-demo-service
@@ -175,11 +208,14 @@ services:
                 header_name: Authorization
                 header_value: Bearer invalid-failover-demo-key
               logging:
-                log_payloads: false
+                log_payloads: true
                 log_statistics: true
               model:
                 provider: openai
                 name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
               weight: 100
             - route_type: llm/v1/chat
               auth:
@@ -187,11 +223,14 @@ services:
                 param_value: ${{ env "DECK_GEMINI_API_KEY" }}
                 param_location: query
               logging:
-                log_payloads: false
+                log_payloads: true
                 log_statistics: true
               model:
                 provider: gemini
                 name: ${{ env "DECK_GEMINI_MODEL" }}
+                options:
+                  input_cost: 0.30
+                  output_cost: 2.50
               weight: 50
 
   - name: ai-orchestrator-token-demo-service
@@ -216,11 +255,14 @@ services:
                 header_name: Authorization
                 header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
               logging:
-                log_payloads: false
+                log_payloads: true
                 log_statistics: true
               model:
                 provider: openai
                 name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
       - name: ai-rate-limiting-advanced
         config:
           llm_providers:
@@ -265,11 +307,14 @@ services:
                 header_name: Authorization
                 header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
               logging:
-                log_payloads: false
+                log_payloads: true
                 log_statistics: true
               model:
                 provider: openai
                 name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
 
   - name: ai-orchestrator-semantic-guard-demo-service
     url: https://api.openai.com
@@ -318,11 +363,14 @@ services:
                 header_name: Authorization
                 header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
               logging:
-                log_payloads: false
+                log_payloads: true
                 log_statistics: true
               model:
                 provider: openai
                 name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
 
   - name: ai-orchestrator-semantic-cache-demo-service
     url: https://api.openai.com
@@ -365,11 +413,14 @@ services:
                 header_name: Authorization
                 header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
               logging:
-                log_payloads: false
+                log_payloads: true
                 log_statistics: true
               model:
                 provider: openai
                 name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
 
   - name: ai-orchestrator-pii-placeholder-demo-service
     url: https://api.openai.com
@@ -402,11 +453,14 @@ services:
                 header_name: Authorization
                 header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
               logging:
-                log_payloads: false
+                log_payloads: true
                 log_statistics: true
               model:
                 provider: openai
                 name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
 
   - name: ai-orchestrator-pii-synthetic-demo-service
     url: https://api.openai.com
@@ -439,11 +493,14 @@ services:
                 header_name: Authorization
                 header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
               logging:
-                log_payloads: false
+                log_payloads: true
                 log_statistics: true
               model:
                 provider: openai
                 name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
 
   - name: ai-orchestrator-pii-block-demo-service
     url: https://api.openai.com
@@ -477,11 +534,14 @@ services:
                 header_name: Authorization
                 header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
               logging:
-                log_payloads: false
+                log_payloads: true
                 log_statistics: true
               model:
                 provider: openai
                 name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
 
   - name: ai-subagent-service
     url: https://generativelanguage.googleapis.com
@@ -506,11 +566,14 @@ services:
                 param_value: ${{ env "DECK_GEMINI_API_KEY" }}
                 param_location: query
               logging:
-                log_payloads: false
+                log_payloads: true
                 log_statistics: true
               model:
                 provider: gemini
                 name: ${{ env "DECK_GEMINI_MODEL" }}
+                options:
+                  input_cost: 0.30
+                  output_cost: 2.50
 
   - name: orchestrator-service
     url: http://orchestrator:8000
@@ -569,6 +632,9 @@ services:
                 - apikey
           - name: ai-mcp-proxy
             config:
+              logging:
+                log_payloads: true
+                log_statistics: true
               mode: conversion-listener
               include_consumer_groups: true
               server:

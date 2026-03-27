@@ -44,6 +44,7 @@ REDIS_PORT = int(os.getenv("REDIS_PORT") or "6379")
 
 
 class PlayRequest(BaseModel):
+    run_id: str | None = None
     customer_id: str = "cust_acme"
     account_name: str = "Acme Health"
     issue_summary: str = "Customer reports a billing dispute and workflow-agent sync delays."
@@ -298,7 +299,7 @@ async def generate_for_scenario(
     base_url: str,
 ) -> dict[str, Any]:
     try:
-        return await llm.generate(base_url=base_url, **prompts)
+        return await llm.generate(base_url=base_url, run_id=run_id, **prompts)
     except AuthenticationError as exc:
         if scenario != "llm_failover":
             raise
@@ -323,6 +324,7 @@ async def generate_for_scenario(
         fallback = await llm.generate(
             base_url=GEMINI_FALLBACK_URL,
             model=GEMINI_FALLBACK_MODEL,
+            run_id=run_id,
             **prompts,
         )
         return fallback
@@ -362,18 +364,22 @@ async def generate_for_scenario(
         raise
 
 
-async def discover_agent(route_prefix: str) -> dict[str, Any]:
+async def discover_agent(route_prefix: str, run_id: str | None = None) -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=10.0) as client:
         response = await client.get(
             f"{KONG_PROXY_URL}{route_prefix}/.well-known/agent.json",
-            headers={"apikey": AGENT_API_KEY},
+            headers={
+                "apikey": AGENT_API_KEY,
+                **({"x-demo-run-id": run_id} if run_id else {}),
+            },
         )
         response.raise_for_status()
         return response.json()
 
 
 async def call_subagent(route_prefix: str, params: dict[str, Any]) -> dict[str, Any]:
-    card = await discover_agent(route_prefix)
+    run_id = params.get("run_id")
+    card = await discover_agent(route_prefix, run_id=run_id)
     endpoint = card["endpoints"]["jsonrpc"]
     payload = {
         "jsonrpc": "2.0",
@@ -384,7 +390,10 @@ async def call_subagent(route_prefix: str, params: dict[str, Any]) -> dict[str, 
     async with httpx.AsyncClient(timeout=45.0) as client:
         response = await client.post(
             f"{KONG_PROXY_URL}{route_prefix}{endpoint}",
-            headers={"apikey": AGENT_API_KEY},
+            headers={
+                "apikey": AGENT_API_KEY,
+                **({"x-demo-run-id": run_id} if run_id else {}),
+            },
             json=payload,
         )
         response.raise_for_status()
@@ -412,7 +421,7 @@ async def fetch_context(state: OrchestratorState) -> OrchestratorState:
     request = state["request"]
     scenario = state.get("governance_scenario", "normal")
     ai_route_base_url = state.get("ai_route_base_url", ai_route_for_scenario(scenario))
-    mcp = KongMCPClient(f"{KONG_PROXY_URL}/mock-mcp", AGENT_API_KEY, "orchestrator")
+    mcp = KongMCPClient(f"{KONG_PROXY_URL}/mock-mcp", AGENT_API_KEY, "orchestrator", run_id=run_id)
     await emit(run_id, "planning", message="Fetching account context through Kong MCP.")
     list_started = time.perf_counter()
     tools = await mcp.list_tools()
@@ -480,6 +489,7 @@ async def fetch_context(state: OrchestratorState) -> OrchestratorState:
                 available_tools=available_tools,
                 remaining_tools=remaining_tools,
                 current_context=current_context,
+                run_id=run_id,
             ) if ai_route_base_url == llm.base_url else await choose_next_tool_for_route(
                 run_id=run_id,
                 stage=stage,
@@ -592,7 +602,7 @@ async def generate_triage_brief(state: OrchestratorState) -> OrchestratorState:
         )
         await emit(run_id, "llm_started", actor="orchestrator", stage=stage_name, input=llm_input)
         started = time.perf_counter()
-        triage_brief = await llm.generate_with_headers(base_url=ai_route_base_url, **triage_prompts)
+        triage_brief = await llm.generate_with_headers(base_url=ai_route_base_url, run_id=run_id, **triage_prompts)
         semantic_cache_probe = {
             "step": semantic_cache_step,
             "headers": triage_brief["cache_headers"],
@@ -786,7 +796,7 @@ orchestrator_graph = (
 
 
 async def run_playbook(request: PlayRequest) -> dict[str, Any]:
-    run_id = str(uuid.uuid4())
+    run_id = request.run_id or str(uuid.uuid4())
     started = time.perf_counter()
     scenario = request.governance_scenario
     semantic_cache_step = request.semantic_cache_step
@@ -853,7 +863,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         await emit(run_id, "llm_started", actor="orchestrator", stage=stage, input=prompts)
         llm_started = time.perf_counter()
         try:
-            pii_result = await llm.generate_with_headers(base_url=ai_route_base_url, **prompts)
+            pii_result = await llm.generate_with_headers(base_url=ai_route_base_url, run_id=run_id, **prompts)
         except (APIStatusError, httpx.HTTPStatusError) as exc:
             status_code = getattr(exc, "status_code", None) or getattr(getattr(exc, "response", None), "status_code", None)
             if pii_sanitizer_mode != "block" or status_code != 400:
@@ -949,7 +959,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         await emit(run_id, "planning", message=stage_summary)
         await emit(run_id, "llm_started", actor="orchestrator", stage=stage, input=prompts)
         llm_started = time.perf_counter()
-        triage_result = await llm.generate_with_headers(base_url=ai_route_base_url, **prompts)
+        triage_result = await llm.generate_with_headers(base_url=ai_route_base_url, run_id=run_id, **prompts)
         cache_status = (triage_result.get("cache_headers", {}).get("x-cache-status") or "").lower()
         policy_stage = "semantic_cache_hit" if cache_status == "hit" else "semantic_cache_miss"
         policy_summary = (

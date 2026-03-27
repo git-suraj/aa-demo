@@ -545,6 +545,132 @@
             "mode": "palette-classic"
           },
           "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 52
+      },
+      "id": 14,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum by (consumer) (sum_over_time({component=\"llm\",run_id=\"$run_id\"} | json | unwrap llm_usage_cost [6h]))",
+          "legendFormat": "{{consumer}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Cost By Agent (Selected Run)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 52
+      },
+      "id": 15,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(sum_over_time({component=\"llm\",run_id=\"$run_id\"} | json | unwrap llm_usage_cost [6h]))",
+          "legendFormat": "Total Cost",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Cost (Selected Run)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -647,7 +773,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 52
+        "y": 60
       },
       "id": 12,
       "options": {
@@ -689,7 +815,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 60
+        "y": 68
       },
       "id": 13,
       "options": {
@@ -726,7 +852,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 70
+        "y": 78
       },
       "id": 5,
       "options": {

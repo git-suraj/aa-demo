@@ -30,7 +30,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 35
+        "y": 60
       },
       "id": 100,
       "options": {
@@ -67,7 +67,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 43
+        "y": 68
       },
       "id": 108,
       "options": {
@@ -104,7 +104,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 51
+        "y": 76
       },
       "id": 116,
       "options": {
@@ -131,6 +131,258 @@
       ],
       "title": "LLM Log Stream",
       "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 304,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum by (llm_usage_model) (sum_over_time({component=\"llm\"} | json | unwrap llm_usage_cost [1h]))",
+          "legendFormat": "{{llm_usage_model}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Cost By Model",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 305,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(sum_over_time({component=\"llm\"} | json | unwrap llm_usage_cost [1h]))",
+          "legendFormat": "Total Cost",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Cost",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "id": 306,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum by (consumer) (sum_over_time({component=\"llm\"} | json | unwrap llm_usage_cost [1h]))",
+          "legendFormat": "{{consumer}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Cost By Agent",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "id": 307,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "avg by (consumer) (avg_over_time({component=\"llm\"} | json | unwrap llm_usage_cost [1h]))",
+          "legendFormat": "{{consumer}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Average Cost By Agent",
+      "type": "stat"
     },
     {
       "datasource": {
@@ -421,7 +673,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 25
+        "y": 50
       },
       "id": 240,
       "options": {
@@ -483,7 +735,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 25
+        "y": 50
       },
       "id": 252,
       "options": {
@@ -567,7 +819,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 16
+        "y": 32
       },
       "id": 999,
       "options": {
@@ -624,7 +876,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 41
       },
       "id": 1001,
       "options": {

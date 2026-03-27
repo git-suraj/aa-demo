@@ -54,7 +54,7 @@ async def emit_trace(run_id: str, event_type: str, **payload: Any) -> None:
 
 async def fetch_tool_inventory(state: SupportState) -> SupportState:
     params = state["params"]
-    client = KongMCPClient(MCP_URL, API_KEY, "support-agent")
+    client = KongMCPClient(MCP_URL, API_KEY, "support-agent", run_id=params["run_id"])
     started = time.perf_counter()
     tools = await client.list_tools()
     available_tools = [tool.get("name") for tool in tools]
@@ -86,7 +86,7 @@ def build_support_tool_args(tool_name: str, llm_arguments: dict[str, Any], param
 
 async def investigate_issue(state: SupportState) -> SupportState:
     params = state["params"]
-    client = KongMCPClient(MCP_URL, API_KEY, "support-agent")
+    client = KongMCPClient(MCP_URL, API_KEY, "support-agent", run_id=params["run_id"])
     available_tools = state.get("available_tools", [])
     remaining_tools = [tool for tool in available_tools if tool in {"get_incident_status", "search_runbook"}]
     called_mcp_tools: list[str] = []
@@ -211,6 +211,7 @@ async def generate_technical_summary(state: SupportState) -> SupportState:
     llm_summary = await llm.generate(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
+            run_id=params["run_id"],
         )
     await emit_trace(
         params["run_id"],
