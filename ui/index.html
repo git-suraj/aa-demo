@@ -85,6 +85,8 @@
                 <path id="line-kong-gemini" d="M830 390 L1088 380" />
                 <path id="line-kong-mcp" d="M740 456 L740 720 L1002 720" />
                 <path id="line-mcp-backend" d="M990 590 L990 456 L740 456 L1186 456 L1186 700" />
+                <path id="line-kong-redis" d="M830 396 L968 396 L968 520 L1090 520" />
+                <path id="line-kong-pii" d="M830 420 L942 420 L942 560 L1090 560" />
               </svg>
 
               <article class="topology-node user-node" data-node="user">
@@ -133,6 +135,18 @@
                 <span class="node-label">Failover / Shared</span>
                 <h3>Gemini 2.5 Flash</h3>
                 <p>Orchestrator failover and the sub-agent LLM route.</p>
+              </article>
+
+              <article class="topology-node redis-node scenario-optional" data-node="redis">
+                <span class="node-label">Vector Store</span>
+                <h3>Redis Vector DB</h3>
+                <p>Used by Kong Semantic Guard and Semantic Cache policies to compare embeddings.</p>
+              </article>
+
+              <article class="topology-node pii-node scenario-optional" data-node="pii-service">
+                <span class="node-label">Sanitization</span>
+                <h3>AI PII Service</h3>
+                <p>Used by Kong AI Sanitizer to anonymize sensitive data in the request and response path.</p>
               </article>
 
               <article class="topology-node mcp-node" data-node="mcp">
@@ -289,6 +303,13 @@
               <p class="semantic-cache-copy">Clears all semantic cache entries so the next first request starts from a clean cache.</p>
             </div>
           </section>
+          <section id="semantic-guard-controls" class="probe-controls" hidden>
+            <article class="probe-card">
+              <span class="probe-label">Semantic Guard Request</span>
+              <p class="probe-copy">This is the actual orchestrator prompt body sent through Kong for the Semantic Guard scenario. Kong compares embeddings against denied topics before allowing any model call.</p>
+              <pre id="semantic-guard-payload" class="probe-payload"></pre>
+            </article>
+          </section>
           <section id="pii-sanitizer-controls" class="probe-controls" hidden>
             <article class="probe-card">
               <span class="probe-label">Sanitization Mode</span>
@@ -301,6 +322,10 @@
                 <label class="preset-option">
                   <input type="radio" name="pii_mode_choice" value="synthetic" />
                   <span>Synthetic</span>
+                </label>
+                <label class="preset-option">
+                  <input type="radio" name="pii_mode_choice" value="block" />
+                  <span>Block</span>
                 </label>
               </div>
               <pre id="pii-mode-payload" class="probe-payload"></pre>

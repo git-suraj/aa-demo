@@ -108,9 +108,13 @@ def ai_route_for_scenario(scenario: str, pii_mode: str = "placeholder") -> str:
         "semantic_guard": f"{KONG_PROXY_URL}/ai/orchestrator-semantic-guard-demo",
         "semantic_cache": f"{KONG_PROXY_URL}/ai/orchestrator-semantic-cache-demo",
         "pii_sanitizer": (
+            f"{KONG_PROXY_URL}/ai/orchestrator-pii-block-demo"
+            if pii_mode == "block"
+            else (
             f"{KONG_PROXY_URL}/ai/orchestrator-pii-synthetic-demo"
             if pii_mode == "synthetic"
             else f"{KONG_PROXY_URL}/ai/orchestrator-pii-placeholder-demo"
+            )
         ),
     }
     return route_map.get(scenario, route_map["normal"])
@@ -806,11 +810,19 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
     if scenario == "pii_sanitizer":
         prompts = build_pii_probe_prompts(request, pii_sanitizer_mode)
         stage = f"pii_{pii_sanitizer_mode}_probe"
-        mode_label = "synthetic" if pii_sanitizer_mode == "synthetic" else "placeholder"
+        mode_label = (
+            "block"
+            if pii_sanitizer_mode == "block"
+            else ("synthetic" if pii_sanitizer_mode == "synthetic" else "placeholder")
+        )
         await emit(
             run_id,
             "planning",
-            message=f"Kong AI PII Sanitizer is anonymizing request and response bodies in {mode_label} mode.",
+            message=(
+                "Kong AI PII Sanitizer is blocking detected sensitive data before the request reaches the model."
+                if pii_sanitizer_mode == "block"
+                else f"Kong AI PII Sanitizer is anonymizing request and response bodies in {mode_label} mode."
+            ),
         )
         await emit(
             run_id,
@@ -819,7 +831,9 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             stage="pii_sanitizer",
             llm_stage=stage,
             summary=(
-                f"Kong AI PII Sanitizer is protecting both the upstream request and downstream response using "
+                "Kong AI PII Sanitizer is configured to block the request when supported PII categories or credentials are detected."
+                if pii_sanitizer_mode == "block"
+                else f"Kong AI PII Sanitizer is protecting both the upstream request and downstream response using "
                 f"{mode_label} anonymization across all supported PII categories and credentials."
             ),
             input={
@@ -831,13 +845,61 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             output={
                 "sanitization_mode": "BOTH",
                 "redact_type": pii_sanitizer_mode,
+                "block_if_detected": pii_sanitizer_mode == "block",
                 "protected_directions": ["request", "response"],
                 "anonymized_categories": pii_anonymized_categories(),
             },
         )
         await emit(run_id, "llm_started", actor="orchestrator", stage=stage, input=prompts)
         llm_started = time.perf_counter()
-        pii_result = await llm.generate_with_headers(base_url=ai_route_base_url, **prompts)
+        try:
+            pii_result = await llm.generate_with_headers(base_url=ai_route_base_url, **prompts)
+        except (APIStatusError, httpx.HTTPStatusError) as exc:
+            status_code = getattr(exc, "status_code", None) or getattr(getattr(exc, "response", None), "status_code", None)
+            if pii_sanitizer_mode != "block" or status_code != 400:
+                raise
+            await emit(
+                run_id,
+                "policy_event",
+                actor="orchestrator",
+                stage="pii_sanitizer_blocked",
+                llm_stage=stage,
+                summary="Kong AI PII Sanitizer blocked the request because supported PII or credentials were detected.",
+                output={"status_code": status_code, "message": str(exc), "mode": pii_sanitizer_mode},
+            )
+            blocked_response = {
+                "headline": "PII sanitization request blocked",
+                "governance_scenario": scenario,
+                "policy_outcome": "blocked",
+                "pii_sanitizer_probe": {
+                    "mode": pii_sanitizer_mode,
+                    "sanitization_mode": "BOTH",
+                    "block_if_detected": True,
+                    "anonymize": ["all_and_credentials"],
+                    "anonymized_categories": pii_anonymized_categories(),
+                    "request_payload": request.model_dump(),
+                    "original_prompt": prompts,
+                    "sanitized_response": "Kong blocked the request before it reached the model because supported PII or credentials were detected.",
+                },
+                "executive_brief": {
+                    "llm_used": False,
+                    "model": None,
+                    "summary": "Kong blocked the request before it reached the model because supported PII or credentials were detected.",
+                },
+                "recommended_summary": "Kong blocked the request before it reached the model because supported PII or credentials were detected.",
+                "available_tools": [],
+                "called_mcp_tools": [],
+                "tool_plan_steps": [],
+                "mcp_tools_by_agent": {
+                    "orchestrator": [],
+                    "support-agent": [],
+                    "success-agent": [],
+                },
+                "error": str(exc),
+            }
+            await emit(run_id, "final_response", headline=blocked_response["headline"], output=blocked_response)
+            await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=blocked_response)
+            return {"run_id": run_id, "result": blocked_response}
         pii_output = without_cache_headers(pii_result)
         await emit(
             run_id,
@@ -855,6 +917,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             "pii_sanitizer_probe": {
                 "mode": pii_sanitizer_mode,
                 "sanitization_mode": "BOTH",
+                "block_if_detected": False,
                 "anonymize": ["all_and_credentials"],
                 "anonymized_categories": pii_anonymized_categories(),
                 "request_payload": request.model_dump(),

@@ -29,6 +29,8 @@ const semanticCacheHitPayload = document.getElementById("semantic-cache-hit-payl
 const semanticCacheSeedButton = document.getElementById("semantic-cache-seed-button");
 const semanticCacheHitButton = document.getElementById("semantic-cache-hit-button");
 const semanticCacheClearButton = document.getElementById("semantic-cache-clear-button");
+const semanticGuardControls = document.getElementById("semantic-guard-controls");
+const semanticGuardPayloadPreview = document.getElementById("semantic-guard-payload");
 const piiSanitizerControls = document.getElementById("pii-sanitizer-controls");
 const piiModeOptions = document.getElementById("pii-mode-options");
 const piiModePayload = document.getElementById("pii-mode-payload");
@@ -51,6 +53,8 @@ const nodes = {
   "success-agent": document.querySelector('[data-node="success-agent"]'),
   openai: document.querySelector('[data-node="openai"]'),
   gemini: document.querySelector('[data-node="gemini"]'),
+  redis: document.querySelector('[data-node="redis"]'),
+  "pii-service": document.querySelector('[data-node="pii-service"]'),
   mcp: document.querySelector('[data-node="mcp"]'),
   "backend-api": document.querySelector('[data-node="backend-api"]'),
 };
@@ -63,6 +67,8 @@ const lineMap = {
   "kong-success": document.getElementById("line-kong-success"),
   "kong-openai": document.getElementById("line-kong-openai"),
   "kong-gemini": document.getElementById("line-kong-gemini"),
+  "kong-redis": document.getElementById("line-kong-redis"),
+  "kong-pii": document.getElementById("line-kong-pii"),
   "kong-mcp": document.getElementById("line-kong-mcp"),
   "mcp-backend": document.getElementById("line-mcp-backend"),
 };
@@ -76,6 +82,11 @@ let llmSuccessTimer = null;
 let pendingMcpActivationTimer = null;
 let orchestratorLlmVisibleUntil = 0;
 let failoverActivationTimer = null;
+let semanticRedisHandoffTimer = null;
+let semanticCacheOpenAiResetTimer = null;
+let semanticGuardSettleTimer = null;
+let piiSanitizerHandoffTimer = null;
+let piiModelHandoffPending = false;
 let activeScenario = "normal";
 
 const scenePresets = {
@@ -237,9 +248,13 @@ function applyScenarioChoice(scenario) {
     piiField.value = "placeholder";
   }
   const isSemanticCache = activeScenario === "semantic_cache";
+  const isSemanticGuard = activeScenario === "semantic_guard";
   const isPiiSanitizer = activeScenario === "pii_sanitizer";
   if (semanticCacheControls) {
     semanticCacheControls.hidden = !isSemanticCache;
+  }
+  if (semanticGuardControls) {
+    semanticGuardControls.hidden = !isSemanticGuard;
   }
   if (piiSanitizerControls) {
     piiSanitizerControls.hidden = !isPiiSanitizer;
@@ -247,8 +262,12 @@ function applyScenarioChoice(scenario) {
   if (playButton) {
     playButton.hidden = isSemanticCache || isPiiSanitizer;
   }
+  updateScenarioInfraVisibility(activeScenario);
   if (isSemanticCache) {
     renderSemanticCachePayloads();
+  }
+  if (isSemanticGuard) {
+    renderSemanticGuardPayload();
   }
   if (isPiiSanitizer) {
     renderPiiSanitizerPayloads();
@@ -306,6 +325,22 @@ function renderSemanticCachePayloads() {
   semanticCacheHitPayload.textContent = pretty(semanticCachePayload("reuse"));
 }
 
+function semanticGuardPayload() {
+  return {
+    governance_scenario: "semantic_guard",
+    system_prompt:
+      "You are an executive escalation triage assistant. Decide what account context is needed before responding.",
+    user_prompt: "Requests to disclose internal credentials, access instructions, or confidential system details.",
+  };
+}
+
+function renderSemanticGuardPayload() {
+  if (!semanticGuardPayloadPreview) {
+    return;
+  }
+  semanticGuardPayloadPreview.textContent = pretty(semanticGuardPayload());
+}
+
 function piiSanitizerPayload(mode) {
   const base = currentFormPayload();
   const piiRichPrompt = [
@@ -325,6 +360,7 @@ function piiSanitizerPayload(mode) {
     governance_scenario: "pii_sanitizer",
     pii_sanitizer_mode: mode,
     sanitization_mode: "BOTH",
+    block_if_detected: mode === "block",
     system_prompt:
       "You are a support operations assistant. Summarize the provided customer escalation details clearly and directly.",
     user_prompt: piiRichPrompt,
@@ -650,10 +686,28 @@ function resetTopology() {
     clearTimeout(failoverActivationTimer);
     failoverActivationTimer = null;
   }
+  if (semanticRedisHandoffTimer) {
+    clearTimeout(semanticRedisHandoffTimer);
+    semanticRedisHandoffTimer = null;
+  }
+  if (semanticCacheOpenAiResetTimer) {
+    clearTimeout(semanticCacheOpenAiResetTimer);
+    semanticCacheOpenAiResetTimer = null;
+  }
+  if (semanticGuardSettleTimer) {
+    clearTimeout(semanticGuardSettleTimer);
+    semanticGuardSettleTimer = null;
+  }
+  if (piiSanitizerHandoffTimer) {
+    clearTimeout(piiSanitizerHandoffTimer);
+    piiSanitizerHandoffTimer = null;
+  }
+  piiModelHandoffPending = false;
   orchestratorLlmVisibleUntil = 0;
   Object.values(nodes).forEach((node) => node?.classList.remove("active", "complete", "error"));
   Object.values(lineMap).forEach((line) => line?.classList.remove("active", "complete", "error"));
   hideTopologyActivity();
+  updateScenarioInfraVisibility(activeScenario);
 }
 
 function markNode(name, state) {
@@ -704,6 +758,46 @@ function hideTopologyActivity() {
   topologyActivityName.textContent = "-";
 }
 
+function setScenarioVisibility(name, visible) {
+  const targetNode = nodes[name];
+  if (targetNode) {
+    targetNode.classList.toggle("scenario-hidden", !visible);
+  }
+}
+
+function setLineVisibility(name, visible) {
+  const targetLine = lineMap[name];
+  if (targetLine) {
+    targetLine.classList.toggle("scenario-hidden", !visible);
+  }
+}
+
+function updateScenarioInfraVisibility(scenario) {
+  const showRedis = scenario === "semantic_guard" || scenario === "semantic_cache";
+  const showPii = scenario === "pii_sanitizer";
+  const focusedScenario = showRedis || showPii;
+
+  setScenarioVisibility("redis", showRedis);
+  setLineVisibility("kong-redis", showRedis);
+
+  setScenarioVisibility("pii-service", showPii);
+  setLineVisibility("kong-pii", showPii);
+  setScenarioVisibility("openai", true);
+  setLineVisibility("kong-openai", true);
+
+  setScenarioVisibility("gemini", !focusedScenario);
+  setLineVisibility("kong-gemini", !focusedScenario);
+
+  setScenarioVisibility("support-agent", !focusedScenario);
+  setScenarioVisibility("success-agent", !focusedScenario);
+  setScenarioVisibility("mcp", !focusedScenario);
+  setScenarioVisibility("backend-api", !focusedScenario);
+  setLineVisibility("kong-support", !focusedScenario);
+  setLineVisibility("kong-success", !focusedScenario);
+  setLineVisibility("kong-mcp", !focusedScenario);
+  setLineVisibility("mcp-backend", !focusedScenario);
+}
+
 function activateActorPath(actor, state = "active") {
   markNode("kong", state);
   if (actor === "support-agent") {
@@ -726,6 +820,51 @@ function activateToolPath(actor, state = "active") {
   markNode("backend-api", state);
   markLine("kong-mcp", state);
   markLine("mcp-backend", state);
+}
+
+function activateRedisPath(state = "active") {
+  markNode("redis", state);
+  markNode("kong", state);
+  markLine("kong-redis", state);
+}
+
+function completeRedisPath() {
+  activateRedisPath("complete");
+}
+
+function settleSemanticGuardTopology() {
+  hideTopologyActivity();
+  markNode("user", "complete");
+  markNode("ui", "complete");
+  markNode("kong", "complete");
+  markNode("redis", "complete");
+  markNode("openai", "complete");
+  markNode("gemini", "complete");
+  markLine("user-ui", "complete");
+  markLine("ui-kong", "complete");
+  markLine("kong-redis", "complete");
+  markLine("kong-openai", "complete");
+  markLine("kong-gemini", "complete");
+  markNode("orchestrator", "complete");
+  markLine("kong-orchestrator", "complete");
+}
+
+function activatePiiPath(state = "active") {
+  activateActorPath("orchestrator", state);
+  markNode("pii-service", state);
+  markLine("kong-pii", state);
+}
+
+function activatePiiRequestPath(state = "active") {
+  activatePiiPath(state);
+}
+
+function activatePiiResponsePath(state = "active") {
+  activatePiiPath(state);
+}
+
+function setOpenAiNodeState(state = "active") {
+  markNode("openai", state);
 }
 
 function showModelFailure(model) {
@@ -947,15 +1086,23 @@ function renderFinalOutput(result) {
           ? `
       <section class="output-section output-section-wide">
         <strong>PII Sanitizer Probe</strong>
-        <p class="output-section-copy">Created by the orchestrator in the AI PII Sanitizer scenario. Kong sanitizes both the upstream request and downstream response using the selected anonymization mode.</p>
+        <p class="output-section-copy">Created by the orchestrator in the AI PII Sanitizer scenario. Kong sanitizes or blocks the upstream request before the model call, and sanitizes the downstream response when the request is allowed.</p>
         <div class="output-subgrid">
           <div class="output-subsection">
             <span>Sanitization Policy</span>
             ${renderDefinitionList([
               ["Mode", piiProbe.mode],
               ["Sanitization Direction", piiProbe.sanitization_mode],
+              ["Block If Detected", piiProbe.block_if_detected ? "true" : "false"],
               ["Anonymize", (piiProbe.anonymize || []).join(", ")],
             ])}
+            ${renderTextBlock(
+              piiProbe.mode === "synthetic"
+                ? "Synthetic mode replaces supported detected values with category-matched synthetic values. Some credential-like secrets may still appear masked rather than replaced with natural-looking values."
+                : piiProbe.mode === "placeholder"
+                  ? "Placeholder mode replaces supported detected values with placeholder tokens."
+                  : "Block mode stops the request before it reaches the model when supported PII or credentials are detected."
+            )}
             ${renderBulletList(piiProbe.anonymized_categories)}
           </div>
           <div class="output-subsection output-subsection-wide">
@@ -1084,6 +1231,23 @@ function resetTraceState() {
     clearTimeout(failoverActivationTimer);
     failoverActivationTimer = null;
   }
+  if (semanticRedisHandoffTimer) {
+    clearTimeout(semanticRedisHandoffTimer);
+    semanticRedisHandoffTimer = null;
+  }
+  if (semanticCacheOpenAiResetTimer) {
+    clearTimeout(semanticCacheOpenAiResetTimer);
+    semanticCacheOpenAiResetTimer = null;
+  }
+  if (semanticGuardSettleTimer) {
+    clearTimeout(semanticGuardSettleTimer);
+    semanticGuardSettleTimer = null;
+  }
+  if (piiSanitizerHandoffTimer) {
+    clearTimeout(piiSanitizerHandoffTimer);
+    piiSanitizerHandoffTimer = null;
+  }
+  piiModelHandoffPending = false;
   orchestratorLlmVisibleUntil = 0;
   traceState = createInitialTraceState();
   selectedTraceId = null;
@@ -1102,6 +1266,8 @@ function initializeRun(payload) {
   traceState = createInitialTraceState();
   traceState.runId = payload.run_id;
   traceState.scenario = payload.governance_scenario || "normal";
+  activeScenario = traceState.scenario;
+  updateScenarioInfraVisibility(traceState.scenario);
   runIdLabel.textContent = payload.run_id;
   touchActivity(payload.timestamp);
 
@@ -1150,7 +1316,13 @@ function handleTraceEvent(payload) {
       markNode("ui", "complete");
       markLine("user-ui", "complete");
       markLine("ui-kong", "active");
-      activateActorPath("orchestrator", "active");
+      if (traceState.scenario === "semantic_guard") {
+        markNode("kong", "active");
+        markNode("orchestrator", "complete");
+        markLine("kong-orchestrator", "complete");
+      } else {
+        activateActorPath("orchestrator", "active");
+      }
       break;
 
     case "scenario_selected": {
@@ -1174,12 +1346,16 @@ function handleTraceEvent(payload) {
         setFlowStage("Semantic cache probe", payload.message);
         hideTopologyActivity();
         clearOrchestratorLlmPath();
-        activateToolPath("orchestrator", "complete");
+        activateRedisPath("active");
       } else if (traceState.scenario === "pii_sanitizer") {
         setFlowStage("PII sanitization probe", payload.message);
         hideTopologyActivity();
         clearOrchestratorLlmPath();
-        activateToolPath("orchestrator", "complete");
+        markNode("kong", "active");
+        markNode("pii-service", "complete");
+        markLine("kong-pii", "complete");
+        setOpenAiNodeState("complete");
+        markLine("kong-openai", "complete");
       } else {
         setFlowStage("Gathering account context", payload.message);
         setMcpPathState("active");
@@ -1221,6 +1397,49 @@ function handleTraceEvent(payload) {
     case "llm_started":
       upsertLlmNode(payload);
       setFlowStage(`LLM call: ${payload.stage}`, `${labelForActor(payload.actor || "orchestrator")} is calling its AI route through Kong.`);
+      if (traceState.scenario === "semantic_guard") {
+        hideTopologyActivity();
+        markNode("orchestrator", "complete");
+        markLine("kong-orchestrator", "complete");
+        activateRedisPath("active");
+        setOpenAiNodeState("complete");
+        markLine("kong-openai", "complete");
+        markNode("gemini", "complete");
+        markLine("kong-gemini", "complete");
+        break;
+      }
+      if (traceState.scenario === "semantic_cache") {
+        activateRedisPath("active");
+        break;
+      }
+      if (traceState.scenario === "pii_sanitizer") {
+        if (String(payload.stage || "").includes("block")) {
+          piiModelHandoffPending = false;
+          activatePiiRequestPath("active");
+          setOpenAiNodeState("complete");
+          markLine("kong-openai", "complete");
+        } else {
+          if (piiSanitizerHandoffTimer) {
+            clearTimeout(piiSanitizerHandoffTimer);
+            piiSanitizerHandoffTimer = null;
+          }
+          piiModelHandoffPending = true;
+          activatePiiRequestPath("active");
+          markLine("kong-openai", "complete");
+          setOpenAiNodeState("complete");
+          piiSanitizerHandoffTimer = window.setTimeout(() => {
+            if (traceState.scenario === "pii_sanitizer" && piiModelHandoffPending) {
+              markNode("pii-service", "complete");
+              markLine("kong-pii", "complete");
+              markNode("kong", "active");
+              markLine("kong-openai", "active");
+              setOpenAiNodeState("active");
+            }
+            piiSanitizerHandoffTimer = null;
+          }, 450);
+        }
+        break;
+      }
       if (
         traceState.scenario === "llm_failover" &&
         payload.actor === "orchestrator" &&
@@ -1235,6 +1454,29 @@ function handleTraceEvent(payload) {
 
     case "llm_completed":
       upsertLlmNode(payload);
+      if (traceState.scenario === "semantic_guard") {
+        completeRedisPath();
+        setOpenAiNodeState("complete");
+        markLine("kong-openai", "complete");
+        markNode("gemini", "complete");
+        markLine("kong-gemini", "complete");
+        break;
+      }
+      if (traceState.scenario === "semantic_cache") {
+        break;
+      }
+      if (traceState.scenario === "pii_sanitizer") {
+        if (piiSanitizerHandoffTimer) {
+          clearTimeout(piiSanitizerHandoffTimer);
+          piiSanitizerHandoffTimer = null;
+        }
+        piiModelHandoffPending = false;
+        activatePiiPath("complete");
+        markLine("kong-openai", "complete");
+        setOpenAiNodeState("complete");
+        markNode("kong", "complete");
+        break;
+      }
       if (
         traceState.scenario === "llm_failover" &&
         payload.actor === "orchestrator" &&
@@ -1265,6 +1507,7 @@ function handleTraceEvent(payload) {
         semantic_cache_miss: "Semantic cache miss",
         semantic_cache_hit: "Semantic cache hit",
         pii_sanitizer: "PII sanitization policy applied",
+        pii_sanitizer_blocked: "Kong PII sanitization blocked request",
         failover_primary_failed: "Primary model path failed",
         failover: "Kong selected fallback model",
       };
@@ -1319,7 +1562,81 @@ function handleTraceEvent(payload) {
         showFailurePath("openai");
       }
       if (payload.stage === "semantic_guard") {
-        showFailurePath("openai");
+        completeRedisPath();
+        setOpenAiNodeState("complete");
+        markLine("kong-openai", "complete");
+        markNode("gemini", "complete");
+        markLine("kong-gemini", "complete");
+        markNode("orchestrator", "complete");
+        markLine("kong-orchestrator", "complete");
+        markNode("kong", "complete");
+        markNode("redis", "complete");
+        markLine("kong-redis", "complete");
+        markNode("ui", "error");
+        markLine("ui-kong", "error");
+        if (semanticGuardSettleTimer) {
+          clearTimeout(semanticGuardSettleTimer);
+        }
+        semanticGuardSettleTimer = window.setTimeout(() => {
+          if (traceState.scenario === "semantic_guard") {
+            settleSemanticGuardTopology();
+          }
+          semanticGuardSettleTimer = null;
+        }, 1300);
+      }
+      if (payload.stage === "semantic_cache_miss") {
+        completeRedisPath();
+        if (semanticRedisHandoffTimer) {
+          clearTimeout(semanticRedisHandoffTimer);
+        }
+        if (semanticCacheOpenAiResetTimer) {
+          clearTimeout(semanticCacheOpenAiResetTimer);
+          semanticCacheOpenAiResetTimer = null;
+        }
+        semanticRedisHandoffTimer = window.setTimeout(() => {
+          setOpenAiNodeState("active");
+          markLine("kong-openai", "active");
+          semanticCacheOpenAiResetTimer = window.setTimeout(() => {
+            setOpenAiNodeState("complete");
+            markLine("kong-openai", "complete");
+            semanticCacheOpenAiResetTimer = null;
+          }, 1100);
+          semanticRedisHandoffTimer = null;
+        }, 550);
+      }
+      if (payload.stage === "semantic_cache_hit") {
+        if (semanticRedisHandoffTimer) {
+          clearTimeout(semanticRedisHandoffTimer);
+          semanticRedisHandoffTimer = null;
+        }
+        if (semanticCacheOpenAiResetTimer) {
+          clearTimeout(semanticCacheOpenAiResetTimer);
+          semanticCacheOpenAiResetTimer = null;
+        }
+        completeRedisPath();
+        setOpenAiNodeState("complete");
+        markLine("kong-openai", "complete");
+      }
+      if (payload.stage === "pii_sanitizer") {
+        activatePiiPath("active");
+        markLine("kong-openai", "complete");
+        setOpenAiNodeState("complete");
+        if (piiSanitizerHandoffTimer) {
+          clearTimeout(piiSanitizerHandoffTimer);
+          piiSanitizerHandoffTimer = null;
+        }
+      }
+      if (payload.stage === "pii_sanitizer_blocked") {
+        if (piiSanitizerHandoffTimer) {
+          clearTimeout(piiSanitizerHandoffTimer);
+          piiSanitizerHandoffTimer = null;
+        }
+        piiModelHandoffPending = false;
+        activatePiiPath("complete");
+        markLine("kong-openai", "complete");
+        setOpenAiNodeState("complete");
+        markNode("ui", "error");
+        markLine("ui-kong", "error");
       }
       break;
     }
@@ -1359,13 +1676,46 @@ function handleTraceEvent(payload) {
       addTraceNode(finalNode, "run");
       selectedTraceId = "final-response";
       setFlowStage("Run complete", "The orchestrator completed synthesis and the final output is ready.");
-      activateActorPath("orchestrator", "complete");
+      if (traceState.scenario !== "semantic_guard") {
+        activateActorPath("orchestrator", "complete");
+      }
       completeActorRoot("orchestrator", payload.timestamp);
-      markNode("kong", "complete");
-      markLine("ui-kong", "complete");
-      if (traceState.scenario === "semantic_cache" || traceState.scenario === "pii_sanitizer") {
+      if (traceState.scenario !== "semantic_guard") {
+        markNode("kong", "complete");
+        markLine("ui-kong", "complete");
+      }
+      if (
+        traceState.scenario === "semantic_cache" ||
+        traceState.scenario === "pii_sanitizer" ||
+        traceState.scenario === "semantic_guard"
+      ) {
         hideTopologyActivity();
-        activateToolPath("orchestrator", "complete");
+        if (traceState.scenario === "semantic_cache") {
+          activateRedisPath("complete");
+          setOpenAiNodeState("complete");
+          markLine("kong-openai", "complete");
+        } else if (traceState.scenario === "semantic_guard") {
+          // Let the semantic guard policy event own the visible block/reset sequence.
+        } else {
+          if (piiSanitizerHandoffTimer) {
+            clearTimeout(piiSanitizerHandoffTimer);
+            piiSanitizerHandoffTimer = null;
+          }
+          piiModelHandoffPending = false;
+          if (payload.output?.policy_outcome === "blocked") {
+            activatePiiPath("complete");
+            markLine("kong-openai", "complete");
+            setOpenAiNodeState("complete");
+            markNode("ui", "error");
+            markLine("ui-kong", "error");
+          } else {
+            activatePiiPath("complete");
+            markLine("kong-openai", "complete");
+            markNode("ui", "complete");
+            markLine("ui-kong", "complete");
+          }
+          setOpenAiNodeState("complete");
+        }
       }
       break;
     }
@@ -1389,9 +1739,38 @@ function handleTraceEvent(payload) {
         setRunState("complete");
       }
       completeActorRoot("orchestrator", payload.timestamp, payload.duration_ms);
-      if (traceState.scenario === "semantic_cache" || traceState.scenario === "pii_sanitizer") {
+      if (
+        traceState.scenario === "semantic_cache" ||
+        traceState.scenario === "pii_sanitizer" ||
+        traceState.scenario === "semantic_guard"
+      ) {
         hideTopologyActivity();
-        activateToolPath("orchestrator", "complete");
+        if (traceState.scenario === "semantic_cache") {
+          activateRedisPath("complete");
+          setOpenAiNodeState("complete");
+          markLine("kong-openai", "complete");
+        } else if (traceState.scenario === "semantic_guard") {
+          // Let the semantic guard policy event own the visible block/reset sequence.
+        } else {
+          if (piiSanitizerHandoffTimer) {
+            clearTimeout(piiSanitizerHandoffTimer);
+            piiSanitizerHandoffTimer = null;
+          }
+          piiModelHandoffPending = false;
+          if (payload.output?.policy_outcome === "blocked") {
+            activatePiiPath("complete");
+            markLine("kong-openai", "complete");
+            setOpenAiNodeState("complete");
+            markNode("ui", "error");
+            markLine("ui-kong", "error");
+          } else {
+            activatePiiPath("complete");
+            markLine("kong-openai", "complete");
+            markNode("ui", "complete");
+            markLine("ui-kong", "complete");
+          }
+          setOpenAiNodeState("complete");
+        }
       }
       break;
     }
@@ -1553,6 +1932,9 @@ resetButton.addEventListener("click", () => {
 playForm.addEventListener("input", () => {
   if (activeScenario === "semantic_cache") {
     renderSemanticCachePayloads();
+  }
+  if (activeScenario === "semantic_guard") {
+    renderSemanticGuardPayload();
   }
   if (activeScenario === "pii_sanitizer") {
     renderPiiSanitizerPayloads();

@@ -330,6 +330,41 @@ services:
                 provider: openai
                 name: gpt-4o-mini
 
+  - name: ai-orchestrator-pii-block-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-pii-block-demo-chat-route
+        paths:
+          - /ai/orchestrator-pii-block-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-sanitizer
+        config:
+          anonymize:
+            - all_and_credentials
+          sanitization_mode: BOTH
+          host: ai-pii-service
+          port: 8080
+          redact_type: placeholder
+          block_if_detected: true
+          recover_redacted: false
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              model:
+                provider: openai
+                name: gpt-4o-mini
+
   - name: ai-subagent-service
     url: https://generativelanguage.googleapis.com
     routes:

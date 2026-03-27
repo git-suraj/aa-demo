@@ -441,6 +441,16 @@ button:hover {
   transition: stroke 600ms ease, opacity 600ms ease, filter 600ms ease;
 }
 
+.topology-lines path.scenario-hidden,
+.topology-lines path.scenario-hidden.active,
+.topology-lines path.scenario-hidden.error,
+.topology-lines path.scenario-hidden.complete {
+  opacity: 0;
+  pointer-events: none;
+  filter: none;
+  animation: none;
+}
+
 .topology-lines path.active {
   stroke: var(--green);
   opacity: 1;
@@ -470,6 +480,11 @@ button:hover {
   background: rgba(11, 13, 18, 0.94);
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.32);
   transition: transform 180ms ease, box-shadow 600ms ease, border-color 600ms ease;
+}
+
+.topology-node.scenario-hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .topology-node h3 {
@@ -559,6 +574,27 @@ button:hover {
 .gemini-node {
   top: 270px;
   right: 88px;
+}
+
+.redis-node,
+.pii-node {
+  top: 468px;
+  right: 88px;
+  width: 220px;
+}
+
+.redis-node {
+  border-color: rgba(131, 255, 94, 0.5);
+  background:
+    linear-gradient(180deg, rgba(131, 255, 94, 0.12), rgba(131, 255, 94, 0.04)),
+    rgba(11, 13, 18, 0.94);
+}
+
+.pii-node {
+  border-color: rgba(124, 192, 255, 0.56);
+  background:
+    linear-gradient(180deg, rgba(124, 192, 255, 0.14), rgba(124, 192, 255, 0.04)),
+    rgba(11, 13, 18, 0.94);
 }
 
 .mcp-node {
