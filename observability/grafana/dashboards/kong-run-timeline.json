@@ -27,110 +27,19 @@
         "uid": "grafana-loki"
       },
       "gridPos": {
-        "h": 8,
+        "h": 4,
         "w": 24,
         "x": 0,
-        "y": 35
+        "y": 0
       },
-      "id": 100,
+      "id": 1,
       "options": {
-        "dedupStrategy": "none",
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": true,
-        "showLabels": true,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": true
+        "content": "This dashboard shows the execution flow for a selected **run_id** across **agents**, **LLM calls**, and **MCP tool calls** using Kong/Loki logs. Pick a run from the selector above to isolate one demo execution end-to-end, then use the summary panels below to inspect tool latency, model usage, token consumption, and per-agent execution time for that run.",
+        "mode": "markdown"
       },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "grafana-loki"
-          },
-          "editorMode": "code",
-          "expr": "{component=\"agent\",consumer=\"orchestrator-agent\"} |~ \"/(support-agent|success-agent)/v1/jsonrpc\"",
-          "queryType": "range",
-          "refId": "A"
-        }
-      ],
-      "title": "Agent Log Stream",
-      "type": "logs"
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "grafana-loki"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 43
-      },
-      "id": 108,
-      "options": {
-        "dedupStrategy": "none",
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": true,
-        "showLabels": true,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "grafana-loki"
-          },
-          "editorMode": "code",
-          "expr": "{component=\"mcp\",route=\"mock-mcp-route\"} | json | mcp_method =~ \"tools/(list|call)\"",
-          "queryType": "range",
-          "refId": "A"
-        }
-      ],
-      "title": "MCP Log Stream",
-      "type": "logs"
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "grafana-loki"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 51
-      },
-      "id": 116,
-      "options": {
-        "dedupStrategy": "none",
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": true,
-        "showLabels": true,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "grafana-loki"
-          },
-          "editorMode": "code",
-          "expr": "{component=\"llm\"}",
-          "queryType": "range",
-          "refId": "A"
-        }
-      ],
-      "title": "LLM Log Stream",
-      "type": "logs"
+      "pluginVersion": "10.4.2",
+      "title": "About This Timeline",
+      "type": "text"
     },
     {
       "datasource": {
@@ -143,7 +52,6 @@
             "mode": "palette-classic"
           },
           "mappings": [],
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -159,29 +67,19 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 24,
         "x": 0,
-        "y": 0
+        "y": 4
       },
-      "id": 224,
+      "id": 2,
       "options": {
-        "displayLabels": [
-          "value"
-        ],
         "legend": {
           "displayMode": "list",
-          "placement": "right"
-        },
-        "pieType": "donut",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
+          "placement": "bottom"
         },
         "tooltip": {
-          "mode": "single"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
@@ -191,14 +89,14 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum by (llm_usage_model) (count_over_time({component=\"llm\"} | json | llm_usage_model != \"\" [1h]))",
-          "legendFormat": "{{llm_usage_model}}",
+          "expr": "sum by (service) (count_over_time({component=\"agent\",run_id=\"$run_id\"} |~ \"/orchestrator/play|/support-agent/v1/jsonrpc|/success-agent/v1/jsonrpc\" [30s]))",
+          "legendFormat": "{{service}}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "LLM Calls By Model",
-      "type": "piechart"
+      "title": "Agent Activity Over Time",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -211,7 +109,6 @@
             "mode": "palette-classic"
           },
           "mappings": [],
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -227,24 +124,20 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 0
+        "w": 24,
+        "x": 0,
+        "y": 12
       },
-      "id": 236,
+      "id": 3,
       "options": {
-        "displayMode": "gradient",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
         },
-        "showUnfilled": true,
-        "sizing": "auto",
-        "text": {}
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
@@ -253,14 +146,14 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum by (consumer,llm_usage_model) (count_over_time({component=\"llm\"} | json | llm_usage_model != \"\" [1h]))",
+          "expr": "sum by (consumer,llm_usage_model) (count_over_time({component=\"llm\",run_id=\"$run_id\"} | json | llm_usage_model != \"\" [30s]))",
           "legendFormat": "{{consumer}} -> {{llm_usage_model}}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "LLM Calls By Agent And Model",
-      "type": "bargauge"
+      "title": "LLM Activity Over Time",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -273,7 +166,6 @@
             "mode": "palette-classic"
           },
           "mappings": [],
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -289,91 +181,19 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 24,
         "x": 0,
-        "y": 8
+        "y": 20
       },
-      "id": 232,
+      "id": 4,
       "options": {
-        "displayMode": "gradient",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showUnfilled": true,
-        "sizing": "auto",
-        "text": {}
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "grafana-loki"
-          },
-          "editorMode": "code",
-          "expr": "sum by (llm_usage_model) (sum_over_time({component=\"llm\"} | json | unwrap llm_usage_total_tokens [1h]))",
-          "legendFormat": "{{llm_usage_model}}",
-          "queryType": "range",
-          "refId": "A"
-        }
-      ],
-      "title": "Tokens Consumed By LLM Model",
-      "type": "bargauge"
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "grafana-loki"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 8
-      },
-      "id": 244,
-      "options": {
-        "displayLabels": [
-          "value"
-        ],
         "legend": {
           "displayMode": "list",
-          "placement": "right"
-        },
-        "pieType": "donut",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
+          "placement": "bottom"
         },
         "tooltip": {
-          "mode": "single"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
@@ -383,76 +203,14 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum by (consumer,llm_usage_model) (sum_over_time({component=\"llm\"} | json | unwrap llm_usage_total_tokens [1h]))",
-          "legendFormat": "{{consumer}} -> {{llm_usage_model}}",
-          "queryType": "range",
-          "refId": "A"
-        }
-      ],
-      "title": "Tokens Consumed By Agent And Model",
-      "type": "piechart"
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "grafana-loki"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "ms"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 0,
-        "y": 25
-      },
-      "id": 240,
-      "options": {
-        "displayMode": "gradient",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showUnfilled": true,
-        "sizing": "auto",
-        "text": {}
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "grafana-loki"
-          },
-          "editorMode": "code",
-          "expr": "avg by (mcp_tool_name) (avg_over_time({component=\"mcp\",route=\"mock-mcp-route\"} | json | mcp_method = \"tools/call\" | mcp_tool_name != \"\" | unwrap mcp_tool_latency [1h]))",
+          "expr": "sum by (mcp_tool_name) (count_over_time({component=\"mcp\",route=\"mock-mcp-route\",run_id=\"$run_id\"} | json | mcp_method = \"tools/call\" | mcp_tool_name != \"\" [30s]))",
           "legendFormat": "{{mcp_tool_name}}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "MCP Tool Execution Latency",
-      "type": "bargauge"
+      "title": "MCP Tool Calls Over Time",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -480,12 +238,12 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
+        "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 25
+        "x": 0,
+        "y": 28
       },
-      "id": 252,
+      "id": 6,
       "options": {
         "displayMode": "gradient",
         "orientation": "horizontal",
@@ -507,7 +265,329 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"orchestrator-service\",method=\"POST\",status=\"200\"} | json | request_uri = \"/orchestrator/play\" | unwrap latencies_request [1h]))",
+          "expr": "max by (mcp_tool_name) (last_over_time({component=\"mcp\",route=\"mock-mcp-route\",run_id=\"$run_id\"} | json | mcp_method = \"tools/call\" | mcp_tool_name != \"\" | unwrap mcp_tool_latency [6h]))",
+          "legendFormat": "{{mcp_tool_name}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "MCP Tool Latency (Selected Run)",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 28
+      },
+      "id": 7,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "text": {}
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum by (consumer,mcp_tool_name) (count_over_time({component=\"mcp\",route=\"mock-mcp-route\",run_id=\"$run_id\"} | json | mcp_method = \"tools/call\" | mcp_tool_name != \"\" [6h]))",
+          "legendFormat": "{{consumer}} -> {{mcp_tool_name}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "MCP Tools Called By Agent (Selected Run)",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 36
+      },
+      "id": 8,
+      "options": {
+        "displayLabels": [
+          "value"
+        ],
+        "legend": {
+          "displayMode": "list",
+          "placement": "right"
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum by (consumer,llm_usage_model) (count_over_time({component=\"llm\",run_id=\"$run_id\"} | json | llm_usage_model != \"\" [6h]))",
+          "legendFormat": "{{consumer}} -> {{llm_usage_model}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "LLM Calls By Agent And Model (Selected Run)",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 36
+      },
+      "id": 9,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "text": {}
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "avg by (llm_usage_model) (last_over_time({component=\"llm\",run_id=\"$run_id\"} | json | llm_usage_model != \"\" | unwrap latencies_request [6h]))",
+          "legendFormat": "{{llm_usage_model}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "LLM Model Latency (Selected Run)",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 44
+      },
+      "id": 10,
+      "options": {
+        "displayLabels": [
+          "value"
+        ],
+        "legend": {
+          "displayMode": "list",
+          "placement": "right"
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum by (consumer) (sum_over_time({component=\"llm\",run_id=\"$run_id\"} | json | unwrap llm_usage_total_tokens [6h]))",
+          "legendFormat": "{{consumer}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Tokens Consumed By Agent (Selected Run)",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 44
+      },
+      "id": 11,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "text": {}
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "max by (service) (last_over_time({component=\"agent\",service=\"orchestrator-service\",run_id=\"$run_id\"} | json | unwrap latencies_request [6h]))",
           "legendFormat": "Orchestrator",
           "queryType": "range",
           "refId": "A"
@@ -518,7 +598,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"support-agent-service\",method=\"POST\",status=\"200\"} | json | request_uri =~ \".*/support-agent/v1/jsonrpc\" | unwrap latencies_request [1h]))",
+          "expr": "max by (service) (last_over_time({component=\"agent\",service=\"support-agent-service\",run_id=\"$run_id\"} | json | unwrap latencies_request [6h]))",
           "legendFormat": "Support Agent",
           "queryType": "range",
           "refId": "B"
@@ -529,15 +609,14 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"success-agent-service\",method=\"POST\",status=\"200\"} | json | request_uri =~ \".*/success-agent/v1/jsonrpc\" | unwrap latencies_request [1h]))",
+          "expr": "max by (service) (last_over_time({component=\"agent\",service=\"success-agent-service\",run_id=\"$run_id\"} | json | unwrap latencies_request [6h]))",
           "legendFormat": "Success Agent",
           "queryType": "range",
           "refId": "C"
         }
       ],
-      "title": "Agent Execution Latency",
-      "type": "bargauge",
-      "description": "Derived from Kong request latency logs over the recent lookback. This averages only the real agent execution requests, excluding long-lived trace websocket traffic."
+      "title": "Agent Execution Latency (Selected Run)",
+      "type": "bargauge"
     },
     {
       "datasource": {
@@ -550,6 +629,7 @@
             "mode": "palette-classic"
           },
           "mappings": [],
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -559,26 +639,30 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "ms"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
+        "h": 8,
         "w": 24,
         "x": 0,
-        "y": 16
+        "y": 52
       },
-      "id": 999,
+      "id": 12,
       "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "showUnfilled": true,
+        "sizing": "auto",
+        "text": {}
       },
       "targets": [
         {
@@ -587,55 +671,36 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum by (consumer,llm_usage_model) (sum_over_time({component=\"llm\"} | json | unwrap llm_usage_total_tokens [5m]))",
+          "expr": "avg by (consumer,llm_usage_model) (last_over_time({component=\"llm\",run_id=\"$run_id\"} | json | llm_usage_model != \"\" | unwrap latencies_request [6h]))",
           "legendFormat": "{{consumer}} -> {{llm_usage_model}}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Token Usage Over Time",
-      "type": "timeseries"
+      "title": "Model Latency By Agent (Selected Run)",
+      "type": "bargauge"
     },
     {
       "datasource": {
         "type": "loki",
         "uid": "grafana-loki"
       },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
       "gridPos": {
-        "h": 9,
+        "h": 10,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 60
       },
-      "id": 1001,
+      "id": 5,
       "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": true,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
       },
       "targets": [
         {
@@ -644,14 +709,13 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum by (mcp_tool_name) (count_over_time({component=\"mcp\",route=\"mock-mcp-route\"} | json | mcp_method = \"tools/call\" | mcp_tool_name != \"\" [5m]))",
-          "legendFormat": "{{mcp_tool_name}}",
+          "expr": "{component=~\"agent|llm|mcp\",run_id=\"$run_id\"}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "MCP Tool Executions Over Time",
-      "type": "timeseries"
+      "title": "Unified Recent Activity Log",
+      "type": "logs"
     }
   ],
   "refresh": "10s",
@@ -659,13 +723,43 @@
   "style": "dark",
   "tags": [
     "kong",
+    "timeline",
     "loki",
     "grafana",
     "ai",
     "mcp"
   ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "datasource": {
+          "type": "loki",
+          "uid": "grafana-loki"
+        },
+        "definition": "label_values({run_id!=\"\"}, run_id)",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Run ID",
+        "multi": false,
+        "name": "run_id",
+        "options": [],
+        "query": {
+          "label": "run_id",
+          "stream": "{run_id!=\"\"}",
+          "type": 1
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 3,
+        "type": "query"
+      }
+    ]
   },
   "time": {
     "from": "now-6h",
@@ -673,8 +767,8 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "Kong Governance Overview",
-  "uid": "kong-governance-overview",
+  "title": "Kong Run Timeline",
+  "uid": "kong-run-timeline",
   "version": 1,
   "weekStart": ""
 }

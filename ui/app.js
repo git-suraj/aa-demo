@@ -145,6 +145,13 @@ function createInitialTraceState() {
   };
 }
 
+function createRunId() {
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  return `run-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
 function labelForScenario(scenario) {
   const labels = {
     normal: "Normal",
@@ -1951,6 +1958,7 @@ function handleTraceEvent(payload) {
 async function play(overrides = {}) {
   const formData = new FormData(playForm);
   const payload = { ...Object.fromEntries(formData.entries()), ...overrides };
+  payload.run_id = payload.run_id || createRunId();
 
   resetTopology();
   resetTraceState();
@@ -1964,6 +1972,7 @@ async function play(overrides = {}) {
       headers: {
         "content-type": "application/json",
         apikey: config.apiKey,
+        "x-demo-run-id": payload.run_id,
       },
       body: JSON.stringify(payload),
     });
