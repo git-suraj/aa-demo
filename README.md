@@ -307,6 +307,12 @@ When `Semantic Cache` is selected in `View Scene`, the scene popup changes from 
   - the orchestrator deletes all Redis keys matching `semantic_cache:*`
   - this button is independent of the send-request buttons and is intended to reset the semantic-cache demo back to a clean state before another first request
 
+Important operational note:
+
+- semantic cache state persists in Redis across runs
+- because the cache is semantic, a later "first" request can still be a real cache hit if a sufficiently similar prompt already exists in Redis
+- if you want a deterministic miss-then-hit demo sequence, clear semantic cache first, then run the seed request, then run the reuse request
+
 ### 7. PII Sanitization
 
 This scenario demonstrates Kong anonymizing sensitive information in both the upstream request body and the downstream LLM response body.
@@ -655,8 +661,8 @@ If Grafana does not show those counts for a fresh normal run, the first thing to
 
 ## Implemented services
 
-- [UI](/Users/surajpillai/Documents/work/demos/learn/aa-demo/ui/index.html): static single-screen demo UI with `Play`, `Reset`, `Reset Observability`, live flow states, and event log
-- [orchestrator](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/orchestrator/app.py): receives `POST /play`, exposes `WS /trace`, calls MCP through Kong, invokes the support-agent first, then invokes the success-agent with support context
+- [UI](/Users/surajpillai/Documents/work/demos/learn/aa-demo/ui/index.html): static single-screen demo UI with `Play`, `Reset`, `Reset Observability`, live flow states, selected-step detail, and a `Recent Runs` dropdown that can replay the last 20 stored traces
+- [orchestrator](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/orchestrator/app.py): receives `POST /play`, exposes `WS /trace`, serves `GET /trace/runs` and `GET /trace/runs/{run_id}` for recent trace replay, calls MCP through Kong, invokes the support-agent first, then invokes the success-agent with support context
 - [orchestrator LLM helper](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/common/llm.py): shared OpenAI-compatible client used by the orchestrator and sub-agents, pointed at Kong's `/ai` route
 - [support-agent](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/support_agent/app.py): LangGraph sub-agent for technical investigation using `get_incident_status` and `search_runbook`
 - [success-agent](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/success_agent/app.py): LangGraph sub-agent for customer-success actions using `draft_customer_reply` and `create_followup_task`
@@ -814,9 +820,18 @@ The UI is hosted through Kong and uses the same gateway for:
 
 - `/orchestrator`
 - `/orchestrator/trace`
+- `/orchestrator/trace/runs`
+- `/orchestrator/trace/runs/{run_id}`
 - `/mock-mcp`
 - `/ai/orchestrator/chat/completions`
 - `/ai/subagent/chat/completions`
+
+The trace sidebar also includes `Recent Runs`.
+
+- it lists the last 20 runs currently held in orchestrator memory
+- selecting one replays that run's stored trace events into the same execution tree and selected-step detail pane
+- this is a UI replay of previously emitted trace events, not a second query path that rebuilds the tree differently
+- because the history is in-memory, restarting or recreating the orchestrator clears the list
 
 The top bar also includes `Reset Observability`, which triggers the orchestrator to:
 
@@ -1045,6 +1060,9 @@ The dashboard `Kong Governance Overview` includes:
 - LLM requests
 - MCP requests
 - agent requests
+- semantic guard blocked requests
+- semantic cache hits
+- semantic cache misses
 - a raw log stream panel for inspection
 
 The dashboard also includes a `Run ID` selector:
@@ -1056,6 +1074,23 @@ The dashboard also includes a `Run ID` selector:
   - scopes the dashboard to one run
 
 The LLM cost panels and LLM call-count panels are intended to follow the active Grafana time range rather than a hardcoded lookback window.
+
+The semantic-cache panels are driven by Kong AI semantic-cache audit log fields that are flattened into the Loki payload:
+
+- `ai_cache_status`
+- `ai_cache_fetch_latency`
+- `ai_cache_embeddings_provider`
+- `ai_cache_embeddings_model`
+- `ai_cache_embeddings_latency`
+
+The current cache counters use:
+
+- `ai_cache_status = "hit"` for `Semantic Cache Hits`
+- `ai_cache_status = "miss"` for `Semantic Cache Misses`
+
+The semantic-guard counter uses the guarded route returning `400`:
+
+- `Semantic Guard Blocked Requests`
 
 The UI-level `Reset Observability` button clears Loki history by recreating the Loki container and restarting Grafana. After using it, wait a few seconds and then refresh Grafana so the datasource reconnects and the dashboard reloads against the new empty Loki state.
 
@@ -1069,6 +1104,13 @@ Important note about historical data:
 - older Loki entries created before the run-id propagation fix may show incorrect per-run sub-agent LLM counts
 - those older runs cannot be corrected retroactively in Grafana because the blank `run_id` was already written into Loki
 - fresh runs after restarting the updated services should show the expected counts listed above
+- semantic-cache panels that rely on `ai_cache_status` only work for logs written after the Kong log transform started flattening those audit fields into the Loki payload
+
+Important note about UI trace history:
+
+- the `Recent Runs` dropdown is separate from Loki and Grafana
+- it is backed by the orchestrator's in-memory trace store and is capped at the latest 20 runs
+- restarting or rebuilding the orchestrator clears that history, so only runs created after the latest orchestrator start will appear
 
 ### Observability reset implementation
 

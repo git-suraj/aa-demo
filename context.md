@@ -215,6 +215,90 @@ Additional dashboard cleanup:
 - token panels now exclude blank `llm_usage_model`, which removed phantom `0` rows
 - model-grouped cost panels also exclude blank `llm_usage_model`
 - agent/model label shortening is done at the display layer, not by hardcoding agent or model names in the Loki queries
+- governance dashboard now also includes:
+  - `Semantic Guard Blocked Requests`
+  - `Semantic Cache Hits`
+  - `Semantic Cache Misses`
+
+## UI Trace History
+
+New UI capability:
+- the trace sidebar now includes a `Recent Runs` dropdown
+
+Behavior:
+- the orchestrator stores the most recent 20 runs in memory inside `TraceBroker`
+- each stored run includes summary metadata plus the ordered list of emitted trace events
+- UI calls:
+  - `GET /orchestrator/trace/runs`
+  - `GET /orchestrator/trace/runs/{run_id}`
+- when a run is selected, the UI replays the stored event stream through the existing `handleTraceEvent(...)` path
+- this means the execution tree and selected-step detail pane update exactly as if that run were streaming live
+
+Implementation details:
+- backend persistence is intentionally lightweight and bounded:
+  - `services/common/trace.py`
+  - uses an `OrderedDict`
+  - keeps only the latest 20 runs
+- replay uses the existing frontend reducer rather than a second tree-building code path:
+  - `ui/app.js`
+- sidebar markup and styling were updated in:
+  - `ui/index.html`
+  - `ui/styles.css`
+
+Operational caveats:
+- run history is not persisted to Redis, Loki, or disk
+- restarting or recreating the orchestrator clears all saved runs
+- after the orchestrator rebuild/restart done for this feature, only new runs created afterward will appear in the dropdown
+
+Related runtime issue we hit:
+- after rebuilding `ui` and `orchestrator`, Kong temporarily served `502` for `http://localhost:8000`
+- root cause was stale upstream container IPs inside Kong after container recreation
+- restarting `kong-dp` fixed upstream resolution
+
+## Semantic Cache / Guard Metrics
+
+User asked for:
+- semantic guard blocked requests
+- semantic cache hits
+- semantic cache misses
+
+Current implementation:
+- `Semantic Guard Blocked Requests`
+  - counts `status="400"` on `ai-orchestrator-semantic-guard-demo-chat-route`
+- `Semantic Cache Hits`
+  - counts `ai_cache_status = "hit"` on `ai-orchestrator-semantic-cache-demo-chat-route`
+- `Semantic Cache Misses`
+  - counts `ai_cache_status = "miss"` on `ai-orchestrator-semantic-cache-demo-chat-route`
+
+Important correction:
+- initial cache hit/miss implementation inferred hits from missing `llm_usage_model`
+- user correctly pointed out Kong documents first-class semantic-cache audit fields
+- implementation was changed to use Kong audit-log-derived cache status instead
+
+Kong log transform change:
+- `kong/deck/kong.yaml` now flattens semantic-cache audit fields into the Loki payload:
+  - `ai_cache_status`
+  - `ai_cache_fetch_latency`
+  - `ai_cache_embeddings_provider`
+  - `ai_cache_embeddings_model`
+  - `ai_cache_embeddings_latency`
+
+Observed live-data nuance:
+- Kong logs `ai_cache_status` in lowercase:
+  - `hit`
+  - `miss`
+- dashboard initially queried `Hit` / `Miss`
+- that caused `No data`
+- fixed by changing the Grafana queries to lowercase values
+
+Observed demo-state nuance:
+- a semantic-cache "first" request can still show as a hit if Redis already contains a semantically similar entry
+- after live inspection, two recent semantic-cache route requests both logged as `hit`
+- this was not a panel bug; it was existing cache state
+- for deterministic demo validation:
+  - clear semantic cache
+  - run seed
+  - run reuse
 
 ## Reset Observability Flow
 
@@ -254,3 +338,4 @@ Operational caveat:
 If the next session continues from here, useful next checks are:
 - confirm Grafana UI reflects the latest dashboard JSON after reload
 - convert remaining token panels from fixed windows like `[1h]` or `[5m]` if exact dashboard-range parity is required everywhere
+- if semantic-cache counters look wrong, inspect fresh Loki entries on `ai-orchestrator-semantic-cache-demo-chat-route` and verify actual `ai_cache_status` values before changing panel queries

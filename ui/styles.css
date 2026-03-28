@@ -40,6 +40,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -197,6 +198,7 @@ button:hover {
 }
 
 .trace-summary > div,
+.trace-run-select,
 .stage-banner,
 .detail-block,
 .detail-code,
@@ -223,6 +225,20 @@ button:hover {
 .trace-empty p,
 .detail-block p {
   color: var(--muted);
+}
+
+.trace-run-select {
+  display: grid;
+  gap: 8px;
+}
+
+.trace-run-select select {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--panel-3);
+  color: var(--text);
 }
 
 .run-state,

@@ -12,6 +12,7 @@ const finalOutput = document.getElementById("final-output");
 const runState = document.getElementById("run-state");
 const lastRun = document.getElementById("last-run");
 const runIdLabel = document.getElementById("run-id-label");
+const runHistorySelect = document.getElementById("run-history-select");
 const sceneStatus = document.getElementById("scene-status");
 const flowStageTitle = document.getElementById("flow-stage-title");
 const flowStageDetail = document.getElementById("flow-stage-detail");
@@ -85,6 +86,7 @@ const lineMap = {
 
 let traceSocket;
 let selectedTraceId = null;
+let selectedRunViewId = null;
 let traceState = createInitialTraceState();
 let mcpAnimationTimer = null;
 let failoverResetTimer = null;
@@ -151,6 +153,16 @@ function createRunId() {
     return window.crypto.randomUUID();
   }
   return `run-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function shortRunId(runId) {
+  if (!runId) {
+    return "unknown";
+  }
+  if (runId.length <= 12) {
+    return runId;
+  }
+  return `${runId.slice(0, 8)}…${runId.slice(-4)}`;
 }
 
 function labelForScenario(scenario) {
@@ -361,6 +373,123 @@ function formatTime(value) {
     return "n/a";
   }
   return new Date(value).toLocaleTimeString();
+}
+
+function formatRunOptionLabel(run) {
+  const parts = [];
+  if (run.started_at) {
+    parts.push(formatTime(run.started_at));
+  }
+  parts.push(labelForScenario(run.governance_scenario || "normal"));
+  if (run.status) {
+    parts.push(run.status);
+  }
+  parts.push(shortRunId(run.run_id));
+  return parts.join(" · ");
+}
+
+function updateRunHistoryOptions(runs, preferredRunId = selectedRunViewId) {
+  if (!runHistorySelect) {
+    return null;
+  }
+
+  runHistorySelect.innerHTML = "";
+
+  if (!runs.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "No saved runs";
+    runHistorySelect.appendChild(option);
+    runHistorySelect.disabled = true;
+    selectedRunViewId = null;
+    return null;
+  }
+
+  runHistorySelect.disabled = false;
+  runs.forEach((run) => {
+    const option = document.createElement("option");
+    option.value = run.run_id;
+    option.textContent = formatRunOptionLabel(run);
+    option.title = run.headline || run.summary || run.run_id;
+    runHistorySelect.appendChild(option);
+  });
+
+  const selectedRunId = runs.some((run) => run.run_id === preferredRunId)
+    ? preferredRunId
+    : runs[0].run_id;
+  runHistorySelect.value = selectedRunId;
+  selectedRunViewId = selectedRunId;
+  return selectedRunId;
+}
+
+async function refreshRunHistory(preferredRunId = selectedRunViewId, { autoLoad = false } = {}) {
+  try {
+    const response = await fetch(`${config.apiBaseUrl}/trace/runs`, {
+      headers: {
+        apikey: config.apiKey,
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to load run history (${response.status})`);
+    }
+
+    const data = await response.json();
+    const runs = Array.isArray(data.runs) ? data.runs : [];
+    const selectedRunId = updateRunHistoryOptions(runs, preferredRunId);
+
+    if (autoLoad && selectedRunId && !traceState.nodes.run) {
+      await loadRunTrace(selectedRunId);
+    }
+  } catch (error) {
+    if (runHistorySelect && !runHistorySelect.options.length) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "Run history unavailable";
+      runHistorySelect.appendChild(option);
+      runHistorySelect.disabled = true;
+    }
+    console.error(error);
+  }
+}
+
+function replayTraceEvents(events) {
+  resetTopology();
+  resetTraceState();
+  setRunState("loading");
+  setFlowStage("Loading run", "Replaying the stored trace for the selected run.");
+
+  if (!events.length) {
+    return;
+  }
+
+  events.forEach((event) => handleTraceEvent(event));
+}
+
+async function loadRunTrace(runId) {
+  if (!runId) {
+    selectedRunViewId = null;
+    resetTopology();
+    resetTraceState();
+    setRunState("idle");
+    setFlowStage("Waiting for a run", "Press Play to see Kong route the request across AI, sub-agent, and MCP paths.");
+    return;
+  }
+
+  const response = await fetch(`${config.apiBaseUrl}/trace/runs/${encodeURIComponent(runId)}`, {
+    headers: {
+      apikey: config.apiKey,
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to load run ${runId} (${response.status})`);
+  }
+
+  const data = await response.json();
+  selectedRunViewId = runId;
+  if (runHistorySelect) {
+    runHistorySelect.value = runId;
+  }
+  replayTraceEvents(Array.isArray(data.events) ? data.events : []);
 }
 
 function pretty(value) {
@@ -1464,7 +1593,12 @@ function connectTraceSocket() {
 
   traceSocket.addEventListener("message", (event) => {
     const payload = JSON.parse(event.data);
-    handleTraceEvent(payload);
+    if (payload.type === "run_started" || payload.type === "run_completed") {
+      void refreshRunHistory(selectedRunViewId || payload.run_id);
+    }
+    if (!selectedRunViewId || selectedRunViewId === payload.run_id) {
+      handleTraceEvent(payload);
+    }
   });
 }
 
@@ -1960,6 +2094,7 @@ async function play(overrides = {}) {
   const formData = new FormData(playForm);
   const payload = { ...Object.fromEntries(formData.entries()), ...overrides };
   payload.run_id = payload.run_id || createRunId();
+  selectedRunViewId = payload.run_id;
 
   resetTopology();
   resetTraceState();
@@ -2167,6 +2302,23 @@ clearLogButton.addEventListener("click", () => {
   resetTraceState();
 });
 
+runHistorySelect?.addEventListener("change", async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLSelectElement)) {
+    return;
+  }
+  try {
+    await loadRunTrace(target.value);
+  } catch (error) {
+    setFlowStage("Run load failed", error.message);
+    showNotice({
+      kicker: "Run History",
+      title: "Could not load run",
+      message: error.message,
+    });
+  }
+});
+
 sceneButton.addEventListener("click", () => sceneModal.showModal());
 graphButton.addEventListener("click", () => graphModal.showModal());
 outputButton.addEventListener("click", () => outputModal.showModal());
@@ -2176,6 +2328,7 @@ kongPolicyButton?.addEventListener("click", () => {
 });
 
 connectTraceSocket();
+void refreshRunHistory(undefined, { autoLoad: true });
 applyScenePreset("acme_default");
 applyScenarioChoice("normal");
 resetTraceState();

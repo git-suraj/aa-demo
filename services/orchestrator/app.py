@@ -12,7 +12,7 @@ from typing import TypedDict
 import httpx
 import redis.asyncio as redis
 from openai import APIStatusError, AuthenticationError, RateLimitError
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel
@@ -1214,6 +1214,21 @@ async def jsonrpc_endpoint(request: Request) -> dict[str, Any]:
 async def trace_event(event: ExternalTraceEvent) -> dict[str, str]:
     await emit(event.run_id, event.type, **event.payload)
     return {"status": "accepted"}
+
+
+@app.get("/trace/runs")
+@app.get("/orchestrator/trace/runs")
+async def trace_runs() -> dict[str, list[dict[str, Any]]]:
+    return {"runs": await trace_broker.list_runs()}
+
+
+@app.get("/trace/runs/{run_id}")
+@app.get("/orchestrator/trace/runs/{run_id}")
+async def trace_run(run_id: str) -> dict[str, Any]:
+    run = await trace_broker.get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return run
 
 
 @app.websocket("/trace")
