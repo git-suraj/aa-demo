@@ -1472,9 +1472,9 @@ function scheduleSemanticCacheReturn(delayMs = 900) {
     clearTimeout(semanticCacheReturnTimer);
   }
   semanticCacheReturnTimer = window.setTimeout(() => {
-    if (traceState.scenario === "semantic_cache" && semanticCacheMissReturnPending) {
-      activateActorPath("orchestrator", "complete");
-      markNode("kong", "active");
+    if (traceState.scenario === "semantic_cache") {
+      applyComponentState("orchestrator", "active");
+      applyComponentState("kong", "active");
     }
     semanticCacheReturnTimer = null;
   }, delayMs);
@@ -1485,11 +1485,16 @@ function scheduleSemanticCacheUiComplete(delayMs = 1600) {
     clearTimeout(semanticCacheUiTimer);
   }
   semanticCacheUiTimer = window.setTimeout(() => {
-    if (traceState.scenario === "semantic_cache" && semanticCacheMissReturnPending) {
-      markNode("ui", "complete");
-      markLine("ui-kong", "complete");
-      markNode("kong", "complete");
-      semanticCacheMissReturnPending = false;
+    if (traceState.scenario === "semantic_cache") {
+      applyComponentState("dashboard", "active");
+      window.setTimeout(() => {
+        if (traceState.scenario === "semantic_cache") {
+          applyComponentState("orchestrator", "complete");
+          applyComponentState("dashboard", "complete");
+          applyComponentState("kong", "complete");
+          semanticCacheMissReturnPending = false;
+        }
+      }, 700);
     }
     semanticCacheUiTimer = null;
   }, delayMs);
@@ -2122,7 +2127,6 @@ function handleTraceEvent(payload) {
         setFlowStage("Semantic cache probe", payload.message);
         hideTopologyActivity();
         clearOrchestratorLlmPath();
-        activateActorPath("orchestrator", "active");
         activateRedisPath("active");
       } else if (traceState.scenario === "semantic_guard") {
         setFlowStage("Semantic guard probe", payload.message);
@@ -2210,9 +2214,6 @@ function handleTraceEvent(payload) {
         break;
       }
       if (traceState.scenario === "semantic_cache") {
-        activateActorPath("orchestrator", "active");
-        markNode("ui", "active");
-        markLine("ui-kong", "active");
         if (!semanticCacheProbeResolved) {
           activateRedisPath("active");
         } else {
@@ -2288,10 +2289,9 @@ function handleTraceEvent(payload) {
         markLine("kong-openai", "complete");
         if (semanticCacheMissReturnPending) {
           setFlowStage("Cache miss response returned", "The LLM response returned through Kong. The return path is settling back through the orchestrator and dashboard.");
-          activateActorPath("orchestrator", "active");
-          markNode("ui", "active");
-          markLine("ui-kong", "active");
-          markNode("kong", "active");
+          applyComponentState("orchestrator", "active");
+          applyComponentState("dashboard", "active");
+          applyComponentState("kong", "active");
           const semanticCacheReturnDelay = Math.max(0, semanticCacheModelVisibleUntil - Date.now());
           scheduleSemanticCacheReturn(semanticCacheReturnDelay + 500);
           scheduleSemanticCacheUiComplete(semanticCacheReturnDelay + 1100);
@@ -2464,9 +2464,6 @@ function handleTraceEvent(payload) {
           },
           "complete",
         );
-        activateActorPath("orchestrator", "active");
-        markNode("ui", "active");
-        markLine("ui-kong", "active");
         activateRedisPath("active");
         if (semanticRedisHandoffTimer) {
           clearTimeout(semanticRedisHandoffTimer);
@@ -2497,7 +2494,6 @@ function handleTraceEvent(payload) {
           },
           "complete",
         );
-        activateActorPath("orchestrator", "active");
         if (semanticRedisHandoffTimer) {
           clearTimeout(semanticRedisHandoffTimer);
           semanticRedisHandoffTimer = null;
@@ -2604,11 +2600,12 @@ function handleTraceEvent(payload) {
         activateJudgePath("active");
         markNode("kong", "active");
         scheduleJudgeUiReturn(1400);
-      } else if (traceState.scenario === "semantic_cache" && semanticCacheMissReturnPending) {
-        activateActorPath("orchestrator", "active");
-        markNode("ui", "active");
-        markLine("ui-kong", "active");
-        markNode("kong", "active");
+      } else if (traceState.scenario === "semantic_cache") {
+        applyComponentState("kong", "active");
+        if (!semanticCacheMissReturnPending) {
+          scheduleSemanticCacheReturn(180);
+          scheduleSemanticCacheUiComplete(520);
+        }
       } else if (isBlockedResponse && traceState.scenario !== "semantic_guard") {
         applyComponentState("openai", "complete");
         applyComponentState("orchestrator", "active");
@@ -2624,6 +2621,8 @@ function handleTraceEvent(payload) {
         // The judge scenario returns through Kong back to the orchestrator and UI.
       } else if (traceState.scenario === "semantic_cache" && semanticCacheMissReturnPending) {
         // Cache miss return sequencing is driven from llm_completed.
+      } else if (traceState.scenario === "semantic_cache") {
+        applyComponentState("kong", "active");
       } else if (isBlockedResponse && traceState.scenario !== "semantic_guard") {
         markNode("kong", "active");
         markNode("ui", "active");
@@ -2726,9 +2725,21 @@ function handleTraceEvent(payload) {
           setOpenAiNodeState("complete");
           markLine("kong-openai", "complete");
           if (!semanticCacheMissReturnPending) {
-            markNode("ui", "complete");
-            markLine("ui-kong", "complete");
-            markNode("kong", "complete");
+            activateActorPath("orchestrator", "complete");
+            markNode("kong", "active");
+            markNode("ui", "active");
+            markLine("ui-kong", "active");
+            if (semanticCacheUiTimer) {
+              clearTimeout(semanticCacheUiTimer);
+            }
+            semanticCacheUiTimer = window.setTimeout(() => {
+              if (traceState.scenario === "semantic_cache" && !semanticCacheMissReturnPending) {
+                markNode("ui", "complete");
+                markLine("ui-kong", "complete");
+                markNode("kong", "complete");
+              }
+              semanticCacheUiTimer = null;
+            }, 900);
           }
         } else if (traceState.scenario === "semantic_guard") {
           // Let the semantic guard policy event own the visible block/reset sequence.

@@ -1242,7 +1242,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         )
         await emit(run_id, "planning", message=stage_summary)
         await emit_component(run_id, "redis", "active", actor="orchestrator", stage=stage)
-        await emit(run_id, "llm_started", actor="orchestrator", stage=stage, component="openai", input=prompts)
+        await emit(run_id, "llm_started", actor="orchestrator", stage=stage, input=prompts)
         llm_started = time.perf_counter()
         triage_result = await llm.generate_with_headers(base_url=ai_route_base_url, run_id=run_id, **prompts)
         cache_status = (triage_result.get("cache_headers", {}).get("x-cache-status") or "").lower()
@@ -1262,12 +1262,16 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             output=triage_result.get("cache_headers"),
         )
         await emit_component(run_id, "redis", "complete", actor="orchestrator", stage=stage)
+        if policy_stage == "semantic_cache_miss":
+            await emit_component(run_id, "openai", "active", actor="orchestrator", stage=stage)
         await emit(
             run_id,
             "llm_completed",
             actor="orchestrator",
             stage=stage,
-            component=triage_result["model"] if triage_result.get("model") else "openai",
+            component=(triage_result["model"] if triage_result.get("model") else "openai")
+            if policy_stage == "semantic_cache_miss"
+            else None,
             llm_used=triage_result["llm_used"],
             model=triage_result["model"],
             output=triage_result,
@@ -1292,6 +1296,8 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
                 "success-agent": [],
             },
         }
+        await emit_component(run_id, "orchestrator", "active", actor="orchestrator", stage=stage)
+        await emit_component(run_id, "kong", "active", actor="orchestrator", stage=stage)
         await emit(run_id, "final_response", headline=final_response["headline"], output=final_response)
         await emit_component(run_id, "dashboard", "complete")
         await emit_component(run_id, "kong", "complete")
