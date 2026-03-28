@@ -51,6 +51,7 @@ plugins:
           local proxy = ai['proxy'] or {}
           local meta = proxy['meta'] or {}
           local usage = proxy['usage'] or {}
+          local cache = proxy['cache'] or {}
           local prompt_tokens = tonumber(usage['prompt_tokens'] or usage['input_tokens'] or 0) or 0
           local completion_tokens = tonumber(usage['completion_tokens'] or usage['output_tokens'] or 0) or 0
           local total_tokens = tonumber(usage['total_tokens'] or (prompt_tokens + completion_tokens) or 0) or 0
@@ -83,6 +84,11 @@ plugins:
           log_payload['llm_usage_cost'] = usage_cost
           log_payload['llm_usage_model'] = model_name
           log_payload['llm_usage_provider'] = provider_name
+          log_payload['ai_cache_status'] = tostring(cache['cache_status'] or '')
+          log_payload['ai_cache_fetch_latency'] = tonumber(cache['fetch_latency'] or 0) or 0
+          log_payload['ai_cache_embeddings_provider'] = tostring(cache['embeddings_provider'] or '')
+          log_payload['ai_cache_embeddings_model'] = tostring(cache['embeddings_model'] or '')
+          log_payload['ai_cache_embeddings_latency'] = tonumber(cache['embeddings_latency'] or 0) or 0
           log_payload['run_id'] = run_id
           log_payload['mcp_session_id'] = tostring(mcp['mcp_session_id'] or '')
           log_payload['mcp_method'] = tostring(mcp_entry['method'] or '')
