@@ -30,7 +30,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 68
+        "y": 78
       },
       "id": 100,
       "options": {
@@ -67,7 +67,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 76
+        "y": 86
       },
       "id": 108,
       "options": {
@@ -104,7 +104,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 84
+        "y": 94
       },
       "id": 116,
       "options": {
@@ -1163,7 +1163,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 92
+        "y": 68
       },
       "id": 320,
       "options": {
@@ -1184,7 +1184,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "{component=\"llm\",route=\"ai-orchestrator-judge-demo-chat-route\",run_id!=\"\",run_id=~\"$run_id\"} | json | judge_model != \"\"",
+          "expr": "{route=\"ai-orchestrator-judge-demo-chat-route\",run_id!=\"\",run_id=~\"$run_id\"}",
           "queryType": "range",
           "refId": "A"
         }
@@ -1195,7 +1195,7 @@
           "id": "extractFields",
           "options": {
             "format": "json",
-            "replace": true,
+            "replace": false,
             "source": "Line"
           }
         },
@@ -1204,6 +1204,7 @@
           "options": {
             "include": {
               "names": [
+                "Time",
                 "judge_input",
                 "judge_output",
                 "judge_inference_model",
@@ -1220,15 +1221,17 @@
           "options": {
             "excludeByName": {},
             "indexByName": {
-              "judge_input": 0,
-              "judge_output": 1,
-              "judge_inference_model": 2,
-              "llm_latency_ms": 3,
-              "judge_model": 4,
-              "judge_latency_ms": 5,
-              "judge_accuracy": 6
+              "Time": 0,
+              "judge_input": 1,
+              "judge_output": 2,
+              "judge_inference_model": 3,
+              "llm_latency_ms": 4,
+              "judge_model": 5,
+              "judge_latency_ms": 6,
+              "judge_accuracy": 7
             },
             "renameByName": {
+              "Time": "Time",
               "judge_accuracy": "Score (Accuracy)",
               "judge_inference_model": "Inference Model",
               "judge_input": "Input",
@@ -1271,12 +1274,12 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "{component=\"llm\",route=\"ai-orchestrator-judge-demo-chat-route\",run_id!=\"\",run_id=~\"$run_id\"}",
+          "expr": "{gateway=\"kong-unified-governance\",run_id!=\"\",run_id=~\"$run_id\"}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "LLM as Judge Raw Logs",
+      "title": "Kong Raw Log Stream",
       "type": "logs"
     }
   ],

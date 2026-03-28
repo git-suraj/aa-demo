@@ -60,6 +60,8 @@ class PlayRequest(BaseModel):
     governance_scenario: str = "normal"
     semantic_cache_step: str = "single"
     pii_sanitizer_mode: str = "placeholder"
+    llm_judge_prompt_choice: str = "escalation"
+    llm_judge_user_prompt: str | None = None
 
 
 class ExternalTraceEvent(BaseModel):
@@ -210,12 +212,36 @@ def build_semantic_cache_prompts(request: PlayRequest) -> dict[str, str]:
 
 
 def build_llm_judge_prompts(request: PlayRequest) -> dict[str, str]:
+    custom_user_prompt = (request.llm_judge_user_prompt or "").strip()
+    if request.llm_judge_prompt_choice == "konghq_overview":
+        return {
+            "system_prompt": (
+                "You are a concise factual company explainer. "
+                "Respond with short, accurate prose and avoid speculation."
+            ),
+            "user_prompt": custom_user_prompt or (
+                "Give me a concise factual overview of KongHQ, including what the company does, "
+                "its main product areas, and who typically uses it."
+            ),
+        }
+    if request.llm_judge_prompt_choice == "konghq_precision":
+        return {
+            "system_prompt": (
+                "You are a precise enterprise platform analyst. "
+                "Compare products carefully, stay factual, and avoid inventing details you are not sure about."
+            ),
+            "user_prompt": custom_user_prompt or (
+                "Give exact current pricing, revenue, headcount, market share, and executive "
+                "leadership details for KongHQ, and compare them precisely with Apigee and AWS "
+                "API Gateway without any caveats."
+            ),
+        }
     return {
         "system_prompt": (
             "You are an executive escalation triage assistant. "
             "Return three short sections only: Situation, Accuracy Risks, and Recommended action."
         ),
-        "user_prompt": (
+        "user_prompt": custom_user_prompt or (
             "Create a concise executive triage note for this enterprise customer escalation.\n"
             f"Account: {request.account_name}\n"
             f"Customer ID: {request.customer_id}\n"

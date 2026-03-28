@@ -339,8 +339,22 @@
           <section id="llm-judge-controls" class="probe-controls" hidden>
             <article class="probe-card">
               <span class="probe-label">LLM as Judge Request</span>
-              <p class="probe-copy">This is the orchestrator prompt body sent through Kong for the LLM as Judge scenario. Kong AI Proxy Advanced sends the request through candidate models, then the judge model scores the response for accuracy.</p>
-              <pre id="llm-judge-payload" class="probe-payload"></pre>
+              <p class="probe-copy">Choose the prompt payload to send through Kong for the LLM as Judge scenario. Kong AI Proxy Advanced sends the request through candidate models, then the judge model scores the response for accuracy.</p>
+              <div class="preset-options" id="llm-judge-prompt-options">
+                <label class="preset-option">
+                  <input type="radio" name="llm_judge_prompt_choice" value="escalation" checked />
+                  <span>Escalation Triage</span>
+                </label>
+                <label class="preset-option">
+                  <input type="radio" name="llm_judge_prompt_choice" value="konghq_overview" />
+                  <span>KongHQ Overview</span>
+                </label>
+                <label class="preset-option">
+                  <input type="radio" name="llm_judge_prompt_choice" value="konghq_precision" />
+                  <span>Low Score Probe</span>
+                </label>
+              </div>
+              <textarea id="llm-judge-payload" class="probe-payload" rows="10"></textarea>
             </article>
           </section>
           <section id="pii-sanitizer-controls" class="probe-controls" hidden>

@@ -262,6 +262,42 @@ User asked for:
 
 ## Recent Governance / UI Fixes
 
+### LLM as Judge UI and Grafana
+
+Fixes applied:
+- the `LLM as Judge` scene now has three prompt presets:
+  - `Escalation Triage`
+  - `KongHQ Overview`
+  - `Low Score Probe`
+- the prompt text area is now editable
+- selecting a radio preset preloads the text area, but the edited text box value is what gets sent on play
+
+Important bug that was fixed:
+- the radio buttons live outside `#play-form`
+- `FormData(playForm)` was therefore not carrying `llm_judge_prompt_choice`
+- `ui/app.js` now injects the selected preset explicitly when playing the judge scenario
+
+Grafana / Kong logging fixes:
+- `LLM as Judge Evaluations` was initially empty even though the route was being called
+- root causes included:
+  - Kong Lua transform using the wrong JSON path for judge fields
+  - request/response payload decoding bugs
+  - Grafana table transformations that were too fragile
+- current state:
+  - judge route logs are present in Loki
+  - the table renders from the raw judge-route logs
+  - the raw judge-only log panel was replaced with a full-width `Kong Raw Log Stream`
+
+Judge input logging fix:
+- the Kong log transform originally concatenated all request messages, including the hidden system prompt
+- that made Grafana's `Input` column look like the preset text had been sent even when the text area had been edited
+- the transform now records only `user`-role content for `judge_input`
+
+Judge route stability fix:
+- the judge demo route originally allowed Gemini as both a candidate target and the judge model
+- that caused intermittent failures when the candidate path selected Gemini
+- the route was corrected so the candidate model is OpenAI only and the judge model is Gemini only
+
 ### Token-limit scenario
 
 Observed issue:

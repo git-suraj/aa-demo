@@ -372,6 +372,58 @@ Important setup note:
   - username: `kong/ai-pii`
   - password: your support-provided token
 
+### 8. LLM as Judge
+
+This scenario demonstrates Kong generating a candidate response with one model and then scoring that response with a separate judge model.
+
+Behind the scenes:
+
+- the orchestrator switches to `/ai/orchestrator-judge-demo/chat/completions`
+- the route applies:
+  - `ai-proxy-advanced` for the candidate response
+  - `ai-llm-as-judge` for the scoring pass
+- the current route shape is:
+  - candidate model: `gpt-4o-mini`
+  - judge model: `gemini-2.5-flash`
+- the judge prompt is now generic rather than escalation-specific:
+  - accuracy
+  - relevance to the request
+  - usefulness for the user's stated task
+- the judge plugin is configured to emit payloads and statistics into Kong audit logs, which are then flattened into Loki by the global `http-log` transform
+
+When `LLM as Judge` is selected in `View Scene`, the scene popup now includes:
+
+- three radio presets:
+  - `Escalation Triage`
+  - `KongHQ Overview`
+  - `Low Score Probe`
+- an editable text box
+  - selecting a radio preset preloads the text box
+  - you can then edit the text directly
+  - the edited text box value is the actual user prompt sent through Kong
+
+Important implementation note:
+
+- the judge-route candidate target is intentionally OpenAI only
+- Gemini is reserved for the judge model
+- earlier, the candidate target list also included Gemini, which caused intermittent failures because the candidate and judge paths could collide on the same model
+
+Grafana support for this scenario now includes:
+
+- `LLM as Judge Evaluations`
+  - table showing:
+    - input
+    - output
+    - inference model
+    - LLM latency
+    - judge model
+    - judge latency
+    - score
+- `Kong Raw Log Stream`
+  - full-width raw Kong logs for the selected run
+
+The Kong log transform was also adjusted so the judge `Input` column reflects only the user message content from the request, not the hidden system prompt.
+
 ## What happens when Play is pressed
 
 When the user presses `Play` in the UI, the following flow happens:
@@ -1074,6 +1126,7 @@ The dashboard `Kong Governance Overview` includes:
 - semantic guard blocked requests
 - semantic cache hits
 - semantic cache misses
+- LLM as Judge evaluations
 - a raw log stream panel for inspection
 
 The dashboard also includes a `Run ID` selector:
@@ -1102,6 +1155,20 @@ The current cache counters use:
 The semantic-guard counter uses the guarded route returning `400`:
 
 - `Semantic Guard Blocked Requests`
+
+The judge table is backed by Kong judge-route logs and expects the flattened fields:
+
+- `judge_input`
+- `judge_output`
+- `judge_inference_model`
+- `judge_model`
+- `judge_latency_ms`
+- `judge_accuracy`
+
+Important judge-panel note:
+
+- old Loki entries created before the recent Kong log-transform fixes may have blank `judge_input` or missing judge fields
+- only fresh judge runs after the latest Kong sync should be used when validating the table
 
 The UI-level `Reset Observability` button clears Loki history by recreating the Loki container and restarting Grafana. After using it, wait a few seconds and then refresh Grafana so the datasource reconnects and the dashboard reloads against the new empty Loki state.
 

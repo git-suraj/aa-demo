@@ -22,6 +22,7 @@ plugins:
         streams: >-
           local ts = string.format('%18.0f', os.time() * 1000000000)
           local log_payload = kong.log.serialize()
+          local cjson = require 'cjson'
           local service = log_payload['service'] or { name = 'noService' }
           local route = log_payload['route'] or { name = 'noRoute' }
           local consumer = log_payload['consumer'] or {}
@@ -53,15 +54,25 @@ plugins:
           local meta = proxy['meta'] or {}
           local usage = proxy['usage'] or {}
           local cache = proxy['cache'] or {}
-          local judge = proxy['ai-llm-as-judge'] or {}
+          local judge = ai['ai-llm-as-judge'] or {}
           local judge_meta = judge['meta'] or {}
           local judge_usage = judge['usage'] or {}
           local function extract_request_text(messages)
+            if type(messages) == 'string' and messages ~= '' then
+              local ok, decoded = pcall(cjson.decode, messages)
+              if ok and type(decoded) == 'table' then
+                messages = decoded['messages'] or messages
+              end
+            end
             if type(messages) ~= 'table' then
               return ''
             end
             local parts = {}
             for _, message in ipairs(messages) do
+              local role = type(message) == 'table' and tostring(message['role'] or '') or ''
+              if role ~= 'user' then
+                goto continue
+              end
               local content = type(message) == 'table' and message['content'] or nil
               if type(content) == 'string' and content ~= '' then
                 table.insert(parts, content)
@@ -76,10 +87,17 @@ plugins:
                   table.insert(parts, table.concat(nested, ' '))
                 end
               end
+              ::continue::
             end
             return table.concat(parts, '\n\n')
           end
           local function extract_response_text(response_payload)
+            if type(response_payload) == 'string' and response_payload ~= '' then
+              local ok, decoded = pcall(cjson.decode, response_payload)
+              if ok then
+                response_payload = decoded
+              end
+            end
             if type(response_payload) ~= 'table' then
               return ''
             end
@@ -139,20 +157,19 @@ plugins:
           log_payload['ai_cache_embeddings_provider'] = tostring(cache['embeddings_provider'] or '')
           log_payload['ai_cache_embeddings_model'] = tostring(cache['embeddings_model'] or '')
           log_payload['ai_cache_embeddings_latency'] = tonumber(cache['embeddings_latency'] or 0) or 0
-          log_payload['judge_input'] = extract_request_text(proxy_payload['request'] and proxy_payload['request']['messages'] or {})
+          log_payload['judge_input'] = extract_request_text(proxy_payload['request'] or {})
           log_payload['judge_output'] = extract_response_text(proxy_payload['response'] or {})
-          log_payload['judge_inference_model'] = tostring(judge_meta['request_model'] or '')
+          log_payload['judge_inference_model'] = tostring(meta['response_model'] or meta['request_model'] or '')
           log_payload['judge_model'] = tostring(judge_meta['response_model'] or '')
           log_payload['judge_provider'] = tostring(judge_meta['provider_name'] or '')
           log_payload['judge_latency_ms'] = tonumber(judge_meta['llm_latency'] or 0) or 0
-          log_payload['judge_accuracy'] = tonumber(judge_usage['llm_accuracy'] or 0) or 0
+          log_payload['judge_accuracy'] = tonumber(usage['llm_accuracy'] or judge_usage['llm_accuracy'] or 0) or 0
           log_payload['run_id'] = run_id
           log_payload['mcp_session_id'] = tostring(mcp['mcp_session_id'] or '')
           log_payload['mcp_method'] = tostring(mcp_entry['method'] or '')
           log_payload['mcp_tool_name'] = tostring(mcp_entry['tool_name'] or '')
           log_payload['mcp_tool_latency'] = tonumber(mcp_entry['latency'] or 0) or 0
           log_payload['mcp_response_body_size'] = tonumber(mcp_entry['response_body_size'] or 0) or 0
-          local cjson = require 'cjson'
           local payload_string = cjson.encode(log_payload)
           return {
             {
@@ -533,8 +550,8 @@ services:
         config:
           prompt: |
             You are a strict evaluator. You will be given a request and a response.
-            Your task is to judge whether the response is correct and useful for executive triage.
-            Assign a score between 1 and 100, where 100 is completely correct and highly useful,
+            Judge whether the response is accurate, relevant to the request, and useful for the user's stated task.
+            Assign a score between 1 and 100, where 100 is completely accurate, relevant, and useful,
             and 1 is incorrect, misleading, or irrelevant. Return a single number only.
           http_timeout: 60000
           https_verify: true
@@ -555,7 +572,7 @@ services:
               provider: gemini
               name: ${{ env "DECK_GEMINI_MODEL" }}
               options:
-                max_tokens: 5
+                max_tokens: 10000
                 temperature: 0.2
                 top_p: 1
             route_type: llm/v1/chat
@@ -597,21 +614,6 @@ services:
                 options:
                   input_cost: 0.15
                   output_cost: 0.60
-              weight: 100
-            - route_type: llm/v1/chat
-              auth:
-                param_name: key
-                param_value: ${{ env "DECK_GEMINI_API_KEY" }}
-                param_location: query
-              logging:
-                log_payloads: true
-                log_statistics: true
-              model:
-                provider: gemini
-                name: ${{ env "DECK_GEMINI_MODEL" }}
-                options:
-                  input_cost: 0.30
-                  output_cost: 2.50
               weight: 100
 
   - name: ai-orchestrator-pii-placeholder-demo-service

@@ -36,6 +36,7 @@ const semanticCacheClearButton = document.getElementById("semantic-cache-clear-b
 const semanticGuardControls = document.getElementById("semantic-guard-controls");
 const semanticGuardPayloadPreview = document.getElementById("semantic-guard-payload");
 const llmJudgeControls = document.getElementById("llm-judge-controls");
+const llmJudgePromptOptions = document.getElementById("llm-judge-prompt-options");
 const llmJudgePayloadPreview = document.getElementById("llm-judge-payload");
 const piiSanitizerControls = document.getElementById("pii-sanitizer-controls");
 const piiModeOptions = document.getElementById("pii-mode-options");
@@ -312,17 +313,19 @@ function policyDetailsForScenario(scenario) {
     },
     llm_as_judge: {
       title: "LLM as Judge",
-      intro: "Kong sends the same request through multiple candidate models and then uses a separate judge model to score the returned answer for accuracy.",
+      intro: "Kong sends the request to a candidate model, then invokes a separate judge model to score the response for accuracy and task usefulness.",
       plainEnglish: [
-        "AI Proxy Advanced fans the request across candidate models on the dedicated judge route.",
-        "Kong then invokes a separate judge model to evaluate the candidate response and assign a numeric accuracy score.",
+        "AI Proxy Advanced sends the request to the dedicated judge route's candidate model.",
+        "Kong then invokes a separate judge model to evaluate the candidate response and assign a numeric score.",
         "The response still returns through Kong, while the evaluation metadata is emitted into the audit logs for Grafana.",
       ],
       why: "This demonstrates model evaluation at the gateway layer without adding a separate scoring service in the application.",
       config: [
         ["Policy", "AI LLM as Judge"],
-        ["Candidate models", "OpenAI 4o mini and Gemini 2.5 Flash"],
+        ["Candidate model", "OpenAI 4o mini"],
         ["Judge model", "Gemini 2.5 Flash"],
+        ["Judge rubric", "Accurate, relevant to the request, and useful for the user's stated task"],
+        ["Prompt presets", "Escalation Triage, KongHQ Overview, or Kong vs Apigee/AWS"],
         ["Expected outcome", "One response is returned and Kong logs judge latency plus an accuracy score"],
       ],
     },
@@ -625,6 +628,11 @@ function currentFormPayload() {
   return Object.fromEntries(formData.entries());
 }
 
+function selectedLlmJudgePromptChoice() {
+  const selected = llmJudgePromptOptions?.querySelector('input[name="llm_judge_prompt_choice"]:checked');
+  return selected instanceof HTMLInputElement ? selected.value : "escalation";
+}
+
 function semanticCachePayload(step) {
   const base = currentFormPayload();
   const systemPrompt =
@@ -689,8 +697,30 @@ function renderSemanticGuardPayload() {
 
 function llmJudgePayload() {
   const base = currentFormPayload();
+  const choice = selectedLlmJudgePromptChoice();
+  if (choice === "konghq_overview") {
+    return {
+      governance_scenario: "llm_as_judge",
+      llm_judge_prompt_choice: choice,
+      system_prompt:
+        "You are a concise factual company explainer. Respond with short, accurate prose and avoid speculation.",
+      user_prompt:
+        "Give me a concise factual overview of KongHQ, including what the company does, its main product areas, and who typically uses it.",
+    };
+  }
+  if (choice === "konghq_precision") {
+    return {
+      governance_scenario: "llm_as_judge",
+      llm_judge_prompt_choice: choice,
+      system_prompt:
+        "You are a precise enterprise platform analyst. Compare products carefully, stay factual, and avoid inventing details you are not sure about.",
+      user_prompt:
+        "Give exact current pricing, revenue, headcount, market share, and executive leadership details for KongHQ, and compare them precisely with Apigee and AWS API Gateway without any caveats.",
+    };
+  }
   return {
     governance_scenario: "llm_as_judge",
+    llm_judge_prompt_choice: choice,
     system_prompt:
       "You are an executive escalation triage assistant. Return three short sections only: Situation, Accuracy Risks, and Recommended action.",
     user_prompt: [
@@ -714,7 +744,7 @@ function renderLlmJudgePayload() {
   if (!llmJudgePayloadPreview) {
     return;
   }
-  llmJudgePayloadPreview.textContent = pretty(llmJudgePayload());
+  llmJudgePayloadPreview.value = llmJudgePayload().user_prompt;
 }
 
 function piiSanitizerPayload(mode) {
@@ -2625,6 +2655,10 @@ function handleTraceEvent(payload) {
 async function play(overrides = {}) {
   const formData = new FormData(playForm);
   const payload = { ...Object.fromEntries(formData.entries()), ...overrides };
+  if ((payload.governance_scenario || activeScenario) === "llm_as_judge") {
+    payload.llm_judge_prompt_choice = selectedLlmJudgePromptChoice();
+    payload.llm_judge_user_prompt = llmJudgePayloadPreview?.value?.trim() || llmJudgePayload().user_prompt;
+  }
   payload.run_id = payload.run_id || createRunId();
   selectedRunViewId = payload.run_id;
 
@@ -2699,7 +2733,7 @@ async function clearSemanticCache() {
   }
 }
 
-async function resetObservability() {
+async function resetObservability({ silent = false } = {}) {
   try {
     const response = await fetch(`${config.apiBaseUrl}/observability/reset`, {
       method: "POST",
@@ -2713,19 +2747,23 @@ async function resetObservability() {
     }
     const result = await response.json();
     setFlowStage("Observability reset", "Recreated Loki and restarted Grafana.");
-    showNotice({
-      kicker: "Observability",
-      title: "Observability reset complete",
-      message: "Loki was recreated and Grafana was restarted. Refresh Grafana after a few seconds if panels still show old data.",
-    });
+    if (!silent) {
+      showNotice({
+        kicker: "Observability",
+        title: "Observability reset complete",
+        message: "Loki was recreated and Grafana was restarted. Refresh Grafana after a few seconds if panels still show old data.",
+      });
+    }
     return result;
   } catch (error) {
     setFlowStage("Observability reset failed", error.message);
-    showNotice({
-      kicker: "Observability",
-      title: "Observability reset failed",
-      message: error.message,
-    });
+    if (!silent) {
+      showNotice({
+        kicker: "Observability",
+        title: "Observability reset failed",
+        message: error.message,
+      });
+    }
     throw error;
   }
 }
@@ -2797,6 +2835,14 @@ piiModeOptions?.addEventListener("change", (event) => {
   }
 });
 
+llmJudgePromptOptions?.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement) || target.name !== "llm_judge_prompt_choice") {
+    return;
+  }
+  renderLlmJudgePayload();
+});
+
 resetButton.addEventListener("click", () => {
   playForm.reset();
   const selectedScenario = scenarioOptions?.querySelector('input[name="scenario_choice"]:checked');
@@ -2824,9 +2870,6 @@ playForm.addEventListener("input", () => {
   }
   if (activeScenario === "semantic_guard") {
     renderSemanticGuardPayload();
-  }
-  if (activeScenario === "llm_as_judge") {
-    renderLlmJudgePayload();
   }
   if (activeScenario === "pii_sanitizer") {
     renderPiiSanitizerPayloads();
