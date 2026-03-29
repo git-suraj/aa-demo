@@ -10,17 +10,24 @@
     <div class="app-shell">
       <header class="topbar">
         <div>
-          <p class="eyebrow">Kong Konnect Hybrid Demo</p>
+          <p class="eyebrow">Kong AI Gateway Demo</p>
           <h1>Kong Unified Governance</h1>
           <p class="hero-copy">
             One request enters Kong. The orchestrator, sub-agents, LLM routes, and MCP tools all
             execute through the gateway while the trace updates live.
           </p>
+          <div class="hero-highlights" aria-label="Kong governance highlights">
+            <span class="hero-chip">AI routing and failover</span>
+            <span class="hero-chip">MCP tool exposure</span>
+            <span class="hero-chip">Per Agent AuthN/AuthZ</span>
+            <span class="hero-chip">Semantic and PII controls</span>
+            <span class="hero-chip">Live observability</span>
+          </div>
         </div>
         <div class="topbar-actions">
-          <button id="scene-button" class="secondary scene-launch" type="button">View Scene</button>
+          <button id="scene-button" class="secondary scene-launch" type="button">Scenes</button>
           <button id="graph-button" class="secondary" type="button">View Diagrams</button>
-          <button id="reset-button" class="secondary" type="button">Reset</button>
+          <button id="reset-button" class="secondary" type="button">Reset Scene</button>
           <button id="reset-observability-button" class="secondary" type="button">Reset Observability</button>
           <button id="output-button" class="secondary" type="button">View Run Output</button>
         </div>
@@ -54,7 +61,7 @@
           <div class="trace-tree" id="trace-tree">
             <div class="trace-empty">
               <h3>No run yet</h3>
-              <p>Open View Scene to choose the demo input and start the run.</p>
+              <p>Open Scenes to choose the demo input and start the run.</p>
             </div>
           </div>
           <div class="tree-actions">

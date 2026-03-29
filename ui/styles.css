@@ -80,9 +80,14 @@ button:hover {
 .topbar {
   display: flex;
   justify-content: space-between;
-  gap: 24px;
+  gap: 32px;
   align-items: flex-start;
   margin-bottom: 22px;
+}
+
+.topbar > :first-child {
+  flex: 1 1 860px;
+  min-width: 0;
 }
 
 .eyebrow,
@@ -104,6 +109,7 @@ button:hover {
   margin: 8px 0 10px;
   font-size: clamp(2rem, 3.3vw, 3.35rem);
   line-height: 0.96;
+  max-width: 11ch;
 }
 
 .hero-copy {
@@ -114,10 +120,59 @@ button:hover {
   font-size: 1rem;
 }
 
-.topbar-actions {
+.hero-highlights {
   display: flex;
   flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.hero-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 5px 13px;
+  border-radius: 999px;
+  border: 1px solid rgba(131, 255, 94, 0.18);
+  background: rgba(156, 255, 120, 0.05);
+  color: #dfffd3;
+  font-size: 0.82rem;
+  letter-spacing: 0.01em;
+  box-shadow: inset 0 0 0 1px rgba(131, 255, 94, 0.03);
+}
+
+.topbar-actions {
+  display: flex;
+  flex-wrap: nowrap;
   gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 20;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(190, 209, 230, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(11, 14, 19, 0.88);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.36),
+    0 8px 24px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  white-space: nowrap;
+}
+
+.topbar-actions button {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.topbar-actions button:not(.scene-launch) {
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
 .scene-launch {
@@ -1598,8 +1653,31 @@ button:hover {
     flex-direction: column;
   }
 
+  .topbar > :first-child {
+    flex: 1 1 auto;
+  }
+
   .topbar-actions {
     width: 100%;
+    position: static;
+    flex-wrap: wrap;
+    margin-top: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .hero-highlights {
+    gap: 10px;
+  }
+
+  .hero-chip {
+    min-height: 30px;
+    padding: 5px 11px;
+    font-size: 0.8rem;
   }
 
   .topbar-actions button {
