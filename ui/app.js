@@ -2165,6 +2165,7 @@ function handleTraceEvent(payload) {
 
     case "tool_list_started":
       setFlowStage("Fetching MCP tool list", `${labelForActor(payload.actor || "orchestrator")} is resolving the allowed MCP tools through Kong.`);
+      showTopologyActivity("list_tools");
       setMcpPathState("active", 0, payload.actor || "orchestrator");
       break;
 
