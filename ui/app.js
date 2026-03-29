@@ -86,7 +86,7 @@ const lineMap = {
   "kong-pii": document.getElementById("line-kong-pii"),
   "kong-observability": document.getElementById("line-kong-observability"),
   "kong-mcp": document.getElementById("line-kong-mcp"),
-  "mcp-backend": document.getElementById("line-mcp-backend"),
+  "kong-backend": document.getElementById("line-kong-backend"),
 };
 
 let traceSocket;
@@ -1416,7 +1416,7 @@ function updateScenarioInfraVisibility(scenario) {
   setLineVisibility("kong-support", !focusedScenario);
   setLineVisibility("kong-success", !focusedScenario);
   setLineVisibility("kong-mcp", !focusedScenario);
-  setLineVisibility("mcp-backend", !focusedScenario);
+  setLineVisibility("kong-backend", !focusedScenario);
 }
 
 function activateActorPath(actor, state = "active") {
@@ -1440,7 +1440,7 @@ function activateToolPath(actor, state = "active") {
   markNode("mcp", state);
   markNode("backend-api", state);
   markLine("kong-mcp", state);
-  markLine("mcp-backend", state);
+  markLine("kong-backend", state);
 }
 
 function activateRedisPath(state = "active") {
@@ -1635,7 +1635,7 @@ function showFailurePath(kind = "orchestrator") {
     markNode("backend-api", "error");
     markLine("kong-orchestrator", "error");
     markLine("kong-mcp", "error");
-    markLine("mcp-backend", "error");
+    markLine("kong-backend", "error");
     return;
   }
 
