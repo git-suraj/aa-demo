@@ -798,6 +798,69 @@ If Grafana does not show those counts for a fresh normal run, the first thing to
 
 This tool split will be enforced by Kong with authenticated Consumers and Consumer Group based ACL rules inside the MCP proxy configuration.
 
+## Backend API reference
+
+The backing REST API lives in [services/mock_api/app.py](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/mock_api/app.py).
+In the local demo, the intended host-facing access path is through Kong on `/api`, not by exposing the `mock-api` container directly on its own host port.
+
+### Tool to endpoint mapping
+
+- `get_customer_account` -> `GET /api/customers/{customer_id}`
+- `get_renewal_risk` -> `GET /api/customers/{customer_id}/renewal-risk`
+- `get_open_tickets` -> `GET /api/customers/{customer_id}/tickets`
+- `get_incident_status` -> `GET /api/incidents/{incident_id}`
+- `search_runbook` -> `GET /api/runbooks/search?q=...`
+- `draft_customer_reply` -> `POST /api/drafts/customer-reply`
+- `create_followup_task` -> `POST /api/tasks/followup`
+
+Preview/helper endpoints also exist:
+
+- `draft_customer_reply_preview` -> `GET /api/drafts/customer-reply/preview`
+- `create_followup_task_preview` -> `GET /api/tasks/followup/preview`
+- `get_demo_scene` -> `GET /api/demo-scene`
+- `healthcheck` -> `GET /api/health`
+
+### Direct curl examples through Kong
+
+```bash
+curl -s http://localhost:8000/api/health | jq
+curl -s http://localhost:8000/api/customers/cust_acme | jq
+curl -s http://localhost:8000/api/customers/cust_acme/renewal-risk | jq
+curl -s http://localhost:8000/api/customers/cust_acme/tickets | jq
+curl -s http://localhost:8000/api/incidents/INC-1007 | jq
+curl -s "http://localhost:8000/api/runbooks/search?q=billing" | jq
+curl -s http://localhost:8000/api/demo-scene | jq
+```
+
+```bash
+curl -s http://localhost:8000/api/drafts/customer-reply \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "account_name": "Acme Health",
+    "csm": "Maya Patel",
+    "issue_summary": "Billing dispute and workflow delays",
+    "renewal_risk": "high",
+    "technical_summary": "Engineering is mitigating the incident and tracking the billing issue."
+  }' | jq
+
+curl -s http://localhost:8000/api/tasks/followup \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "account_name": "Acme Health",
+    "owner": "Maya Patel",
+    "due_date": "2026-04-02",
+    "action_items": ["Send daily update", "Review renewal risk", "Confirm billing correction"]
+  }' | jq
+```
+
+### Bypassing Kong for container-network debugging
+
+The `mock-api` service is not published directly to the host in the default compose setup. If you want to hit it without Kong, call it from another container on the compose network, for example:
+
+```bash
+docker exec orchestrator curl -s http://mock-api:8000/customers/cust_acme
+```
+
 ## Files added in this scaffold
 
 - `docker-compose.yml`: local container topology
