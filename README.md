@@ -41,6 +41,36 @@ This makes Kong's role easy to explain:
 - per-agent tool restrictions
 - observability of agent traffic
 
+## Current UI
+
+The UI is now opinionated around Kong as the control plane.
+
+Top-level controls:
+
+- `Scenes`
+- `View Diagrams`
+- `Reset Scene`
+- `Reset Observability`
+- `View Run Output`
+- `?` help modal for the demo scenario and agent roles
+
+Main UI behaviors:
+
+- the topology keeps Kong visually primary
+- every topology node has a `+` button that opens contextual details
+- Kong and MCP stay highlighted after reset / end-of-run so the gateway/tool-plane relationship stays visible
+- the trace sidebar includes `Recent Runs`, backed by the in-memory `TraceBroker`
+- `Reset Observability` clears Loki/Grafana state and also clears the recent-runs list in the UI
+
+Diagram views:
+
+- `View Diagrams` includes UML-style sequence flow for the normal scenario
+- the same modal includes LangGraph state diagrams for:
+  - orchestrator
+  - support-agent
+  - success-agent
+- the sequence diagram has an `Open Full Width` action that opens the sequence in a separate popup for inspection
+
 ## What it will show
 
 - 1 orchestrator agent
@@ -50,6 +80,9 @@ This makes Kong's role easy to explain:
 - LangGraph-based deterministic agent workflows
 - an orchestrator LLM call for planning and synthesis
 - a lightweight UI that visualizes the request flow
+- node-level detail popups explaining what each box does
+- a sequence diagram for the normal end-to-end flow
+- LangGraph workflow diagrams for all three agents
 
 ## Runtime shape
 

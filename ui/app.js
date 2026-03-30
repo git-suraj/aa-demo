@@ -5,6 +5,7 @@ const playButton = document.getElementById("scene-play-button");
 const resetButton = document.getElementById("reset-button");
 const sceneButton = document.getElementById("scene-button");
 const graphButton = document.getElementById("graph-button");
+const helpButton = document.getElementById("help-button");
 const outputButton = document.getElementById("output-button");
 const resetObservabilityButton = document.getElementById("reset-observability-button");
 const clearLogButton = document.getElementById("clear-log");
@@ -24,6 +25,11 @@ const scenarioOptions = document.getElementById("scenario-options");
 const sceneModal = document.getElementById("scene-modal");
 const outputModal = document.getElementById("output-modal");
 const graphModal = document.getElementById("graph-modal");
+const helpModal = document.getElementById("help-modal");
+const sequenceModal = document.getElementById("sequence-modal");
+const sequenceFullscreenButton = document.getElementById("sequence-fullscreen-button");
+const sequenceDiagram = document.querySelector(".sequence-diagram-svg");
+const sequenceModalContent = document.getElementById("sequence-modal-content");
 const noticeModal = document.getElementById("notice-modal");
 const policyModal = document.getElementById("policy-modal");
 const kongPolicyButton = document.getElementById("kong-policy-button");
@@ -155,6 +161,55 @@ document.querySelectorAll("[data-close-modal]").forEach((button) => {
     const modal = document.getElementById(button.dataset.closeModal);
     modal?.close();
   });
+});
+
+helpButton?.addEventListener("click", () => {
+  helpModal?.showModal();
+});
+
+function fitSequenceModalDiagram() {
+  if (!sequenceModal?.open || !sequenceModalContent) {
+    return;
+  }
+
+  const svg = sequenceModalContent.querySelector("svg");
+  if (!(svg instanceof SVGSVGElement)) {
+    return;
+  }
+
+  const viewBox = svg.viewBox.baseVal;
+  if (!viewBox || !viewBox.width || !viewBox.height) {
+    return;
+  }
+
+  const bounds = sequenceModalContent.getBoundingClientRect();
+  const availableWidth = Math.max(bounds.width, 1);
+  const availableHeight = Math.max(bounds.height, 1);
+  const scale = Math.min(availableWidth / viewBox.width, availableHeight / viewBox.height);
+
+  svg.style.width = `${Math.floor(viewBox.width * scale)}px`;
+  svg.style.height = `${Math.floor(viewBox.height * scale)}px`;
+}
+
+sequenceFullscreenButton?.addEventListener("click", () => {
+  if (!sequenceDiagram || !sequenceModalContent || !sequenceModal) {
+    return;
+  }
+  const svg = sequenceDiagram.querySelector("svg");
+  sequenceModalContent.innerHTML = "";
+  if (svg) {
+    sequenceModalContent.appendChild(svg.cloneNode(true));
+  }
+  sequenceModalContent.scrollLeft = 0;
+  sequenceModalContent.scrollTop = 0;
+  sequenceModal.showModal();
+  requestAnimationFrame(() => {
+    fitSequenceModalDiagram();
+  });
+});
+
+window.addEventListener("resize", () => {
+  fitSequenceModalDiagram();
 });
 
 function createInitialTraceState() {

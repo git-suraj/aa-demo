@@ -71,6 +71,28 @@ button:hover {
   color: var(--muted);
 }
 
+#sequence-fullscreen-button {
+  padding: 10px 14px;
+  border: 1px solid rgba(124, 192, 255, 0.28);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(124, 192, 255, 0.2), rgba(124, 192, 255, 0.08));
+  color: #dff0ff;
+  box-shadow: 0 10px 24px rgba(124, 192, 255, 0.14);
+}
+
+.help-button {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 999px;
+  border-color: rgba(131, 255, 94, 0.28);
+  background: linear-gradient(180deg, rgba(131, 255, 94, 0.2), rgba(131, 255, 94, 0.08));
+  color: #edffe6;
+  font-size: 1.15rem;
+  font-weight: 700;
+  box-shadow: 0 10px 24px rgba(131, 255, 94, 0.12);
+}
+
 .app-shell {
   max-width: 1720px;
   margin: 0 auto;
@@ -886,6 +908,11 @@ button:hover {
   background: transparent;
 }
 
+#sequence-modal {
+  width: calc(100vw - 12px);
+  max-width: calc(100vw - 12px);
+}
+
 .modal::backdrop {
   background: rgba(2, 3, 5, 0.74);
   backdrop-filter: blur(8px);
@@ -907,6 +934,35 @@ button:hover {
 
 .modal-wide {
   width: min(1180px, calc(100vw - 32px));
+}
+
+.modal-sequence-full {
+  width: min(1900px, calc(100vw - 8px));
+  max-width: min(1900px, calc(100vw - 8px));
+  max-height: calc(100vh - 12px);
+  padding: 14px 16px 18px;
+}
+
+.modal-sequence-full .sequence-diagram {
+  width: 100%;
+  height: calc(100vh - 150px);
+  overflow: auto;
+}
+
+.modal-sequence-full .sequence-diagram-svg {
+  padding: 0;
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+
+.modal-sequence-full .sequence-svg {
+  min-width: 1620px !important;
+  width: 1620px !important;
+  height: auto !important;
+  max-width: none;
+  max-height: none;
+  margin: 0;
 }
 
 .modal-notice {
@@ -1202,6 +1258,13 @@ button:hover {
   gap: 16px;
 }
 
+.graph-section-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .graph-section-head h3 {
   margin: 8px 0 0;
   color: var(--text);
@@ -1234,6 +1297,169 @@ button:hover {
     linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0)),
     #171922;
   overflow: hidden;
+}
+
+.sequence-diagram {
+  margin: 18px 0 14px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0)),
+    #151821;
+  overflow: auto;
+}
+
+.sequence-diagram-svg {
+  padding: 14px;
+}
+
+.sequence-svg {
+  display: block;
+  min-width: 1620px;
+  width: 100%;
+  height: auto;
+}
+
+.sequence-participant rect {
+  fill: rgba(255, 255, 255, 0.04);
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 1.4;
+  rx: 10;
+}
+
+.sequence-participant text {
+  fill: rgba(244, 246, 251, 0.94);
+  font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 14px;
+  text-anchor: middle;
+}
+
+.sequence-participant text:last-child {
+  fill: rgba(201, 208, 223, 0.72);
+  font-size: 11px;
+}
+
+.sequence-participant line {
+  stroke: rgba(216, 108, 255, 0.42);
+  stroke-width: 1.6;
+  stroke-dasharray: 10 8;
+}
+
+.sequence-participant-kong rect {
+  stroke: rgba(131, 255, 94, 0.34);
+}
+
+.sequence-participant-kong text:first-child {
+  fill: #d7ffca;
+}
+
+.sequence-activation rect {
+  fill: rgba(255, 255, 255, 0.08);
+  stroke: rgba(255, 255, 255, 0.14);
+  stroke-width: 1;
+}
+
+.sequence-call line,
+.sequence-return line {
+  stroke-width: 2;
+  fill: none;
+}
+
+.sequence-call text,
+.sequence-return text,
+.sequence-frame text {
+  fill: rgba(244, 246, 251, 0.92);
+  font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 13px;
+  text-anchor: middle;
+}
+
+.sequence-return line {
+  stroke: rgba(244, 246, 251, 0.74);
+  stroke-dasharray: 6 5;
+}
+
+.sequence-call-http line {
+  stroke: #7cc0ff;
+}
+
+.sequence-call-green line {
+  stroke: #83ff5e;
+}
+
+.sequence-call-gold line {
+  stroke: #ffd978;
+}
+
+.sequence-call-magenta line {
+  stroke: #d86cff;
+}
+
+.sequence-call-cyan line {
+  stroke: #7de3d6;
+}
+
+.sequence-call-http text {
+  fill: #9fd0ff;
+}
+
+.sequence-call-green text {
+  fill: #b6ff9e;
+}
+
+.sequence-call-gold text {
+  fill: #ffe59d;
+}
+
+.sequence-call-magenta text {
+  fill: #efb0ff;
+}
+
+.sequence-call-cyan text {
+  fill: #a5f3ea;
+}
+
+.sequence-frame rect {
+  fill: rgba(255, 255, 255, 0.02);
+  stroke: rgba(255, 255, 255, 0.22);
+  stroke-width: 1.4;
+}
+
+.sequence-frame text {
+  text-anchor: start;
+}
+
+.sequence-http {
+  color: #7cc0ff;
+}
+
+.sequence-stream {
+  color: #89d8ff;
+}
+
+.sequence-kong {
+  color: #83ff5e;
+}
+
+.sequence-mcp {
+  color: #ffe082;
+}
+
+.sequence-backend {
+  color: #c3c9d8;
+}
+
+.sequence-llm {
+  color: #d86cff;
+}
+
+.sequence-agent {
+  color: #9ad87f;
+}
+
+.sequence-logs {
+  color: #7de3d6;
 }
 
 .graph-diagram-orchestrator {

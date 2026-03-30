@@ -37,6 +37,35 @@ Relevant services in `docker-compose.yml`:
 - `redis-stack`
 - `ui`
 
+## Current UI State
+
+Important current UI behaviors:
+
+- header actions are:
+  - `Scenes`
+  - `View Diagrams`
+  - `Reset Scene`
+  - `Reset Observability`
+  - `View Run Output`
+  - `?` help modal for the scenario and agent-role explainer
+- topology nodes all expose a `+` detail button
+- Kong is the primary highlighted node
+- `MCP Tools` is intentionally highlighted at lower intensity than Kong
+- `Recent Runs` in the sidebar is populated from `TraceBroker`
+- `Reset Observability` also clears the recent-runs UI state
+
+Diagram modal state:
+
+- `View Diagrams` contains:
+  - a normal-scenario UML-style sequence diagram
+  - LangGraph state diagrams for orchestrator, support-agent, and success-agent
+- `Open Full Width` opens the sequence diagram in a separate top-level dialog
+
+Current UI files to inspect for this behavior:
+- `/Users/surajpillai/Documents/work/demos/learn/aa-demo/ui/index.html`
+- `/Users/surajpillai/Documents/work/demos/learn/aa-demo/ui/styles.css`
+- `/Users/surajpillai/Documents/work/demos/learn/aa-demo/ui/app.js`
+
 Important environment wiring:
 - orchestrator uses `AGENT_API_KEY=orchestrator-demo-key`
 - support-agent uses `AGENT_API_KEY=support-demo-key`
@@ -257,6 +286,9 @@ Implementation details:
 - sidebar markup and styling were updated in:
   - `ui/index.html`
   - `ui/styles.css`
+
+Additional current behavior:
+- `Reset Observability` now clears the recent-runs dropdown and selected replay state in the frontend after the backend reset succeeds
 
 Operational caveats:
 - run history is not persisted to Redis, Loki, or disk
