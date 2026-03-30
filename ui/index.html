@@ -106,85 +106,98 @@
               </svg>
 
               <article class="topology-node user-node" data-node="user">
+                <button class="node-info-button" data-info-target="user" type="button" aria-label="View User Request details">+</button>
                 <span class="node-label">Entry</span>
                 <h3>User Request</h3>
                 <p>Play starts one fixed escalation workflow.</p>
               </article>
 
               <article class="topology-node ui-node" data-node="ui">
+                <button class="node-info-button" data-info-target="ui" type="button" aria-label="View Dashboard details">+</button>
                 <span class="node-label">Hosted UI</span>
                 <h3>Dashboard</h3>
                 <p>Served through Kong. Shows live path activation and trace state.</p>
               </article>
 
               <article class="topology-node kong-node gateway-core" data-node="kong">
-                <button id="kong-policy-button" class="kong-policy-button" type="button" aria-label="View Kong policy details">+</button>
+                <button id="kong-policy-button" class="node-info-button kong-info-button" data-info-target="kong" type="button" aria-label="View Kong Gateway details">+</button>
                 <span class="node-label">Gateway Core</span>
                 <h3>Kong Gateway</h3>
                 <p>AI Proxy Advanced, Agent routing, auth, ACLs, and MCP tool exposure.</p>
               </article>
 
               <article class="topology-node orchestrator-node" data-node="orchestrator">
+                <button class="node-info-button" data-info-target="orchestrator" type="button" aria-label="View Orchestrator details">+</button>
                 <span class="node-label">LangGraph</span>
                 <h3>Orchestrator</h3>
                 <p>Gets context, calls its LLM, invokes support then success, and assembles the final brief.</p>
               </article>
 
               <article class="topology-node support-node" data-node="support-agent">
+                <button class="node-info-button" data-info-target="support-agent" type="button" aria-label="View Support Agent details">+</button>
                 <span class="node-label">Sub-agent</span>
                 <h3>Support Agent</h3>
                 <p>Uses incident and runbook tools, then summarizes the technical posture.</p>
               </article>
 
               <article class="topology-node success-node" data-node="success-agent">
+                <button class="node-info-button" data-info-target="success-agent" type="button" aria-label="View Success Agent details">+</button>
                 <span class="node-label">Sub-agent</span>
                 <h3>Success Agent</h3>
                 <p>Uses reply and task tools, then produces the customer action plan.</p>
               </article>
 
               <article class="topology-node openai-node" data-node="openai">
+                <button class="node-info-button" data-info-target="openai" type="button" aria-label="View OpenAI model details">+</button>
                 <span class="node-label">Primary</span>
                 <h3>OpenAI 4o mini</h3>
                 <p>Primary orchestrator model via AI Proxy Advanced.</p>
               </article>
 
               <article class="topology-node gemini-node" data-node="gemini">
+                <button class="node-info-button" data-info-target="gemini" type="button" aria-label="View Gemini model details">+</button>
                 <span class="node-label">Failover / Shared</span>
                 <h3>Gemini 2.5 Flash</h3>
                 <p>Orchestrator failover and the sub-agent LLM route.</p>
               </article>
 
               <article class="topology-node judge-node scenario-optional" data-node="judge-model">
+                <button class="node-info-button" data-info-target="judge-model" type="button" aria-label="View Judge model details">+</button>
                 <span class="node-label">Judge</span>
                 <h3>Gemini 2.5 Flash</h3>
                 <p>Scores the candidate response for accuracy before Kong returns the judged result to the orchestrator.</p>
               </article>
 
               <article class="topology-node redis-node scenario-optional" data-node="redis">
+                <button class="node-info-button" data-info-target="redis" type="button" aria-label="View Redis details">+</button>
                 <span class="node-label">Vector Store</span>
                 <h3>Redis Vector DB</h3>
                 <p>Used by Kong Semantic Guard and Semantic Cache policies to compare embeddings.</p>
               </article>
 
               <article class="topology-node pii-node scenario-optional" data-node="pii-service">
+                <button class="node-info-button" data-info-target="pii-service" type="button" aria-label="View AI PII Service details">+</button>
                 <span class="node-label">Sanitization</span>
                 <h3>AI PII Service</h3>
                 <p>Used by Kong AI Sanitizer to anonymize sensitive data in the request and response path.</p>
               </article>
 
               <article class="topology-node observability-node telemetry-node" data-node="observability">
+                <button class="node-info-button" data-info-target="observability" type="button" aria-label="View Observability details">+</button>
                 <span class="node-label">Observability</span>
                 <h3>Grafana / Loki</h3>
                 <p>Receives Kong gateway logs for live metrics, queries, and dashboard panels.</p>
               </article>
 
               <article class="topology-node mcp-node" data-node="mcp">
+                <button class="node-info-button" data-info-target="mcp" type="button" aria-label="View MCP Tools details">+</button>
                 <span class="node-label">Tool Plane</span>
                 <h3>MCP Tools</h3>
                 <p>Kong exposes the backing REST API as tools and filters them per consumer group.</p>
               </article>
 
               <article class="topology-node backend-node" data-node="backend-api">
+                <button class="node-info-button" data-info-target="backend-api" type="button" aria-label="View Backend APIs details">+</button>
                 <span class="node-label">Upstream</span>
                 <h3>Backend APIs</h3>
                 <p>Mock account, incident, runbook, draft, and task endpoints reached through Kong.</p>
@@ -433,24 +446,54 @@
                 <span class="node-label">Main Graph</span>
                 <h3>Orchestrator</h3>
               </div>
-              <div class="graph-flow">
-                <div class="graph-node start">START</div>
-                <div class="graph-arrow">→</div>
-                <div class="graph-node">fetch_context</div>
-                <div class="graph-arrow">→</div>
-                <div class="graph-node">generate_triage_brief</div>
-                <div class="graph-arrow">→</div>
-                <div class="graph-node">run_support_agent</div>
-                <div class="graph-arrow">→</div>
-                <div class="graph-node">run_success_agent</div>
-                <div class="graph-arrow">→</div>
-                <div class="graph-node">finalize_response</div>
-                <div class="graph-arrow">→</div>
-                <div class="graph-node end">END</div>
+              <div class="graph-diagram graph-diagram-orchestrator">
+                <svg class="langgraph-svg" viewBox="0 0 920 1180" aria-label="Orchestrator LangGraph diagram">
+                  <defs>
+                    <marker id="graph-arrow-head" markerWidth="10" markerHeight="10" refX="7" refY="3.5" orient="auto">
+                      <polygon points="0 0, 8 3.5, 0 7" fill="#f4f6fb"></polygon>
+                    </marker>
+                  </defs>
+                  <path class="langgraph-edge" d="M460 94 L460 164"></path>
+                  <path class="langgraph-edge" d="M460 276 L460 346"></path>
+                  <path class="langgraph-edge" d="M460 458 L460 528"></path>
+                  <path class="langgraph-edge" d="M460 640 L460 710"></path>
+                  <path class="langgraph-edge" d="M460 822 L460 892"></path>
+                  <path class="langgraph-edge" d="M460 1004 L460 1074"></path>
+
+                  <g class="langgraph-node langgraph-node-start">
+                    <rect x="328" y="24" rx="30" ry="30" width="264" height="70"></rect>
+                    <text x="460" y="68">__start__</text>
+                  </g>
+                  <g class="langgraph-node langgraph-node-process">
+                    <rect x="282" y="164" rx="22" ry="22" width="356" height="112"></rect>
+                    <text x="460" y="212">fetch_context</text>
+                  </g>
+                  <g class="langgraph-node langgraph-node-process">
+                    <rect x="214" y="346" rx="22" ry="22" width="492" height="112"></rect>
+                    <text x="460" y="394">generate_triage_brief</text>
+                  </g>
+                  <g class="langgraph-node langgraph-node-process">
+                    <rect x="250" y="528" rx="22" ry="22" width="420" height="112"></rect>
+                    <text x="460" y="576">run_support_agent</text>
+                  </g>
+                  <g class="langgraph-node langgraph-node-process">
+                    <rect x="250" y="710" rx="22" ry="22" width="420" height="112"></rect>
+                    <text x="460" y="758">run_success_agent</text>
+                  </g>
+                  <g class="langgraph-node langgraph-node-process">
+                    <rect x="242" y="892" rx="22" ry="22" width="436" height="112"></rect>
+                    <text x="460" y="940">finalize_response</text>
+                  </g>
+                  <g class="langgraph-node langgraph-node-end">
+                    <rect x="328" y="1074" rx="30" ry="30" width="264" height="70"></rect>
+                    <text x="460" y="1118">__end__</text>
+                  </g>
+                </svg>
               </div>
               <p class="graph-copy">
-                The orchestrator gathers MCP context, produces a triage brief, invokes support,
-                passes that forward to success, and then assembles the final executive response.
+                This matches the compiled orchestrator graph in
+                <code>services/orchestrator/app.py</code>: fetch context, generate the triage
+                brief, run the support agent, run the success agent, then finalize the response.
               </p>
             </article>
 
@@ -459,22 +502,49 @@
                 <span class="node-label">Sub-agent Graph</span>
                 <h3>Support Agent</h3>
               </div>
-              <div class="graph-flow compact">
-                <div class="graph-node start">START</div>
-                <div class="graph-arrow">→</div>
-                <div class="graph-node">list_tools</div>
-                <div class="graph-arrow">→</div>
-                <div class="graph-node">get_incident_status</div>
-                <div class="graph-arrow">→</div>
-                <div class="graph-node">search_runbook</div>
-                <div class="graph-arrow">→</div>
-                <div class="graph-node">technical_summary</div>
-                <div class="graph-arrow">→</div>
-                <div class="graph-node end">END</div>
+              <div class="graph-diagram graph-diagram-agent">
+                <svg class="langgraph-svg" viewBox="0 0 780 960" aria-label="Support Agent LangGraph diagram">
+                  <defs>
+                    <marker id="graph-arrow-head-support" markerWidth="10" markerHeight="10" refX="7" refY="3.5" orient="auto">
+                      <polygon points="0 0, 8 3.5, 0 7" fill="#f4f6fb"></polygon>
+                    </marker>
+                  </defs>
+                  <path class="langgraph-edge" marker-end="url(#graph-arrow-head-support)" d="M390 94 L390 164"></path>
+                  <path class="langgraph-edge" marker-end="url(#graph-arrow-head-support)" d="M390 276 L390 342"></path>
+                  <path class="langgraph-edge" marker-end="url(#graph-arrow-head-support)" d="M390 454 L390 520"></path>
+                  <path class="langgraph-edge" marker-end="url(#graph-arrow-head-support)" d="M390 632 L390 698"></path>
+                  <path class="langgraph-edge" marker-end="url(#graph-arrow-head-support)" d="M390 810 L390 876"></path>
+
+                  <g class="langgraph-node langgraph-node-start">
+                    <rect x="258" y="24" rx="30" ry="30" width="264" height="70"></rect>
+                    <text x="390" y="68">__start__</text>
+                  </g>
+                  <g class="langgraph-node langgraph-node-process">
+                    <rect x="160" y="164" rx="22" ry="22" width="460" height="112"></rect>
+                    <text x="390" y="212">fetch_tool_inventory</text>
+                  </g>
+                  <g class="langgraph-node langgraph-node-process">
+                    <rect x="182" y="342" rx="22" ry="22" width="416" height="112"></rect>
+                    <text x="390" y="390">investigate_issue</text>
+                  </g>
+                  <g class="langgraph-node langgraph-node-process">
+                    <rect x="110" y="520" rx="22" ry="22" width="560" height="112"></rect>
+                    <text x="390" y="568">generate_technical_summary</text>
+                  </g>
+                  <g class="langgraph-node langgraph-node-process">
+                    <rect x="210" y="698" rx="22" ry="22" width="360" height="112"></rect>
+                    <text x="390" y="746">build_response</text>
+                  </g>
+                  <g class="langgraph-node langgraph-node-end">
+                    <rect x="258" y="876" rx="30" ry="30" width="264" height="70"></rect>
+                    <text x="390" y="920">__end__</text>
+                  </g>
+                </svg>
               </div>
               <p class="graph-copy">
-                The support agent discovers its MCP tools, chooses which one to call next, gathers
-                incident and runbook evidence, and then generates a technical summary.
+                This matches the compiled support graph in
+                <code>services/support_agent/app.py</code>: fetch the tool inventory, investigate
+                the issue, generate the technical summary, then build the response payload.
               </p>
             </article>
 
@@ -483,22 +553,49 @@
                 <span class="node-label">Sub-agent Graph</span>
                 <h3>Success Agent</h3>
               </div>
-              <div class="graph-flow compact">
-                <div class="graph-node start">START</div>
-                <div class="graph-arrow">→</div>
-                <div class="graph-node">list_tools</div>
-                <div class="graph-arrow">→</div>
-                <div class="graph-node">draft_customer_reply</div>
-                <div class="graph-arrow">→</div>
-                <div class="graph-node">create_followup_task</div>
-                <div class="graph-arrow">→</div>
-                <div class="graph-node">success_summary</div>
-                <div class="graph-arrow">→</div>
-                <div class="graph-node end">END</div>
+              <div class="graph-diagram graph-diagram-agent">
+                <svg class="langgraph-svg" viewBox="0 0 780 960" aria-label="Success Agent LangGraph diagram">
+                  <defs>
+                    <marker id="graph-arrow-head-success" markerWidth="10" markerHeight="10" refX="7" refY="3.5" orient="auto">
+                      <polygon points="0 0, 8 3.5, 0 7" fill="#f4f6fb"></polygon>
+                    </marker>
+                  </defs>
+                  <path class="langgraph-edge" marker-end="url(#graph-arrow-head-success)" d="M390 94 L390 164"></path>
+                  <path class="langgraph-edge" marker-end="url(#graph-arrow-head-success)" d="M390 276 L390 342"></path>
+                  <path class="langgraph-edge" marker-end="url(#graph-arrow-head-success)" d="M390 454 L390 520"></path>
+                  <path class="langgraph-edge" marker-end="url(#graph-arrow-head-success)" d="M390 632 L390 698"></path>
+                  <path class="langgraph-edge" marker-end="url(#graph-arrow-head-success)" d="M390 810 L390 876"></path>
+
+                  <g class="langgraph-node langgraph-node-start">
+                    <rect x="258" y="24" rx="30" ry="30" width="264" height="70"></rect>
+                    <text x="390" y="68">__start__</text>
+                  </g>
+                  <g class="langgraph-node langgraph-node-process">
+                    <rect x="160" y="164" rx="22" ry="22" width="460" height="112"></rect>
+                    <text x="390" y="212">fetch_tool_inventory</text>
+                  </g>
+                  <g class="langgraph-node langgraph-node-process">
+                    <rect x="130" y="342" rx="22" ry="22" width="520" height="112"></rect>
+                    <text x="390" y="390">prepare_customer_actions</text>
+                  </g>
+                  <g class="langgraph-node langgraph-node-process">
+                    <rect x="134" y="520" rx="22" ry="22" width="512" height="112"></rect>
+                    <text x="390" y="568">generate_success_summary</text>
+                  </g>
+                  <g class="langgraph-node langgraph-node-process">
+                    <rect x="210" y="698" rx="22" ry="22" width="360" height="112"></rect>
+                    <text x="390" y="746">build_response</text>
+                  </g>
+                  <g class="langgraph-node langgraph-node-end">
+                    <rect x="258" y="876" rx="30" ry="30" width="264" height="70"></rect>
+                    <text x="390" y="920">__end__</text>
+                  </g>
+                </svg>
               </div>
               <p class="graph-copy">
-                The success agent discovers its MCP tools, drafts the customer reply, creates the
-                follow-up task, and then turns those outputs into a customer-facing action plan.
+                This matches the compiled success graph in
+                <code>services/success_agent/app.py</code>: fetch the tool inventory, prepare the
+                customer actions, generate the success summary, then build the response payload.
               </p>
             </article>
           </section>

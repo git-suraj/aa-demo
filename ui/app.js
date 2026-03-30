@@ -27,6 +27,7 @@ const graphModal = document.getElementById("graph-modal");
 const noticeModal = document.getElementById("notice-modal");
 const policyModal = document.getElementById("policy-modal");
 const kongPolicyButton = document.getElementById("kong-policy-button");
+const nodeInfoButtons = document.querySelectorAll(".node-info-button");
 const semanticCacheControls = document.getElementById("semantic-cache-controls");
 const semanticCacheSeedPayload = document.getElementById("semantic-cache-seed-payload");
 const semanticCacheHitPayload = document.getElementById("semantic-cache-hit-payload");
@@ -206,6 +207,206 @@ function currentPiiMode() {
     "placeholder";
 }
 
+function nodeInfoDetails(target, scenario = activeScenario || "normal") {
+  if (target === "kong") {
+    const details = policyDetailsForScenario(scenario);
+    return {
+      title: `Kong Gateway: ${details.title}`,
+      intro: details.intro,
+      plainEnglish: details.plainEnglish,
+      why: details.why,
+      config: details.config,
+    };
+  }
+
+  const generic = {
+    user: {
+      title: "User Request",
+      intro: "The demo starts here with one guided request entering the hosted UI.",
+      plainEnglish: [
+        "This is the business request that starts the workflow.",
+        "The request carries the selected governance scenario and the shared run_id.",
+        "Everything downstream is correlated back to this entry point.",
+      ],
+      why: "It establishes the business context Kong will govern.",
+      config: [
+        ["Input", "Customer escalation request"],
+        ["Carries", "Scene data, governance_scenario, run_id"],
+      ],
+    },
+    ui: {
+      title: "Dashboard",
+      intro: "The dashboard starts runs, renders the live topology, and streams trace updates.",
+      plainEnglish: [
+        "The UI goes through Kong instead of calling services directly.",
+        "It shows the path activation, trace tree, and run output.",
+        "It also exposes the scene, diagrams, and detail modals used in the demo.",
+      ],
+      why: "It makes the governed traffic and the business workflow visible in one place.",
+      config: [
+        ["Served through", "Kong"],
+        ["Role", "Launch runs and visualize governed flow"],
+      ],
+    },
+    orchestrator: {
+      title: "Orchestrator",
+      intro: "The orchestrator is the main workflow coordinator for the escalation.",
+      plainEnglish: [
+        "It gathers account context through Kong-exposed tools.",
+        "It calls the support and success agents through Kong routes.",
+        "It performs the final synthesis before returning the result.",
+      ],
+      why: "It turns multiple governed tool and agent hops into one business outcome.",
+      config: [
+        ["Framework", "LangGraph"],
+        ["Calls through Kong", "MCP, sub-agents, and orchestrator AI routes"],
+      ],
+    },
+    "support-agent": {
+      title: "Support Agent",
+      intro: "The support agent handles the technical investigation side of the escalation.",
+      plainEnglish: [
+        "It resolves its allowed tools through Kong.",
+        "It checks incident status and runbook guidance.",
+        "It summarizes the technical posture through the sub-agent AI route.",
+      ],
+      why: "It converts incident data into technical guidance for the orchestrator.",
+      config: [
+        ["Allowed tools", "get_incident_status, search_runbook"],
+        ["LLM path", "Sub-agent Gemini route through Kong"],
+      ],
+    },
+    "success-agent": {
+      title: "Success Agent",
+      intro: "The success agent handles follow-up planning and customer communication.",
+      plainEnglish: [
+        "It resolves only its allowed tools through Kong.",
+        "It drafts the reply and creates the follow-up task.",
+        "It turns those outputs into a customer-ready plan.",
+      ],
+      why: "It makes the customer and account-team actions explicit in the governed flow.",
+      config: [
+        ["Allowed tools", "draft_customer_reply, create_followup_task"],
+        ["LLM path", "Sub-agent Gemini route through Kong"],
+      ],
+    },
+    openai: {
+      title: "OpenAI 4o mini",
+      intro: "This is the primary orchestrator model path in the standard run.",
+      plainEnglish: [
+        "Kong routes orchestrator planning and summary calls here in the normal flow.",
+        "Some scenarios change how Kong governs this route.",
+        "It is kept separate from the shared sub-agent route.",
+      ],
+      why: "It shows caller-specific model routing at the gateway layer.",
+      config: [
+        ["Used by", "Orchestrator"],
+        ["Role", "Planner, triage, and final executive summary"],
+      ],
+    },
+    gemini: {
+      title: "Gemini 2.5 Flash",
+      intro: "This model path is shared by sub-agents and selected orchestrator scenarios.",
+      plainEnglish: [
+        "Kong routes the support and success agents here in the base flow.",
+        "It also appears for failover or judge-related scenario paths.",
+        "The node represents the governed route choice, not just a raw provider logo.",
+      ],
+      why: "It shows that Kong can split or redirect model traffic by role and scenario.",
+      config: [
+        ["Used by", "Sub-agents and selected scenario paths"],
+        ["Governed through", "Kong AI routing"],
+      ],
+    },
+    "judge-model": {
+      title: "Judge Model",
+      intro: "This node appears in the LLM as Judge scenario when Kong scores a candidate response with a separate model.",
+      plainEnglish: [
+        "Kong invokes the judge after the candidate response is produced.",
+        "The judge returns a score and evaluation context.",
+        "That output is then exposed in observability and the final result path.",
+      ],
+      why: "It makes evaluation at the gateway layer visible.",
+      config: [
+        ["Scenario", "LLM as Judge"],
+        ["Purpose", "Quality scoring and judgment"],
+      ],
+    },
+    redis: {
+      title: "Redis Vector DB",
+      intro: "Redis backs the semantic governance scenarios by storing or comparing embeddings.",
+      plainEnglish: [
+        "Kong uses it for semantic guard comparisons.",
+        "Kong also uses it for semantic cache lookup and reuse.",
+        "It only appears when the semantic scenarios are relevant.",
+      ],
+      why: "It shows the supporting infrastructure behind semantic policy behavior.",
+      config: [
+        ["Used by", "Semantic Guard and Semantic Cache"],
+        ["Role", "Embedding-backed similarity store"],
+      ],
+    },
+    "pii-service": {
+      title: "AI PII Service",
+      intro: "This service appears when Kong sanitizes or blocks sensitive content in request or response paths.",
+      plainEnglish: [
+        "Kong sends request content here before the model call when the scenario uses sanitization.",
+        "It can also sanitize the response before Kong returns it.",
+        "The exact behavior depends on placeholder, synthetic, or block mode.",
+      ],
+      why: "It shows that privacy enforcement can happen outside application code.",
+      config: [
+        ["Scenario", "PII Sanitization"],
+        ["Modes", "placeholder, synthetic, block"],
+      ],
+    },
+    observability: {
+      title: "Grafana / Loki",
+      intro: "Observability receives Kong gateway logs and makes them queryable by run and scenario.",
+      plainEnglish: [
+        "Kong sends structured logs into Loki.",
+        "Grafana reads those logs to show counts, failures, and policy events.",
+        "The same run_id ties the topology, trace, and metrics together.",
+      ],
+      why: "It provides evidence for the governed path the topology is visualizing.",
+      config: [
+        ["Receives", "Structured Kong logs"],
+        ["Correlates by", "run_id and gateway metadata"],
+      ],
+    },
+    mcp: {
+      title: "MCP Tools",
+      intro: "Kong exposes the backing APIs as MCP tools and filters the allowed tool set per agent.",
+      plainEnglish: [
+        "Agents ask Kong for the tool list instead of discovering raw APIs directly.",
+        "Kong applies auth and access control before returning tools.",
+        "Tool invocations still route back through Kong before reaching backend services.",
+      ],
+      why: "It is where API governance becomes agent-tool governance.",
+      config: [
+        ["Protocol", "MCP via Kong"],
+        ["Governed by", "Per-agent auth and authorization"],
+      ],
+    },
+    "backend-api": {
+      title: "Backend APIs",
+      intro: "These are the mock upstream systems that hold the data used by the tools and agents.",
+      plainEnglish: [
+        "They provide account, incident, runbook, reply, and task data.",
+        "The topology now shows them behind Kong rather than directly behind MCP.",
+        "They act as the raw upstream data plane in the demo.",
+      ],
+      why: "They make the difference between direct backend access and Kong-governed access visible.",
+      config: [
+        ["Provides", "Business and support data used by the demo"],
+        ["Reached through", "Kong-governed routing"],
+      ],
+    },
+  };
+
+  return generic[target] || generic.kong;
+}
+
 function policyDetailsForScenario(scenario) {
   const common = {
     normal: {
@@ -358,12 +559,15 @@ function policyDetailsForScenario(scenario) {
 }
 
 function renderPolicyModal() {
-  const scenario = activeScenario || "normal";
-  const details = policyDetailsForScenario(scenario);
+  const details = nodeInfoDetails("kong", activeScenario || "normal");
+  renderInfoModal(details);
+}
+
+function renderInfoModal(details) {
   if (!policyTitle || !policyIntro || !policyPlainEnglish || !policyWhy || !policyConfig) {
     return;
   }
-  policyTitle.textContent = `${details.title} Policy Details`;
+  policyTitle.textContent = details.title;
   policyIntro.textContent = details.intro;
   policyPlainEnglish.innerHTML = details.plainEnglish
     .map((point) => `<p class="policy-point">${escapeHtml(point)}</p>`)
@@ -1233,12 +1437,20 @@ function resetTopology() {
   Object.values(lineMap).forEach((line) => line?.classList.remove("active", "complete", "error"));
   hideTopologyActivity();
   updateScenarioInfraVisibility(activeScenario);
+  markNode("kong", "active");
+  markNode("mcp", "active");
 }
 
 function markNode(name, state) {
   const node = nodes[name];
   if (!node) {
     return;
+  }
+  if (name === "kong" && state === "complete") {
+    state = "active";
+  }
+  if (name === "mcp" && state === "complete") {
+    state = "active";
   }
   if (state === "active") {
     node.classList.remove("complete", "error");
@@ -3048,9 +3260,12 @@ runHistorySelect?.addEventListener("change", async (event) => {
 sceneButton.addEventListener("click", () => sceneModal.showModal());
 graphButton.addEventListener("click", () => graphModal.showModal());
 outputButton.addEventListener("click", () => outputModal.showModal());
-kongPolicyButton?.addEventListener("click", () => {
-  renderPolicyModal();
-  policyModal?.showModal();
+nodeInfoButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const target = button.dataset.infoTarget || "kong";
+    renderInfoModal(nodeInfoDetails(target, activeScenario || "normal"));
+    policyModal?.showModal();
+  });
 });
 
 connectTraceSocket();
