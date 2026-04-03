@@ -124,15 +124,18 @@ plugins:
           local total_tokens = tonumber(usage['total_tokens'] or (prompt_tokens + completion_tokens) or 0) or 0
           local provider_name = tostring(meta['provider_name'] or '')
           local model_name = tostring(meta['response_model'] or meta['request_model'] or '')
+          local prompt_cost = 0
+          local completion_cost = 0
           local usage_cost = tonumber(usage['cost'])
+          if provider_name == 'openai' and string.find(model_name, 'gpt-4o-mini', 1, true) then
+            prompt_cost = (prompt_tokens * 0.15) / 1000000
+            completion_cost = (completion_tokens * 0.60) / 1000000
+          elseif provider_name == 'gemini' and string.find(model_name, 'gemini-2.5-flash', 1, true) then
+            prompt_cost = (prompt_tokens * 0.30) / 1000000
+            completion_cost = (completion_tokens * 2.50) / 1000000
+          end
           if usage_cost == nil or usage_cost <= 0 then
-            if provider_name == 'openai' and string.find(model_name, 'gpt-4o-mini', 1, true) then
-              usage_cost = ((prompt_tokens * 0.15) + (completion_tokens * 0.60)) / 1000000
-            elseif provider_name == 'gemini' and string.find(model_name, 'gemini-2.5-flash', 1, true) then
-              usage_cost = ((prompt_tokens * 0.30) + (completion_tokens * 2.50)) / 1000000
-            else
-              usage_cost = 0
-            end
+            usage_cost = prompt_cost + completion_cost
           end
           log_payload['llm_usage'] = {
             provider_name = provider_name,
@@ -141,6 +144,8 @@ plugins:
             prompt_tokens = prompt_tokens,
             completion_tokens = completion_tokens,
             total_tokens = total_tokens,
+            prompt_cost = prompt_cost,
+            completion_cost = completion_cost,
             cost = usage_cost,
             time_per_token = usage['time_per_token'],
             time_to_first_token = usage['time_to_first_token'],
@@ -148,6 +153,8 @@ plugins:
           log_payload['llm_usage_prompt_tokens'] = prompt_tokens
           log_payload['llm_usage_completion_tokens'] = completion_tokens
           log_payload['llm_usage_total_tokens'] = total_tokens
+          log_payload['llm_usage_prompt_cost'] = prompt_cost
+          log_payload['llm_usage_completion_cost'] = completion_cost
           log_payload['llm_usage_cost'] = usage_cost
           log_payload['llm_usage_model'] = model_name
           log_payload['llm_usage_provider'] = provider_name
