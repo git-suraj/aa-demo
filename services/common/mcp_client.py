@@ -19,12 +19,14 @@ class KongMCPClient:
         client_name: str,
         timeout: float = 20.0,
         run_id: str | None = None,
+        context_id: str | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.client_name = client_name
         self.timeout = timeout
         self.run_id = run_id
+        self.context_id = context_id
         self.session_id: str | None = None
         self._initialized = False
 
@@ -38,6 +40,8 @@ class KongMCPClient:
             headers["mcp-session-id"] = self.session_id
         if self.run_id:
             headers["x-demo-run-id"] = self.run_id
+        if self.context_id:
+            headers["x-demo-context-id"] = self.context_id
         return headers
 
     def _parse_response(self, response: httpx.Response) -> dict[str, Any]:

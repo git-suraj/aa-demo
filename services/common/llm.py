@@ -29,6 +29,7 @@ class OrchestratorLLM:
         base_url: str | None = None,
         model: str | None = None,
         run_id: str | None = None,
+        context_id: str | None = None,
     ) -> dict[str, Any]:
         if not self.enabled:
             raise RuntimeError("Kong-routed LLM is not configured")
@@ -42,6 +43,7 @@ class OrchestratorLLM:
                     "apikey": self.kong_api_key or "",
                     "content-type": "application/json",
                     **({"x-demo-run-id": run_id} if run_id else {}),
+                    **({"x-demo-context-id": context_id} if context_id else {}),
                 },
                 json={
                     "model": resolved_model,
@@ -69,6 +71,7 @@ class OrchestratorLLM:
         base_url: str | None = None,
         model: str | None = None,
         run_id: str | None = None,
+        context_id: str | None = None,
     ) -> dict[str, Any]:
         if not self.enabled:
             raise RuntimeError("Kong-routed LLM is not configured")
@@ -82,6 +85,7 @@ class OrchestratorLLM:
                     "apikey": self.kong_api_key or "",
                     "content-type": "application/json",
                     **({"x-demo-run-id": run_id} if run_id else {}),
+                    **({"x-demo-context-id": context_id} if context_id else {}),
                 },
                 json={
                     "model": resolved_model,
@@ -118,6 +122,7 @@ class OrchestratorLLM:
         support_track: Any | None = None,
         success_track: Any | None = None,
         run_id: str | None = None,
+        context_id: str | None = None,
     ) -> dict[str, Any]:
         if not self.enabled:
             return self._fallback(
@@ -137,7 +142,7 @@ class OrchestratorLLM:
             support_track=support_track,
             success_track=success_track,
         )
-        return await self.generate(**prompts, run_id=run_id)
+        return await self.generate(**prompts, run_id=run_id, context_id=context_id)
 
     def build_executive_prompts(
         self,
@@ -181,6 +186,7 @@ class OrchestratorLLM:
         billing_issue: str,
         available_tools: list[str],
         run_id: str | None = None,
+        context_id: str | None = None,
     ) -> dict[str, Any]:
         if not self.enabled:
             selected_tools = [
@@ -202,7 +208,7 @@ class OrchestratorLLM:
             billing_issue=billing_issue,
             available_tools=available_tools,
         )
-        response = await self.generate(**prompts, run_id=run_id)
+        response = await self.generate(**prompts, run_id=run_id, context_id=context_id)
         selected_tools = list(available_tools)
         reasoning = response["summary"]
 
@@ -258,6 +264,7 @@ class OrchestratorLLM:
         remaining_tools: list[str],
         current_context: dict[str, Any],
         run_id: str | None = None,
+        context_id: str | None = None,
     ) -> dict[str, Any]:
         if not remaining_tools:
             return {
@@ -294,7 +301,7 @@ class OrchestratorLLM:
             remaining_tools=remaining_tools,
             current_context=current_context,
         )
-        response = await self.generate(**prompts, run_id=run_id)
+        response = await self.generate(**prompts, run_id=run_id, context_id=context_id)
         decision = {
             "llm_used": response["llm_used"],
             "model": response["model"],

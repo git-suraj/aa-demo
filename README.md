@@ -13,6 +13,7 @@ The demo uses:
 - an orchestrator LLM step for triage and executive synthesis
 - LLM calls from the orchestrator and sub-agents routed through Kong AI Proxy Advanced
 - separate Kong AI routes for orchestrator and sub-agents
+- Kong's `ai-a2a-proxy` plugin for agent-to-agent handoffs between the orchestrator and the sub-agents
 - 1 backing REST API
 - Kong's `ai-mcp-proxy` plugin to expose that API as MCP tools
 - Consumers and Consumer Groups to control which agent can see which tools
@@ -94,6 +95,7 @@ Diagram views:
 - `ai-llm-service`: LLM traffic routed through Kong AI Proxy Advanced
 - `redis-stack`: vector database backing the semantic guard scenario
 - `kong-dp`: Kong Gateway `3.13.0.1` in Konnect hybrid mode
+- `kong-dp`: Kong Gateway `3.14.0.1` in Konnect hybrid mode
 
 ## Routes
 
@@ -107,6 +109,8 @@ Diagram views:
 - `/ai/subagent/chat/completions`
 
 The UI is also intended to be hosted through Kong, so the full demo can be reached from the same gateway entrypoint instead of exposing the UI separately.
+
+Agent-to-agent traffic now uses A2A-native `message/send` handoffs with a shared `context_id` for the conversation and a separate `run_id` for the demo execution.
 
 `/mock-mcp` is the important route for the demo. Kong fronts the REST API and exposes it as MCP tools using the `ai-mcp-proxy` plugin.
 The AI routes are split by caller type:

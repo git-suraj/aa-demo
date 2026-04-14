@@ -65,6 +65,7 @@ class TraceBroker:
         if not run:
             run = {
                 "run_id": run_id,
+                "context_id": event.get("context_id"),
                 "governance_scenario": "normal",
                 "summary": None,
                 "started_at": None,
@@ -83,6 +84,7 @@ class TraceBroker:
             run["started_at"] = event.get("timestamp") or run["started_at"]
             run["governance_scenario"] = event.get("governance_scenario") or run["governance_scenario"]
             run["summary"] = event.get("summary") or run["summary"]
+            run["context_id"] = event.get("context_id") or run.get("context_id")
             run["status"] = "running"
         elif event_type == "final_response":
             output = event.get("output") or {}
@@ -100,6 +102,7 @@ class TraceBroker:
     def _summary(run: dict[str, Any]) -> dict[str, Any]:
         return {
             "run_id": run["run_id"],
+            "context_id": run.get("context_id"),
             "governance_scenario": run["governance_scenario"],
             "summary": run["summary"],
             "started_at": run["started_at"],

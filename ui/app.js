@@ -13,6 +13,7 @@ const finalOutput = document.getElementById("final-output");
 const runState = document.getElementById("run-state");
 const lastRun = document.getElementById("last-run");
 const runIdLabel = document.getElementById("run-id-label");
+const contextIdLabel = document.getElementById("context-id-label");
 const runHistorySelect = document.getElementById("run-history-select");
 const sceneStatus = document.getElementById("scene-status");
 const flowStageTitle = document.getElementById("flow-stage-title");
@@ -223,6 +224,7 @@ window.addEventListener("resize", () => {
 function createInitialTraceState() {
   return {
     runId: null,
+    contextId: null,
     scenario: "normal",
     rootIds: [],
     nodes: {},
@@ -705,6 +707,9 @@ function formatRunOptionLabel(run) {
     parts.push(formatTime(run.started_at));
   }
   parts.push(labelForScenario(run.governance_scenario || "normal"));
+  if (run.context_id) {
+    parts.push(`ctx ${shortRunId(run.context_id)}`);
+  }
   if (run.status) {
     parts.push(run.status);
   }
@@ -2327,6 +2332,7 @@ function resetTraceState() {
   traceState = createInitialTraceState();
   selectedTraceId = null;
   runIdLabel.textContent = "not started";
+  contextIdLabel.textContent = "not started";
   lastRun.textContent = "not started";
   traceTree.innerHTML = `
     <div class="trace-empty">
@@ -2340,11 +2346,13 @@ function resetTraceState() {
 function initializeRun(payload) {
   traceState = createInitialTraceState();
   traceState.runId = payload.run_id;
+  traceState.contextId = payload.context_id || null;
   traceState.scenario = payload.governance_scenario || "normal";
   semanticCacheProbeResolved = false;
   activeScenario = traceState.scenario;
   updateScenarioInfraVisibility(traceState.scenario);
   runIdLabel.textContent = payload.run_id;
+  contextIdLabel.textContent = payload.context_id || "not started";
   touchActivity(payload.timestamp);
 
   const runNode = createTraceNode("run", 0, `Run started: ${payload.run_id}`, `Top-level workflow started for ${labelForScenario(traceState.scenario)}.`, {
@@ -3125,6 +3133,9 @@ async function play(overrides = {}) {
     }
 
     const data = await response.json();
+    if (data.context_id) {
+      contextIdLabel.textContent = data.context_id;
+    }
     renderFinalOutput(data.result);
   } catch (error) {
     setRunState("error");

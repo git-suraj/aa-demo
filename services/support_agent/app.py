@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
 import time
+from contextvars import ContextVar
 from typing import Any
 from typing import TypedDict
 
@@ -11,6 +13,7 @@ from pydantic import BaseModel
 from langgraph.graph import END, START, StateGraph
 
 from services.common.jsonrpc import error_response, success_response
+from services.common.a2a import extract_message_text
 from services.common.llm import OrchestratorLLM
 from services.common.mcp_client import KongMCPClient
 
@@ -22,10 +25,14 @@ API_KEY = os.getenv("AGENT_API_KEY", "support-demo-key")
 TRACE_COLLECTOR_URL = os.getenv("TRACE_COLLECTOR_URL", "http://orchestrator:8000/trace/event")
 os.environ.setdefault("KONG_AI_PROXY_URL", "http://kong-dp:8000/ai/subagent")
 llm = OrchestratorLLM()
+CURRENT_CONTEXT_ID: ContextVar[str | None] = ContextVar("support_context_id", default=None)
+CURRENT_TASK_ID: ContextVar[str | None] = ContextVar("support_task_id", default=None)
 
 
 class SupportRunParams(BaseModel):
     run_id: str
+    context_id: str
+    task_id: str | None = None
     customer_id: str
     account_name: str
     product_issue: str
@@ -45,6 +52,8 @@ class SupportState(TypedDict, total=False):
 
 
 async def emit_trace(run_id: str, event_type: str, **payload: Any) -> None:
+    payload.setdefault("context_id", CURRENT_CONTEXT_ID.get())
+    payload.setdefault("task_id", CURRENT_TASK_ID.get())
     async with httpx.AsyncClient(timeout=5.0) as client:
         await client.post(
             TRACE_COLLECTOR_URL,
@@ -54,7 +63,13 @@ async def emit_trace(run_id: str, event_type: str, **payload: Any) -> None:
 
 async def fetch_tool_inventory(state: SupportState) -> SupportState:
     params = state["params"]
-    client = KongMCPClient(MCP_URL, API_KEY, "support-agent", run_id=params["run_id"])
+    client = KongMCPClient(
+        MCP_URL,
+        API_KEY,
+        "support-agent",
+        run_id=params["run_id"],
+        context_id=params["context_id"],
+    )
     started = time.perf_counter()
     await emit_trace(params["run_id"], "tool_list_started", actor="support-agent")
     tools = await client.list_tools()
@@ -87,7 +102,13 @@ def build_support_tool_args(tool_name: str, llm_arguments: dict[str, Any], param
 
 async def investigate_issue(state: SupportState) -> SupportState:
     params = state["params"]
-    client = KongMCPClient(MCP_URL, API_KEY, "support-agent", run_id=params["run_id"])
+    client = KongMCPClient(
+        MCP_URL,
+        API_KEY,
+        "support-agent",
+        run_id=params["run_id"],
+        context_id=params["context_id"],
+    )
     available_tools = state.get("available_tools", [])
     remaining_tools = [tool for tool in available_tools if tool in {"get_incident_status", "search_runbook"}]
     called_mcp_tools: list[str] = []
@@ -121,6 +142,7 @@ async def investigate_issue(state: SupportState) -> SupportState:
             remaining_tools=remaining_tools,
             current_context=current_context,
             run_id=params["run_id"],
+            context_id=params["context_id"],
         )
         await emit_trace(
             params["run_id"],
@@ -216,6 +238,7 @@ async def generate_technical_summary(state: SupportState) -> SupportState:
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             run_id=params["run_id"],
+            context_id=params["context_id"],
         )
     await emit_trace(
         params["run_id"],
@@ -235,6 +258,8 @@ def build_response(state: SupportState) -> SupportState:
     params = state["params"]
     result = {
         "agent": "support-agent",
+        "context_id": params["context_id"],
+        "task_id": params.get("task_id"),
         "triage_brief": params["triage_brief"],
         "available_tools": state.get("available_tools", []),
         "called_mcp_tools": state.get("called_mcp_tools", []),
@@ -287,25 +312,44 @@ async def agent_card() -> dict[str, Any]:
         "agent_id": "support-agent",
         "name": "Support Agent",
         "description": "Investigates technical issues and recommends remediation steps.",
-        "endpoints": {"jsonrpc": "/v1/jsonrpc"},
+        "endpoints": {"jsonrpc": "/v1/jsonrpc", "a2a": "/a2a"},
     }
 
 
 @app.post("/v1/jsonrpc")
 @app.post("/support-agent/v1/jsonrpc")
+@app.post("/a2a")
+@app.post("/support-agent/a2a")
 async def jsonrpc_endpoint(request: Request) -> dict[str, Any]:
     body = await request.json()
     request_id = body.get("id")
-    if body.get("method") != "agent.run":
+    method = body.get("method")
+    if method not in {"agent.run", "message/send"}:
         return error_response(request_id, -32601, "Unsupported method")
 
     try:
         params = SupportRunParams.model_validate(body.get("params", {}))
     except Exception as exc:
-        return error_response(request_id, -32602, "Invalid params", str(exc))
+        if method != "message/send":
+            return error_response(request_id, -32602, "Invalid params", str(exc))
+        payload = body.get("params", {})
+        message = payload.get("message") if isinstance(payload, dict) else {}
+        message_text = extract_message_text(message)
+        if not message_text:
+            return error_response(request_id, -32602, "Invalid params", "Unable to extract A2A message payload")
+        try:
+            params = SupportRunParams.model_validate(json.loads(message_text))
+        except Exception as inner_exc:
+            return error_response(request_id, -32602, "Invalid params", str(inner_exc))
 
+    context_token = CURRENT_CONTEXT_ID.set(params.context_id)
+    task_token = CURRENT_TASK_ID.set(params.task_id)
     try:
         graph_result = await support_graph.ainvoke({"params": params.model_dump()})
     except Exception as exc:
         return error_response(request_id, -32000, "Support agent failed", str(exc))
+    finally:
+        CURRENT_TASK_ID.reset(task_token)
+        CURRENT_CONTEXT_ID.reset(context_token)
+
     return success_response(request_id, graph_result["result"])

@@ -5,6 +5,7 @@ import json
 import os
 import time
 import uuid
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
 from typing import TypedDict
@@ -18,6 +19,11 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel
 
 from services.common.jsonrpc import error_response, success_response
+from services.common.a2a import build_message_send_request
+from services.common.a2a import build_text_message
+from services.common.a2a import extract_message_text
+from services.common.a2a import new_context_id
+from services.common.a2a import new_task_id
 from services.common.llm import OrchestratorLLM
 from services.common.mcp_client import KongMCPClient
 from services.common.trace import TraceBroker
@@ -47,10 +53,12 @@ COMPOSE_PROJECT_NAME = os.getenv("OBSERVABILITY_COMPOSE_PROJECT_NAME", "aa-demo"
 COMPOSE_FILE_PATH = os.getenv("OBSERVABILITY_COMPOSE_FILE", "docker-compose.yml")
 SUBAGENT_DISCOVERY_ATTEMPTS = 3
 SUBAGENT_DISCOVERY_BACKOFF_MS = 350
+CURRENT_CONTEXT_ID: ContextVar[str | None] = ContextVar("orchestrator_context_id", default=None)
 
 
 class PlayRequest(BaseModel):
     run_id: str | None = None
+    context_id: str | None = None
     customer_id: str = "cust_acme"
     account_name: str = "Acme Health"
     issue_summary: str = "Customer reports a billing dispute and workflow-agent sync delays."
@@ -73,6 +81,7 @@ class ExternalTraceEvent(BaseModel):
 class OrchestratorState(TypedDict, total=False):
     request: dict[str, Any]
     run_id: str
+    context_id: str
     governance_scenario: str
     semantic_cache_step: str
     pii_sanitizer_mode: str
@@ -95,9 +104,11 @@ class OrchestratorState(TypedDict, total=False):
 
 
 async def emit(run_id: str, event_type: str, **payload: Any) -> None:
+    context_id = payload.pop("context_id", None) or CURRENT_CONTEXT_ID.get()
     await trace_broker.broadcast(
         {
             "run_id": run_id,
+            "context_id": context_id,
             "type": event_type,
             "timestamp": datetime.now(UTC).isoformat(),
             **payload,
@@ -316,6 +327,7 @@ def build_pii_probe_prompts(request: PlayRequest, mode: str) -> dict[str, str]:
 async def choose_next_tool_for_route(
     *,
     run_id: str,
+    context_id: str,
     stage: str,
     scenario: str,
     prompts: dict[str, str],
@@ -325,6 +337,7 @@ async def choose_next_tool_for_route(
 ) -> dict[str, Any]:
     response = await generate_for_scenario(
         run_id=run_id,
+        context_id=context_id,
         stage=stage,
         scenario=scenario,
         prompts=prompts,
@@ -355,13 +368,14 @@ async def choose_next_tool_for_route(
 async def generate_for_scenario(
     *,
     run_id: str,
+    context_id: str,
     stage: str,
     scenario: str,
     prompts: dict[str, str],
     base_url: str,
 ) -> dict[str, Any]:
     try:
-        return await llm.generate(base_url=base_url, run_id=run_id, **prompts)
+        return await llm.generate(base_url=base_url, run_id=run_id, context_id=context_id, **prompts)
     except httpx.HTTPStatusError as exc:
         if scenario == "token_limit" and exc.response.status_code == 429:
             await emit_component(run_id, "openai", "error", actor="orchestrator", stage=stage)
@@ -411,6 +425,7 @@ async def generate_for_scenario(
                 base_url=GEMINI_FALLBACK_URL,
                 model=GEMINI_FALLBACK_MODEL,
                 run_id=run_id,
+                context_id=context_id,
                 **prompts,
             )
         raise
@@ -442,6 +457,7 @@ async def generate_for_scenario(
             base_url=GEMINI_FALLBACK_URL,
             model=GEMINI_FALLBACK_MODEL,
             run_id=run_id,
+            context_id=context_id,
             **prompts,
         )
         return fallback
@@ -484,10 +500,15 @@ async def generate_for_scenario(
         raise
 
 
-async def discover_agent(route_prefix: str, run_id: str | None = None) -> dict[str, Any]:
+async def discover_agent(
+    route_prefix: str,
+    run_id: str | None = None,
+    context_id: str | None = None,
+) -> dict[str, Any]:
     headers = {
         "apikey": AGENT_API_KEY,
         **({"x-demo-run-id": run_id} if run_id else {}),
+        **({"x-demo-context-id": context_id} if context_id else {}),
     }
     last_error: Exception | None = None
 
@@ -512,20 +533,40 @@ async def discover_agent(route_prefix: str, run_id: str | None = None) -> dict[s
 
 async def call_subagent(route_prefix: str, params: dict[str, Any]) -> dict[str, Any]:
     run_id = params.get("run_id")
-    card = await discover_agent(route_prefix, run_id=run_id)
-    endpoint = card["endpoints"]["jsonrpc"]
-    payload = {
-        "jsonrpc": "2.0",
-        "id": str(uuid.uuid4()),
-        "method": "agent.run",
-        "params": params,
-    }
+    context_id = params.get("context_id")
+    task_id = params.get("task_id") or new_task_id()
+    card = await discover_agent(route_prefix, run_id=run_id, context_id=context_id)
+    endpoint = card.get("endpoints", {}).get("a2a") or card.get("endpoints", {}).get("jsonrpc") or "/a2a"
+    message = build_text_message(
+        role="user",
+        content=json.dumps(params, ensure_ascii=False),
+        agent_id=card.get("agent_id") or route_prefix.strip("/"),
+        context_id=context_id or "",
+        task_id=task_id,
+        metadata={
+            "run_id": run_id,
+            "source_agent": "orchestrator",
+            "target_agent": card.get("agent_id") or route_prefix.strip("/"),
+            "scenario": params.get("governance_scenario"),
+        },
+    )
+    payload = build_message_send_request(
+        context_id=context_id or "",
+        task_id=task_id,
+        message=message,
+        metadata={
+            "run_id": run_id,
+            "source_agent": "orchestrator",
+            "target_agent": card.get("agent_id") or route_prefix.strip("/"),
+        },
+    )
     async with httpx.AsyncClient(timeout=45.0) as client:
         response = await client.post(
             f"{KONG_PROXY_URL}{route_prefix}{endpoint}",
             headers={
                 "apikey": AGENT_API_KEY,
                 **({"x-demo-run-id": run_id} if run_id else {}),
+                **({"x-demo-context-id": context_id} if context_id else {}),
             },
             json=payload,
         )
@@ -533,7 +574,7 @@ async def call_subagent(route_prefix: str, params: dict[str, Any]) -> dict[str, 
         data = response.json()
     if "error" in data:
         raise RuntimeError(data["error"]["message"])
-    return {"card": card, "result": data["result"]}
+    return {"card": card, "result": data["result"], "task_id": task_id, "context_id": context_id}
 
 
 def unwrap_mcp_result(result: Any) -> Any:
@@ -554,7 +595,13 @@ async def fetch_context(state: OrchestratorState) -> OrchestratorState:
     request = state["request"]
     scenario = state.get("governance_scenario", "normal")
     ai_route_base_url = state.get("ai_route_base_url", ai_route_for_scenario(scenario))
-    mcp = KongMCPClient(f"{KONG_PROXY_URL}/mock-mcp", AGENT_API_KEY, "orchestrator", run_id=run_id)
+    mcp = KongMCPClient(
+        f"{KONG_PROXY_URL}/mock-mcp",
+        AGENT_API_KEY,
+        "orchestrator",
+        run_id=run_id,
+        context_id=state["context_id"],
+    )
     await emit(run_id, "planning", message="Fetching account context through Kong MCP.")
     list_started = time.perf_counter()
     await emit(run_id, "tool_list_started", actor="orchestrator")
@@ -625,8 +672,10 @@ async def fetch_context(state: OrchestratorState) -> OrchestratorState:
                 remaining_tools=remaining_tools,
                 current_context=current_context,
                 run_id=run_id,
+                context_id=state["context_id"],
             ) if ai_route_base_url == llm.base_url else await choose_next_tool_for_route(
                 run_id=run_id,
+                context_id=state["context_id"],
                 stage=stage,
                 scenario=scenario,
                 prompts=prompts,
@@ -739,7 +788,12 @@ async def generate_triage_brief(state: OrchestratorState) -> OrchestratorState:
         await emit_component(run_id, "redis", "active", actor="orchestrator", stage=stage_name)
         await emit(run_id, "llm_started", actor="orchestrator", stage=stage_name, input=llm_input)
         started = time.perf_counter()
-        triage_brief = await llm.generate_with_headers(base_url=ai_route_base_url, run_id=run_id, **triage_prompts)
+        triage_brief = await llm.generate_with_headers(
+            base_url=ai_route_base_url,
+            run_id=run_id,
+            context_id=state["context_id"],
+            **triage_prompts,
+        )
         semantic_cache_probe = {
             "step": semantic_cache_step,
             "headers": triage_brief["cache_headers"],
@@ -761,6 +815,7 @@ async def generate_triage_brief(state: OrchestratorState) -> OrchestratorState:
         started = time.perf_counter()
         triage_brief = await generate_for_scenario(
             run_id=run_id,
+            context_id=state["context_id"],
             stage="triage_plan",
             scenario=scenario,
             prompts=triage_prompts,
@@ -785,9 +840,11 @@ async def generate_triage_brief(state: OrchestratorState) -> OrchestratorState:
 
 async def run_support_agent(state: OrchestratorState) -> OrchestratorState:
     run_id = state["run_id"]
+    context_id = state["context_id"]
     request = state["request"]
     params = {
         "run_id": run_id,
+        "context_id": context_id,
         "customer_id": request["customer_id"],
         "account_name": request["account_name"],
         "product_issue": request["product_issue"],
@@ -813,10 +870,12 @@ async def run_support_agent(state: OrchestratorState) -> OrchestratorState:
 
 async def run_success_agent(state: OrchestratorState) -> OrchestratorState:
     run_id = state["run_id"]
+    context_id = state["context_id"]
     request = state["request"]
     support_track = state.get("support_track", {})
     params = {
         "run_id": run_id,
+        "context_id": context_id,
         "account_name": request["account_name"],
         "csm": "Maya Patel",
         "issue_summary": state.get("triage_brief", {}).get("summary", request["issue_summary"]),
@@ -879,6 +938,7 @@ async def finalize_response(state: OrchestratorState) -> OrchestratorState:
     executive_prompts = llm_input
     executive_brief = await generate_for_scenario(
         run_id=run_id,
+        context_id=state["context_id"],
         stage="executive_summary",
         scenario=scenario,
         prompts=executive_prompts,
@@ -939,6 +999,8 @@ orchestrator_graph = (
 
 async def run_playbook(request: PlayRequest) -> dict[str, Any]:
     run_id = request.run_id or str(uuid.uuid4())
+    context_id = request.context_id or new_context_id()
+    context_token = CURRENT_CONTEXT_ID.set(context_id)
     started = time.perf_counter()
     scenario = request.governance_scenario
     semantic_cache_step = request.semantic_cache_step
@@ -950,6 +1012,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         summary=request.issue_summary,
         input=request.model_dump(),
         governance_scenario=scenario,
+        context_id=context_id,
     )
     await emit_component(run_id, "kong", "active")
     await emit(
@@ -959,6 +1022,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         scenario=scenario,
         summary=scenario_summary(scenario),
         output={"ai_route_base_url": ai_route_base_url},
+        context_id=context_id,
     )
     if scenario == "pii_sanitizer":
         prompts = build_pii_probe_prompts(request, pii_sanitizer_mode)
@@ -1007,7 +1071,12 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         await emit(run_id, "llm_started", actor="orchestrator", stage=stage, component="openai", input=prompts)
         llm_started = time.perf_counter()
         try:
-            pii_result = await llm.generate_with_headers(base_url=ai_route_base_url, run_id=run_id, **prompts)
+            pii_result = await llm.generate_with_headers(
+                base_url=ai_route_base_url,
+                run_id=run_id,
+                context_id=context_id,
+                **prompts,
+            )
         except (APIStatusError, httpx.HTTPStatusError) as exc:
             status_code = getattr(exc, "status_code", None) or getattr(getattr(exc, "response", None), "status_code", None)
             if pii_sanitizer_mode != "block" or status_code != 400:
@@ -1058,7 +1127,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             await emit_component(run_id, "orchestrator", "complete")
             await emit_component(run_id, "observability", "complete")
             await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=blocked_response)
-            return {"run_id": run_id, "result": blocked_response}
+            return {"run_id": run_id, "context_id": context_id, "result": blocked_response}
         pii_output = without_cache_headers(pii_result)
         await emit(
             run_id,
@@ -1128,7 +1197,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         await emit_component(run_id, "orchestrator", "complete")
         await emit_component(run_id, "observability", "complete")
         await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=final_response)
-        return {"run_id": run_id, "result": final_response}
+        return {"run_id": run_id, "context_id": context_id, "result": final_response}
     if scenario == "llm_as_judge":
         prompts = build_llm_judge_prompts(request)
         stage = "llm_as_judge_probe"
@@ -1145,6 +1214,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             base_url=ai_route_base_url,
             model="gpt-4o-mini",
             run_id=run_id,
+            context_id=context_id,
             **prompts,
         )
         await emit(
@@ -1231,7 +1301,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         await emit_component(run_id, "orchestrator", "complete")
         await emit_component(run_id, "observability", "complete")
         await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=final_response)
-        return {"run_id": run_id, "result": final_response}
+        return {"run_id": run_id, "context_id": context_id, "result": final_response}
     if scenario == "semantic_cache":
         prompts = build_semantic_cache_prompts(request)
         stage = "semantic_cache_seed" if semantic_cache_step == "seed" else "semantic_cache_reuse"
@@ -1244,7 +1314,12 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         await emit_component(run_id, "redis", "active", actor="orchestrator", stage=stage)
         await emit(run_id, "llm_started", actor="orchestrator", stage=stage, input=prompts)
         llm_started = time.perf_counter()
-        triage_result = await llm.generate_with_headers(base_url=ai_route_base_url, run_id=run_id, **prompts)
+        triage_result = await llm.generate_with_headers(
+            base_url=ai_route_base_url,
+            run_id=run_id,
+            context_id=context_id,
+            **prompts,
+        )
         cache_status = (triage_result.get("cache_headers", {}).get("x-cache-status") or "").lower()
         policy_stage = "semantic_cache_hit" if cache_status == "hit" else "semantic_cache_miss"
         policy_summary = (
@@ -1304,12 +1379,13 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         await emit_component(run_id, "orchestrator", "complete")
         await emit_component(run_id, "observability", "complete")
         await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=final_response)
-        return {"run_id": run_id, "result": final_response}
+        return {"run_id": run_id, "context_id": context_id, "result": final_response}
     try:
         graph_result = await orchestrator_graph.ainvoke(
             {
                 "request": request.model_dump(),
                 "run_id": run_id,
+                "context_id": context_id,
                 "governance_scenario": scenario,
                 "semantic_cache_step": semantic_cache_step,
                 "pii_sanitizer_mode": pii_sanitizer_mode,
@@ -1364,13 +1440,13 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         await emit_component(run_id, "orchestrator", "complete")
         await emit_component(run_id, "observability", "complete")
         await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=blocked_result)
-        return {"run_id": run_id, "result": blocked_result}
+        return {"run_id": run_id, "context_id": context_id, "result": blocked_result}
     await emit_component(run_id, "dashboard", "complete")
     await emit_component(run_id, "kong", "complete")
     await emit_component(run_id, "orchestrator", "complete")
     await emit_component(run_id, "observability", "complete")
     await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=graph_result["result"])
-    return {"run_id": run_id, "result": graph_result["result"]}
+    return {"run_id": run_id, "context_id": context_id, "result": graph_result["result"]}
 
 
 async def clear_semantic_cache_keys() -> dict[str, Any]:
@@ -1472,7 +1548,7 @@ async def agent_card() -> dict[str, Any]:
         "agent_id": "orchestrator",
         "name": "Orchestrator",
         "description": "Coordinates the customer escalation triage workflow.",
-        "endpoints": {"jsonrpc": "/v1/jsonrpc"},
+        "endpoints": {"jsonrpc": "/v1/jsonrpc", "a2a": "/v1/jsonrpc"},
     }
 
 
@@ -1507,12 +1583,21 @@ async def reset_observability() -> dict[str, Any]:
 async def jsonrpc_endpoint(request: Request) -> dict[str, Any]:
     body = await request.json()
     request_id = body.get("id")
-    if body.get("method") != "agent.run":
+    method = body.get("method")
+    if method not in {"agent.run", "message/send"}:
         return error_response(request_id, -32601, "Unsupported method")
     try:
         params = PlayRequest.model_validate(body.get("params", {}))
-    except Exception as exc:
-        return error_response(request_id, -32602, "Invalid params", str(exc))
+    except Exception:
+        payload = body.get("params", {})
+        message = payload.get("message") if isinstance(payload, dict) else {}
+        message_text = extract_message_text(message)
+        if not message_text:
+            return error_response(request_id, -32602, "Invalid params", "Unable to extract play payload from A2A message")
+        try:
+            params = PlayRequest.model_validate(json.loads(message_text))
+        except Exception as exc:
+            return error_response(request_id, -32602, "Invalid params", str(exc))
     try:
         result = await run_playbook(params)
     except Exception as exc:

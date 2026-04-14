@@ -14,6 +14,7 @@ This folder contains the declarative Kong config for the demo.
 - `key-auth` for agent-facing routes
 - 3 Consumers and 3 Consumer Groups
 - per-tool ACL intent for the `ai-mcp-proxy` plugin on `/mock-mcp`
+- `ai-a2a-proxy` on the agent-to-agent routes for support and success handoffs
 
 ## Important
 

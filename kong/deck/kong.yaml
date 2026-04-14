@@ -33,6 +33,7 @@ plugins:
           local status = tostring(status_code)
           local status_class = tostring(math.floor(status_code / 100)) .. 'xx'
           local run_id = tostring(request_headers['x-demo-run-id'] or request_headers['X-Demo-Run-Id'] or '')
+          local context_id = tostring(request_headers['x-demo-context-id'] or request_headers['X-Demo-Context-Id'] or '')
           local component = 'gateway'
           if route['name'] == 'mock-mcp-route' then
             component = 'mcp'
@@ -49,6 +50,10 @@ plugins:
           local mcp = ai['mcp'] or {}
           local mcp_rpc = mcp['rpc'] or {}
           local mcp_entry = mcp_rpc[1] or {}
+          local a2a = ai['a2a'] or {}
+          local a2a_rpc = a2a['rpc'] or {}
+          local a2a_entry = a2a_rpc[1] or {}
+          local a2a_payload = a2a_entry['payload'] or {}
           local proxy = ai['proxy'] or {}
           local proxy_payload = proxy['payload'] or {}
           local meta = proxy['meta'] or {}
@@ -177,6 +182,12 @@ plugins:
           log_payload['mcp_tool_name'] = tostring(mcp_entry['tool_name'] or '')
           log_payload['mcp_tool_latency'] = tonumber(mcp_entry['latency'] or 0) or 0
           log_payload['mcp_response_body_size'] = tonumber(mcp_entry['response_body_size'] or 0) or 0
+          log_payload['a2a_context_id'] = tostring(a2a_entry['context_id'] or a2a_payload['context_id'] or context_id or '')
+          log_payload['a2a_task_id'] = tostring(a2a_entry['task_id'] or a2a_payload['task_id'] or '')
+          log_payload['a2a_message_id'] = tostring(a2a_entry['message_id'] or a2a_payload['message_id'] or '')
+          log_payload['a2a_method'] = tostring(a2a_entry['method'] or '')
+          log_payload['a2a_request_body'] = a2a_payload['request'] or a2a_entry['request'] or log_payload['request']
+          log_payload['a2a_response_body'] = a2a_payload['response'] or a2a_entry['response'] or log_payload['response']
           local payload_string = cjson.encode(log_payload)
           return {
             {
@@ -190,6 +201,7 @@ plugins:
                 status = status,
                 status_class = status_class,
                 run_id = run_id,
+                context_id = context_id,
                 mcp_method = tostring(mcp_entry['method'] or ''),
                 mcp_tool_name = tostring(mcp_entry['tool_name'] or ''),
               },
@@ -801,6 +813,11 @@ services:
         config:
           key_names:
             - apikey
+      - name: ai-a2a-proxy
+        config:
+          logging:
+            log_payloads: true
+            log_statistics: true
 
   - name: success-agent-service
     url: http://success-agent:8000
@@ -814,6 +831,11 @@ services:
         config:
           key_names:
             - apikey
+      - name: ai-a2a-proxy
+        config:
+          logging:
+            log_payloads: true
+            log_statistics: true
 
   - name: mock-api-service
     url: http://mock-api:8000

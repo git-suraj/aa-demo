@@ -7,7 +7,7 @@ This repo is a Kong-governed multi-agent demo for a customer escalation workflow
 Core flow:
 - UI sends a `Play` request through Kong to the orchestrator.
 - Orchestrator gathers account context through MCP tools exposed by Kong.
-- Orchestrator calls two sub-agents through Kong:
+- Orchestrator calls two sub-agents through Kong using A2A-native `message/send` handoffs:
   - `support-agent`
   - `success-agent`
 - Orchestrator produces a final executive brief through Kong-routed LLM endpoints.
@@ -72,6 +72,7 @@ Important environment wiring:
 - success-agent uses `AGENT_API_KEY=success-demo-key`
 - orchestrator LLM base URL: `http://kong-dp:8000/ai/orchestrator`
 - sub-agent LLM base URL: `http://kong-dp:8000/ai/subagent`
+- agent-to-agent tracing now uses a shared `context_id` per escalation run alongside the existing `run_id`
 - orchestrator now also has Docker access for the demo-only observability reset flow:
   - Docker socket mounted
   - repo mounted read-only at the host-absolute path

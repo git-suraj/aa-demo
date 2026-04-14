@@ -45,7 +45,7 @@ services:
         condition: service_started
 
   kong-dp:
-    image: kong/kong-gateway:3.13.0.1
+    image: kong/kong-gateway:3.14.0.1
     container_name: kong-dp
     restart: unless-stopped
     env_file:
