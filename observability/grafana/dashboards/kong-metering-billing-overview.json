@@ -1172,7 +1172,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"support-agent-service\",method=\"POST\",status=\"200\",run_id!=\"\",run_id=~\"$run_id\"} | json | request_uri =~ \".*/support-agent/v1/jsonrpc\" | unwrap latencies_request [1h]))",
+          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"support-agent-service\",method=\"POST\",status=\"200\",run_id!=\"\",run_id=~\"$run_id\"} | json | request_uri =~ \".*/support-agent/(a2a|v1/jsonrpc)\" | unwrap latencies_request [1h]))",
           "legendFormat": "Support Agent",
           "queryType": "range",
           "refId": "B"
@@ -1183,7 +1183,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"success-agent-service\",method=\"POST\",status=\"200\",run_id!=\"\",run_id=~\"$run_id\"} | json | request_uri =~ \".*/success-agent/v1/jsonrpc\" | unwrap latencies_request [1h]))",
+          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"success-agent-service\",method=\"POST\",status=\"200\",run_id!=\"\",run_id=~\"$run_id\"} | json | request_uri =~ \".*/success-agent/(a2a|v1/jsonrpc)\" | unwrap latencies_request [1h]))",
           "legendFormat": "Success Agent",
           "queryType": "range",
           "refId": "C"
@@ -1334,7 +1334,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "{component=\"agent\",consumer=\"orchestrator-agent\",run_id!=\"\",run_id=~\"$run_id\"} |~ \"/(support-agent|success-agent)/v1/jsonrpc\"",
+          "expr": "{component=\"agent\",consumer=\"orchestrator-agent\",run_id!=\"\",run_id=~\"$run_id\"} |~ \"/(support-agent|success-agent)/(a2a|v1/jsonrpc)\"",
           "queryType": "range",
           "refId": "A"
         }

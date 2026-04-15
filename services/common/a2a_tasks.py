@@ -94,7 +94,9 @@ class A2ATaskStore:
 
     async def append_history(self, task_id: str, entry_type: str, **payload: Any) -> None:
         async with self._lock:
-            task = self._tasks[task_id]
+            task = self._tasks.get(task_id)
+            if task is None:
+                return
             task["updated_at"] = time.time()
             task["history"].append({"ts": task["updated_at"], "type": entry_type, **payload})
             await self._publish_locked(task_id)

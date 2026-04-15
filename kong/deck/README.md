@@ -47,6 +47,15 @@ The A2A plugin is expected to:
   - `tasks/get`
 - emit A2A log fields into the `ai.a2a` namespace consumed by Kong log plugins
 
+Current application behavior:
+
+- support-agent and success-agent are implemented with `a2a-sdk[http-server]==0.3.26`
+- SDK agent cards report protocol version `0.3.0`
+- first `message/send` or `message/stream` requests should not include `taskId`; the SDK creates the task id
+- streamed responses are SDK SSE events:
+  - `status-update`
+  - `artifact-update`
+
 ## Sync workflow
 
 Typical workflow:
@@ -86,15 +95,15 @@ curl -N \
     "method": "message/stream",
     "params": {
       "contextId": "ctx-deck-readme-001",
-      "taskId": "task-deck-readme-001",
       "message": {
         "kind": "message",
         "messageId": "msg-deck-readme-001",
         "role": "user",
+        "contextId": "ctx-deck-readme-001",
         "parts": [
           {
             "kind": "text",
-            "text": "{\"run_id\":\"deck-readme-run-001\",\"context_id\":\"ctx-deck-readme-001\",\"task_id\":\"task-deck-readme-001\",\"message_id\":\"msg-deck-readme-001\",\"customer_id\":\"cust_acme\",\"issue_summary\":\"Customer reports workflow-agent sync delays and needs technical investigation.\",\"triage_brief\":\"Investigate the incident, verify impact, and provide next steps.\"}"
+            "text": "{\"run_id\":\"deck-readme-run-001\",\"context_id\":\"ctx-deck-readme-001\",\"customer_id\":\"cust_acme\",\"account_name\":\"Acme Health\",\"product_issue\":\"workflow agent sync delays\",\"incident_id\":\"INC-1007\",\"triage_brief\":\"Investigate the incident, verify impact, and provide next steps.\"}"
           }
         ]
       }

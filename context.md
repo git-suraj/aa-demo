@@ -20,6 +20,7 @@ Main code locations:
 - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/success_agent/app.py`
 - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/common/llm.py`
 - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/common/mcp_client.py`
+- `/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/common/a2a_sdk_server.py`
 - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml`
 - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/observability/grafana/dashboards/kong-governance-overview.json`
 - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/observability/konnect/dashboards/aa-demo-api-analytics.json`
@@ -90,6 +91,8 @@ Important environment wiring:
 Important current A2A behavior:
 
 - Kong Gateway is `3.14.0.1`
+- support-agent and success-agent are now served by `a2a-sdk[http-server]==0.3.26`
+- SDK-generated agent cards report A2A protocol version `0.3.0`
 - `ai-a2a-proxy` is applied at service scope for:
   - `support-agent-service`
   - `success-agent-service`
@@ -99,35 +102,43 @@ Important current A2A behavior:
 - execution is through Kong on:
   - `/support-agent/a2a`
   - `/success-agent/a2a`
-- the orchestrator now uses `message/stream` instead of polling `tasks/get`
-- sub-agents still expose `tasks/get` as a protocol-compatible inspection endpoint
+- the orchestrator uses SDK-compatible `message/stream` instead of polling `tasks/get`
+- the orchestrator does not send `taskId` on the first message; the SDK creates the task and returns the task id in streamed events
+- sub-agents expose `tasks/get` through the SDK task store as a protocol-compatible inspection endpoint
 
 Task lifecycle model:
 
 - one `context_id` can contain multiple A2A tasks
 - one `task_id` can contain multiple `message_id`s
-- sub-agent task state is tracked in-memory with:
+- sub-agent task state is emitted by the A2A SDK over SSE with:
   - `submitted`
   - `working`
   - `completed`
   - `failed`
+- `message/stream` emits SDK event objects:
+  - `status-update` for task state changes
+  - `artifact-update` for result artifacts
+- the orchestrator folds those SDK stream events back into the task/result shape used by the rest of the demo
 
 Current implementation files:
 
 - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/common/a2a.py`
 - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/common/a2a_tasks.py`
+- `/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/common/a2a_sdk_server.py`
 - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/orchestrator/app.py`
 - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/support_agent/app.py`
 - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/success_agent/app.py`
 
 ## Trace Surfaces
 
-There are now three trace surfaces:
+There are now four trace surfaces:
 
 - `TraceBroker`
   - recent runs and live run updates for the main UI
 - Grafana + Loki
   - operational dashboarding and context trace tables
+- Jaeger
+  - local OpenTelemetry trace UI for Kong spans, GenAI spans, and A2A spans
 - custom `Trace Explorer`
   - a UI for loading normalized events for a `context_id`
 
@@ -170,10 +181,13 @@ Expected per-model totals for a normal run:
 Important interpretation notes for the A2A context table:
 
 - `tasks/get`
-  - protocol-compatible task inspection endpoint on the sub-agents
-  - no longer the orchestrator's main execution path after the SSE refactor
+  - protocol-compatible task inspection endpoint exposed through the A2A SDK task store
+  - no longer the orchestrator's main execution path
 - `message/stream`
-  - current orchestrator-to-subagent execution path
+  - current orchestrator-to-subagent execution path through the A2A SDK
+- `task_state`
+  - request-level final state extracted by Kong from the streamed A2A response
+  - not a separate row per SSE event in the Kong http-log record
 - `notifications/initialized`
   - MCP lifecycle handshake noise after `initialize`
 - `task_stage = planning`
@@ -342,6 +356,41 @@ Additional dashboard cleanup:
   - `Semantic Guard Blocked Requests`
   - `Semantic Cache Hits`
   - `Semantic Cache Misses`
+- `Context Trace Table` is present on the governance dashboard
+- A2A log/table queries now include SDK execution traffic on `/a2a` as well as legacy `/v1/jsonrpc`
+- the metering/billing dashboard agent latency and agent log-stream panels also include `/a2a`
+
+## Jaeger OpenTelemetry State
+
+Current implementation:
+- `jaeger` runs as part of the normal Docker Compose stack
+- Kong tracing is enabled with:
+  - `KONG_TRACING_INSTRUMENTATIONS=all`
+  - `KONG_TRACING_SAMPLING_RATE=1.0`
+- Kong has a global `opentelemetry` plugin exporting traces to:
+  - `http://jaeger:4318/v1/traces`
+- Kong post-function tagging adds searchable trace attributes:
+  - `demo.run_id`
+  - `demo.context_id`
+  - `a2a.task_id`
+  - `a2a.message_id`
+
+Latest SDK validation run:
+- run id: `f34eb1d2-899f-4727-bb32-ae23a3788985`
+- context id: `ctx-7dfe3072-a372-4c6f-a2b4-d5a648bfeea8`
+- Jaeger trace id: `64f9561a571b467430bf2d0c6987354d`
+- span count observed: `268`
+- Jaeger includes:
+  - `kong.a2a`
+  - `kong.access.plugin.ai-a2a-proxy`
+  - `kong.access.plugin.ai-proxy-advanced`
+  - GenAI span tags
+  - A2A span tags including `kong.a2a.task.state`, `kong.a2a.task.id`, `kong.a2a.sse_events_count`, and `kong.a2a.streaming`
+
+Interpretation:
+- Jaeger is good for one end-to-end trace tree when trace context is propagated.
+- Grafana/Loki remains better for tabular A2A/MCP/LLM event inspection.
+- Jaeger is not intended to replace Grafana for metric-style dashboard panels.
 
 Konnect dashboard assets:
 - two Konnect Analytics tile-definition JSONs were added under `observability/konnect/dashboards`
@@ -505,7 +554,7 @@ Version comparison:
 - therefore this does not look like a 3.13-only regression
 
 Current practical state:
-- local `docker-compose.yml` was returned to `kong/kong-gateway:3.13.0.1`
+- local `docker-compose.yml` is on Kong Gateway `3.14.0.1`
 - failover scenario should be treated as experimental in this repo unless re-validated with a proven provider-native failover condition that Kong surfaces as a supported criterion
 - semantic guard blocked requests
 - semantic cache hits

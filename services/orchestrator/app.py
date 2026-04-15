@@ -25,7 +25,6 @@ from services.common.a2a import build_text_message
 from services.common.a2a import extract_task_payload
 from services.common.a2a import extract_message_text
 from services.common.a2a import new_context_id
-from services.common.a2a import new_task_id
 from services.common.llm import OrchestratorLLM
 from services.common.mcp_client import KongMCPClient
 from services.common.trace import TraceBroker
@@ -541,21 +540,27 @@ async def discover_agent(
 async def call_subagent(route_prefix: str, params: dict[str, Any]) -> dict[str, Any]:
     run_id = params.get("run_id")
     context_id = params.get("context_id")
-    task_id = params.get("task_id") or new_task_id()
+    task_id = params.get("task_id")
     card = await discover_agent(route_prefix, run_id=run_id, context_id=context_id)
     base_url = card.get("url") or f"{KONG_PROXY_URL}{route_prefix}"
     interface_url = next(
         (
             interface.get("url")
             for interface in card.get("additionalInterfaces", [])
-            if isinstance(interface, dict) and interface.get("kind") == "a2a"
+            if isinstance(interface, dict)
+            and str(interface.get("kind") or interface.get("transport") or "").lower() in {"a2a", "jsonrpc"}
         ),
         None,
     )
     endpoint_path = card.get("endpoints", {}).get("a2a") or card.get("endpoints", {}).get("jsonrpc") or "/a2a"
-    if isinstance(interface_url, str) and interface_url.startswith("http") and interface_url.rstrip("/") != str(base_url).rstrip("/"):
-        endpoint_url = interface_url
-    elif isinstance(base_url, str) and base_url.startswith("http"):
+    if isinstance(interface_url, str) and interface_url.startswith(KONG_PROXY_URL):
+        interface_path = interface_url.rstrip("/")
+        endpoint_url = (
+            interface_path
+            if interface_path.endswith(("/a2a", "/v1/jsonrpc"))
+            else urljoin(interface_path + "/", endpoint_path.lstrip("/"))
+        )
+    elif isinstance(base_url, str) and base_url.startswith(KONG_PROXY_URL):
         endpoint_url = urljoin(base_url.rstrip("/") + "/", endpoint_path.lstrip("/"))
     else:
         endpoint_url = f"{KONG_PROXY_URL}{route_prefix}{endpoint_path}"
@@ -565,6 +570,7 @@ async def call_subagent(route_prefix: str, params: dict[str, Any]) -> dict[str, 
         agent_id=card.get("agent_id") or route_prefix.strip("/"),
         context_id=context_id or "",
         task_id=task_id,
+        include_task_id=bool(task_id),
         metadata={
             "run_id": run_id,
             "source_agent": "orchestrator",
@@ -607,12 +613,20 @@ async def stream_subagent_task(
     payload: dict[str, Any],
     run_id: str | None,
     context_id: str | None,
-    task_id: str,
+    task_id: str | None,
     message_id: str | None,
     agent_name: str,
 ) -> dict[str, Any]:
     terminal_states = {"completed", "failed", "canceled", "rejected", "auth-required"}
-    final_task: dict[str, Any] | None = None
+    final_task: dict[str, Any] = {
+        "id": task_id or "",
+        "contextId": context_id or "",
+        "status": {"state": "submitted"},
+        "artifacts": [],
+        "messages": [],
+        "metadata": {"agent_id": agent_name, **({"run_id": run_id} if run_id else {})},
+    }
+    saw_event = False
     last_state: str | None = None
     async with httpx.AsyncClient(timeout=90.0) as client:
         async with client.stream(
@@ -638,28 +652,78 @@ async def stream_subagent_task(
                 data = json.loads(raw)
                 if "error" in data:
                     raise RuntimeError(data["error"]["message"])
-                task = data.get("result") or {}
-                state = str(task.get("status", {}).get("state") or "unknown")
-                final_task = task
+                event = data.get("result") or {}
+                final_task, state = merge_a2a_stream_event(
+                    final_task,
+                    event,
+                    default_context_id=context_id,
+                    default_task_id=task_id,
+                    agent_name=agent_name,
+                    run_id=run_id,
+                )
+                saw_event = True
                 if state != last_state:
                     await emit(
                         run_id or "unknown-run",
                         "subagent_task_update",
                         agent=agent_name,
                         context_id=context_id,
-                        task_id=task.get("id") or task_id,
+                        task_id=final_task.get("id") or task_id,
                         message_id=message_id,
                         task_state=state,
-                        output=task,
+                        output=final_task,
                     )
                     last_state = state
                 if state in terminal_states:
                     if state != "completed":
-                        raise RuntimeError(f"Subagent task {task.get('id') or task_id} ended in state {state}")
+                        raise RuntimeError(f"Subagent task {final_task.get('id') or task_id} ended in state {state}")
                     break
-    if not final_task:
+    if not saw_event:
         raise RuntimeError(f"No streamed task updates received for {agent_name}")
     return final_task
+
+
+def merge_a2a_stream_event(
+    task: dict[str, Any],
+    event: dict[str, Any],
+    *,
+    default_context_id: str | None,
+    default_task_id: str | None,
+    agent_name: str,
+    run_id: str | None,
+) -> tuple[dict[str, Any], str]:
+    kind = event.get("kind")
+    task_id = event.get("id") or event.get("taskId") or event.get("task_id") or task.get("id") or default_task_id or ""
+    event_context_id = event.get("contextId") or event.get("context_id") or task.get("contextId") or default_context_id or ""
+    if task_id:
+        task["id"] = task_id
+    if event_context_id:
+        task["contextId"] = event_context_id
+
+    if kind == "artifact-update":
+        artifact = event.get("artifact")
+        if isinstance(artifact, dict):
+            task.setdefault("artifacts", []).append(artifact)
+        state = str(task.get("status", {}).get("state") or "working")
+        return task, state
+
+    if "status" in event and isinstance(event["status"], dict):
+        status = dict(event["status"])
+        state = str(status.get("state") or "unknown")
+        task["status"] = status
+        message = status.get("message")
+        if isinstance(message, dict):
+            task.setdefault("messages", []).append(message)
+        return task, state
+
+    if "artifacts" in event or "messages" in event or "metadata" in event:
+        task.update(event)
+        state = str(task.get("status", {}).get("state") or "unknown")
+        task.setdefault("metadata", {"agent_id": agent_name, **({"run_id": run_id} if run_id else {})})
+        return task, state
+
+    state = str(task.get("status", {}).get("state") or "unknown")
+    return task, state
 
 
 def unwrap_mcp_result(result: Any) -> Any:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import time
@@ -9,20 +8,17 @@ from typing import Any
 from typing import TypedDict
 
 import httpx
-from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI
 from pydantic import BaseModel
 from langgraph.graph import END, START, StateGraph
 
-from services.common.jsonrpc import error_response, success_response
-from services.common.a2a import extract_message_text
-from services.common.a2a import new_task_id
-from services.common.a2a_tasks import A2ATaskStore, TERMINAL_TASK_STATES
+from services.common.a2a_sdk_server import GraphAgentExecutor
+from services.common.a2a_sdk_server import add_a2a_sdk_routes
+from services.common.a2a_sdk_server import add_trace_context_middleware
+from services.common.a2a_sdk_server import build_agent_card
+from services.common.a2a_tasks import A2ATaskStore
 from services.common.llm import OrchestratorLLM
 from services.common.mcp_client import KongMCPClient
-from services.common.trace_context import extract_trace_headers
-from services.common.trace_context import reset_trace_headers
-from services.common.trace_context import set_trace_headers
 
 
 app = FastAPI(title="Support Agent", version="1.0.0")
@@ -36,7 +32,6 @@ CURRENT_CONTEXT_ID: ContextVar[str | None] = ContextVar("support_context_id", de
 CURRENT_TASK_ID: ContextVar[str | None] = ContextVar("support_task_id", default=None)
 CURRENT_MESSAGE_ID: ContextVar[str | None] = ContextVar("support_message_id", default=None)
 TASK_STORE = A2ATaskStore("support-agent")
-RUNNING_TASKS: dict[str, asyncio.Task[Any]] = {}
 
 
 class SupportRunParams(BaseModel):
@@ -335,139 +330,25 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/.well-known/agent-card.json")
-@app.get("/support-agent/.well-known/agent-card.json")
-@app.get("/.well-known/agent.json")
-@app.get("/support-agent/.well-known/agent.json")
-async def agent_card() -> dict[str, Any]:
-    return {
-        "agent_id": "support-agent",
-        "name": "Support Agent",
-        "description": "Investigates technical issues and recommends remediation steps.",
-        "url": "http://support-agent:8000/a2a",
-        "additionalInterfaces": [
-            {"kind": "a2a", "url": "http://support-agent:8000/a2a"},
-            {"kind": "jsonrpc", "url": "http://support-agent:8000/v1/jsonrpc"},
-        ],
-        "endpoints": {"jsonrpc": "/v1/jsonrpc", "a2a": "/a2a"},
-    }
-
-
-@app.post("/v1/jsonrpc")
-@app.post("/support-agent/v1/jsonrpc")
-@app.post("/a2a")
-@app.post("/support-agent/a2a")
-async def jsonrpc_endpoint(request: Request) -> dict[str, Any]:
-    trace_headers = extract_trace_headers(request.headers)
-    body = await request.json()
-    request_id = body.get("id")
-    method = body.get("method")
-    if method not in {"agent.run", "message/send", "message/stream", "tasks/get"}:
-        return error_response(request_id, -32601, "Unsupported method")
-
-    if method == "tasks/get":
-        payload = body.get("params", {})
-        task_id = None
-        if isinstance(payload, dict):
-            task_id = payload.get("id") or payload.get("taskId") or payload.get("task_id")
-        if not task_id:
-            return error_response(request_id, -32602, "Invalid params", "Missing task id")
-        task = await TASK_STORE.get(str(task_id))
-        if not task:
-            return error_response(request_id, -32004, "Task not found")
-        return success_response(request_id, task)
-
-    try:
-        params = SupportRunParams.model_validate(body.get("params", {}))
-    except Exception as exc:
-        if method not in {"message/send", "message/stream"}:
-            return error_response(request_id, -32602, "Invalid params", str(exc))
-        payload = body.get("params", {})
-        message = payload.get("message") if isinstance(payload, dict) else {}
-        message_text = extract_message_text(message)
-        if not message_text:
-            return error_response(request_id, -32602, "Invalid params", "Unable to extract A2A message payload")
-        try:
-            params = SupportRunParams.model_validate(json.loads(message_text))
-        except Exception as inner_exc:
-            return error_response(request_id, -32602, "Invalid params", str(inner_exc))
-
-    payload = body.get("params", {})
-    message = payload.get("message") if isinstance(payload, dict) else {}
-    inbound_message_id = message.get("messageId") if isinstance(message, dict) else None
-    if method in {"message/send", "message/stream"}:
-        task_id = params.task_id or (payload.get("task_id") if isinstance(payload, dict) else None) or new_task_id()
-        task = await TASK_STORE.upsert_inbound_message(
-            task_id=task_id,
-            context_id=params.context_id,
-            run_id=params.run_id,
-            message=message if isinstance(message, dict) else {},
-            metadata={"run_id": params.run_id},
-        )
-        if task_id not in RUNNING_TASKS or RUNNING_TASKS[task_id].done():
-            RUNNING_TASKS[task_id] = asyncio.create_task(
-                execute_support_task(
-                    task_id=task_id,
-                    params={
-                        **params.model_dump(),
-                        "task_id": task_id,
-                        "message_id": inbound_message_id,
-                        "_trace_headers": trace_headers,
-                    },
-                )
-            )
-        if method == "message/send":
-            return success_response(request_id, task)
-        queue = await TASK_STORE.subscribe(task_id)
-
-        async def event_stream():
-            try:
-                while True:
-                    snapshot = await queue.get()
-                    envelope = {"jsonrpc": "2.0", "id": request_id, "result": snapshot}
-                    yield f"data: {json.dumps(envelope, ensure_ascii=False)}\n\n"
-                    state = str(snapshot.get("status", {}).get("state") or "unknown")
-                    if state in TERMINAL_TASK_STATES:
-                        break
-            finally:
-                await TASK_STORE.unsubscribe(task_id, queue)
-
-        return StreamingResponse(
-            event_stream(),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-        )
-
-    context_token = CURRENT_CONTEXT_ID.set(params.context_id)
-    task_token = CURRENT_TASK_ID.set(params.task_id)
-    message_token = CURRENT_MESSAGE_ID.set(inbound_message_id)
-    trace_token = set_trace_headers(trace_headers)
-    try:
-        graph_result = await support_graph.ainvoke({"params": {**params.model_dump(), "message_id": inbound_message_id}})
-    except Exception as exc:
-        return error_response(request_id, -32000, "Support agent failed", str(exc))
-    finally:
-        reset_trace_headers(trace_token)
-        CURRENT_MESSAGE_ID.reset(message_token)
-        CURRENT_TASK_ID.reset(task_token)
-        CURRENT_CONTEXT_ID.reset(context_token)
-    result = graph_result["result"]
-    return success_response(request_id, result)
-
-
-async def execute_support_task(*, task_id: str, params: dict[str, Any]) -> None:
-    trace_token = set_trace_headers(params.get("_trace_headers") or {})
-    context_token = CURRENT_CONTEXT_ID.set(params["context_id"])
-    task_token = CURRENT_TASK_ID.set(task_id)
-    message_token = CURRENT_MESSAGE_ID.set(params.get("message_id"))
-    try:
-        await TASK_STORE.mark_working(task_id, stage="agent execution started")
-        graph_result = await support_graph.ainvoke({"params": params})
-        await TASK_STORE.complete(task_id, payload=graph_result["result"], run_id=params.get("run_id"))
-    except Exception as exc:
-        await TASK_STORE.fail(task_id, str(exc))
-    finally:
-        CURRENT_MESSAGE_ID.reset(message_token)
-        CURRENT_TASK_ID.reset(task_token)
-        CURRENT_CONTEXT_ID.reset(context_token)
-        reset_trace_headers(trace_token)
+add_trace_context_middleware(app)
+add_a2a_sdk_routes(
+    app=app,
+    route_prefix="/support-agent",
+    agent_card=build_agent_card(
+        agent_id="support-agent",
+        name="Support Agent",
+        description="Investigates technical issues and recommends remediation steps.",
+        url="http://support-agent:8000/a2a",
+        skill_id="technical-investigation",
+        skill_name="Technical Investigation",
+        skill_description="Investigate incidents, runbooks, and technical remediation for customer escalations.",
+    ),
+    executor=GraphAgentExecutor(
+        agent_id="support-agent",
+        graph=support_graph,
+        params_model=SupportRunParams,
+        context_var=CURRENT_CONTEXT_ID,
+        task_var=CURRENT_TASK_ID,
+        message_var=CURRENT_MESSAGE_ID,
+    ),
+)

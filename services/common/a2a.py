@@ -23,28 +23,33 @@ def build_text_message(
     content: str,
     agent_id: str,
     context_id: str,
-    task_id: str,
+    task_id: str | None = None,
     message_id: str | None = None,
     metadata: dict[str, Any] | None = None,
+    include_task_id: bool = True,
 ) -> dict[str, Any]:
-    return {
+    message = {
         "kind": "message",
         "messageId": message_id or new_message_id(),
         "role": role,
+        "contextId": context_id,
         "parts": [{"kind": "text", "text": content}],
         "metadata": {
             "agent_id": agent_id,
             "context_id": context_id,
-            "task_id": task_id,
+            **({"task_id": task_id} if task_id else {}),
             **(metadata or {}),
         },
     }
+    if include_task_id and task_id:
+        message["taskId"] = task_id
+    return message
 
 
 def build_message_send_request(
     *,
     context_id: str,
-    task_id: str,
+    task_id: str | None = None,
     message: dict[str, Any],
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -54,10 +59,11 @@ def build_message_send_request(
         "method": "message/send",
         "params": {
             "context_id": context_id,
-            "task_id": task_id,
             "message": message,
         },
     }
+    if task_id:
+        payload["params"]["task_id"] = task_id
     if metadata:
         payload["params"]["metadata"] = metadata
     return payload
@@ -66,7 +72,7 @@ def build_message_send_request(
 def build_message_stream_request(
     *,
     context_id: str,
-    task_id: str,
+    task_id: str | None = None,
     message: dict[str, Any],
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -137,7 +143,8 @@ def extract_task_payload(result: Any) -> Any:
             for part in parts:
                 if not isinstance(part, dict):
                     continue
-                text = part.get("text")
+                part_payload = part.get("root") if isinstance(part.get("root"), dict) else part
+                text = part_payload.get("text")
                 if isinstance(text, str) and text:
                     try:
                         return json.loads(text)
@@ -171,8 +178,11 @@ def extract_message_text(message: Any) -> str:
     parts = message.get("parts") or []
     texts: list[str] = []
     for part in parts:
-        if isinstance(part, dict) and part.get("kind") == "text" and part.get("text"):
-            texts.append(str(part["text"]))
+        if not isinstance(part, dict):
+            continue
+        part_payload = part.get("root") if isinstance(part.get("root"), dict) else part
+        if part_payload.get("kind") == "text" and part_payload.get("text"):
+            texts.append(str(part_payload["text"]))
     if texts:
         return "\n\n".join(texts)
 

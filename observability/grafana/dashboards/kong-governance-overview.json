@@ -50,7 +50,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "{component=\"agent\",consumer=\"orchestrator-agent\",run_id!=\"\",run_id=~\"$run_id\"} |~ \"/(support-agent|success-agent)/v1/jsonrpc\"",
+          "expr": "{component=\"agent\",consumer=\"orchestrator-agent\",run_id!=\"\",run_id=~\"$run_id\"} |~ \"/(support-agent|success-agent)/(a2a|v1/jsonrpc)\"",
           "queryType": "range",
           "refId": "A"
         }

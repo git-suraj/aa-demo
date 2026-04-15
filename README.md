@@ -147,6 +147,17 @@ demo.run_id=<run_id>
 
 Then expand the returned trace. A normal run should include gateway spans for `/orchestrator`, `/support-agent`, `/success-agent`, `/mock-mcp`, `/ai/orchestrator/...`, and `/ai/subagent/...`.
 
+Latest validation after the A2A SDK migration:
+
+- run id: `f34eb1d2-899f-4727-bb32-ae23a3788985`
+- context id: `ctx-7dfe3072-a372-4c6f-a2b4-d5a648bfeea8`
+- Jaeger trace id: `64f9561a571b467430bf2d0c6987354d`
+- observed trace size: `268` spans
+- observed Loki events for that run:
+  - `a2a`: `4`
+  - `mcp`: `20`
+  - `llm`: `11`
+
 If you need to bring the Opik experiment back for comparison:
 
 ```bash
@@ -170,9 +181,12 @@ Agent-to-agent traffic now uses A2A-native discovery and streaming execution:
 
 - discovery happens through Kong at `GET /.well-known/agent-card.json`
 - Kong rewrites the agent card `url` and `additionalInterfaces[].url` fields to the gateway address
-- the orchestrator sends `message/stream` to the sub-agents through Kong
-- the sub-agents stream task snapshots back over SSE until the task reaches a terminal state
-- `tasks/get` is still implemented on the sub-agents as a compatibility and inspection endpoint, but it is no longer the orchestrator's primary execution path
+- the support and success sub-agents are served with `a2a-sdk==0.3.26`
+- SDK-generated agent cards report A2A protocol version `0.3.0`
+- the orchestrator sends SDK-compatible `message/stream` requests to the sub-agents through Kong
+- the sub-agents stream SDK SSE events back: `status-update` for state changes and `artifact-update` for output chunks
+- the orchestrator does not send a `taskId` on the first message; the SDK creates the task id and returns it in the stream
+- `tasks/get` is available through the SDK task store for inspection, but it is no longer the orchestrator's primary execution path
 - `context_id` is the primary conversation identifier
 - `run_id` remains the demo execution identifier
 - `task_id` is the A2A task identifier
@@ -230,11 +244,11 @@ The current A2A flow is aligned around the Kong `ai-a2a-proxy` plugin and the A2
 Current sub-agent behavior:
 
 - `message/send`
-  - creates or resumes a task and returns the current task snapshot
+  - creates or resumes a task through the A2A SDK and returns the task result
 - `message/stream`
-  - creates or resumes a task and streams task snapshots over SSE
+  - creates or resumes a task through the A2A SDK and streams `status-update` / `artifact-update` events over SSE
 - `tasks/get`
-  - returns the current task snapshot for an existing task
+  - returns the SDK task snapshot for an existing task
 
 The orchestrator currently uses `message/stream` for sub-agent execution so task state changes are pushed rather than polled.
 
@@ -282,7 +296,7 @@ curl -sS \
 
 ### 3. Send a Non-Streaming A2A Message Through Kong
 
-This returns the initial task snapshot.
+This creates a new SDK task. Do not pass `taskId` on the first message; the SDK assigns it.
 
 ```bash
 curl -sS \
@@ -297,15 +311,15 @@ curl -sS \
     "method": "message/send",
     "params": {
       "contextId": "ctx-curl-a2a-001",
-      "taskId": "task-curl-a2a-001",
       "message": {
         "kind": "message",
         "messageId": "msg-curl-a2a-001",
         "role": "user",
+        "contextId": "ctx-curl-a2a-001",
         "parts": [
           {
             "kind": "text",
-            "text": "{\"run_id\":\"curl-a2a-run-001\",\"context_id\":\"ctx-curl-a2a-001\",\"task_id\":\"task-curl-a2a-001\",\"message_id\":\"msg-curl-a2a-001\",\"customer_id\":\"cust_acme\",\"issue_summary\":\"Customer reports workflow-agent sync delays and needs technical investigation.\",\"triage_brief\":\"Investigate the incident, verify impact, and provide next steps.\"}"
+            "text": "{\"run_id\":\"curl-a2a-run-001\",\"context_id\":\"ctx-curl-a2a-001\",\"customer_id\":\"cust_acme\",\"account_name\":\"Acme Health\",\"product_issue\":\"workflow agent sync delays\",\"incident_id\":\"INC-1007\",\"triage_brief\":\"Investigate the incident, verify impact, and provide next steps.\"}"
           }
         ]
       }
@@ -315,7 +329,7 @@ curl -sS \
 
 ### 4. Stream A2A Task Updates Through Kong
 
-This returns SSE task snapshots until the task finishes.
+This returns SDK SSE events until the task finishes.
 
 ```bash
 curl -N \
@@ -331,15 +345,15 @@ curl -N \
     "method": "message/stream",
     "params": {
       "contextId": "ctx-curl-a2a-002",
-      "taskId": "task-curl-a2a-002",
       "message": {
         "kind": "message",
         "messageId": "msg-curl-a2a-002",
         "role": "user",
+        "contextId": "ctx-curl-a2a-002",
         "parts": [
           {
             "kind": "text",
-            "text": "{\"run_id\":\"curl-a2a-run-002\",\"context_id\":\"ctx-curl-a2a-002\",\"task_id\":\"task-curl-a2a-002\",\"message_id\":\"msg-curl-a2a-002\",\"customer_id\":\"cust_acme\",\"issue_summary\":\"Customer reports workflow-agent sync delays and needs technical investigation.\",\"triage_brief\":\"Investigate the incident, verify impact, and provide next steps.\"}"
+            "text": "{\"run_id\":\"curl-a2a-run-002\",\"context_id\":\"ctx-curl-a2a-002\",\"customer_id\":\"cust_acme\",\"account_name\":\"Acme Health\",\"product_issue\":\"workflow agent sync delays\",\"incident_id\":\"INC-1007\",\"triage_brief\":\"Investigate the incident, verify impact, and provide next steps.\"}"
           }
         ]
       }
@@ -349,11 +363,14 @@ curl -N \
 
 Expected stream shape:
 
-- initial task snapshot in `submitted`
-- one or more task snapshots in `working`
-- terminal task snapshot in `completed` or `failed`
+- `status-update` event with `status.state=submitted`
+- `status-update` event with `status.state=working`
+- `artifact-update` event containing the agent result artifact
+- final `status-update` event with `status.state=completed` or `failed`
 
 ### 5. Inspect a Task Directly Through Kong
+
+Use the `taskId` returned by `message/send` or emitted by `message/stream`.
 
 ```bash
 curl -sS \
@@ -367,7 +384,7 @@ curl -sS \
     "id": "curl-task-001",
     "method": "tasks/get",
     "params": {
-      "id": "task-curl-a2a-002"
+      "id": "<task-id-from-the-stream>"
     }
   }' | jq
 ```
@@ -732,7 +749,7 @@ When the user presses `Play` in the UI, the following flow happens:
    - open support tickets
 8. The orchestrator creates an executive triage brief using the scenario-specific orchestrator AI route in Kong.
 9. The orchestrator sends that triage brief to both sub-agents as shared escalation context.
-10. The orchestrator invokes the `support-agent` through Kong using explicit HTTP JSON-RPC.
+10. The orchestrator invokes the `support-agent` through Kong using A2A SDK `message/stream`.
 11. The support agent starts its own LangGraph workflow and calls only its allowed MCP tools through Kong:
    - `get_incident_status`
    - `search_runbook`

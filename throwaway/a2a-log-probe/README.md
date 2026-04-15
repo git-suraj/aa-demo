@@ -2,6 +2,13 @@
 
 Throwaway setup to verify what Kong exports for A2A `message/stream` traffic.
 
+Observed result with Kong Gateway `3.14`:
+- Kong/http-log emits one request-level log record for the streamed `message/stream` request.
+- `ai.a2a.rpc[0].task_state` resolves to the final task state when Kong can parse the streamed response.
+- `ai.a2a.rpc[0].sse_events_count` records the number of SSE events.
+- `ai.a2a.rpc[0].payload.response`, when payload logging is enabled, can contain the raw SSE response body with intermediate states such as `submitted`, `working`, and `completed`.
+- The http-log plugin does not deliver one separate webhook call per SSE event.
+
 Services:
 - `kong`: DB-less Kong with `ai-a2a-proxy` and `http-log`
 - `a2a-server`: minimal A2A server that streams `submitted -> working -> completed`
