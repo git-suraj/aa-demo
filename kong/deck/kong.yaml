@@ -1,6 +1,44 @@
 _format_version: "3.0"
 
 plugins:
+  - name: opentelemetry
+    config:
+      traces_endpoint: http://jaeger:4318/v1/traces
+      resource_attributes:
+        service.name: aa-demo-kong
+  - name: post-function
+    config:
+      access:
+        - |
+          local function header(name)
+            local value = kong.request.get_header(name)
+            if value == nil or value == "" then
+              return nil
+            end
+            return value
+          end
+
+          local attributes = {
+            ["demo.run_id"] = header("x-demo-run-id"),
+            ["demo.context_id"] = header("x-demo-context-id"),
+            ["a2a.task_id"] = header("x-demo-task-id"),
+            ["a2a.message_id"] = header("x-demo-message-id"),
+          }
+
+          local function set_attributes(span)
+            if not span then
+              return
+            end
+            for key, value in pairs(attributes) do
+              if value then
+                span:set_attribute(key, value)
+              end
+            end
+          end
+
+          local root_span = kong.tracing.get_root_span and kong.tracing.get_root_span() or nil
+          set_attributes(root_span)
+          set_attributes(kong.tracing.active_span())
   - name: http-log
     config:
       http_endpoint: http://loki:3100/loki/api/v1/push

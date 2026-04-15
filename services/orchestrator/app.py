@@ -29,6 +29,9 @@ from services.common.a2a import new_task_id
 from services.common.llm import OrchestratorLLM
 from services.common.mcp_client import KongMCPClient
 from services.common.trace import TraceBroker
+from services.common.trace_context import current_trace_headers
+from services.common.trace_context import reset_trace_headers
+from services.common.trace_context import set_trace_headers_from_request
 
 
 app = FastAPI(title="Orchestrator", version="1.0.0")
@@ -510,6 +513,7 @@ async def discover_agent(
 ) -> dict[str, Any]:
     headers = {
         "apikey": AGENT_API_KEY,
+        **current_trace_headers(),
         **({"x-demo-run-id": run_id} if run_id else {}),
         **({"x-demo-context-id": context_id} if context_id else {}),
     }
@@ -616,6 +620,7 @@ async def stream_subagent_task(
             endpoint_url,
             headers={
                 "apikey": AGENT_API_KEY,
+                **current_trace_headers(),
                 **({"x-demo-run-id": run_id} if run_id else {}),
                 **({"x-demo-context-id": context_id} if context_id else {}),
                 **({"x-demo-task-id": task_id} if task_id else {}),
@@ -1743,8 +1748,12 @@ async def agent_card() -> dict[str, Any]:
 
 @app.post("/play")
 @app.post("/orchestrator/play")
-async def play(request: PlayRequest) -> dict[str, Any]:
-    return await run_playbook(request)
+async def play(request: Request, payload: PlayRequest) -> dict[str, Any]:
+    trace_token = set_trace_headers_from_request(request)
+    try:
+        return await run_playbook(payload)
+    finally:
+        reset_trace_headers(trace_token)
 
 
 @app.post("/semantic-cache/clear")
@@ -1770,28 +1779,32 @@ async def reset_observability() -> dict[str, Any]:
 @app.post("/v1/jsonrpc")
 @app.post("/orchestrator/v1/jsonrpc")
 async def jsonrpc_endpoint(request: Request) -> dict[str, Any]:
+    trace_token = set_trace_headers_from_request(request)
     body = await request.json()
-    request_id = body.get("id")
-    method = body.get("method")
-    if method not in {"agent.run", "message/send"}:
-        return error_response(request_id, -32601, "Unsupported method")
     try:
-        params = PlayRequest.model_validate(body.get("params", {}))
-    except Exception:
-        payload = body.get("params", {})
-        message = payload.get("message") if isinstance(payload, dict) else {}
-        message_text = extract_message_text(message)
-        if not message_text:
-            return error_response(request_id, -32602, "Invalid params", "Unable to extract play payload from A2A message")
+        request_id = body.get("id")
+        method = body.get("method")
+        if method not in {"agent.run", "message/send"}:
+            return error_response(request_id, -32601, "Unsupported method")
         try:
-            params = PlayRequest.model_validate(json.loads(message_text))
+            params = PlayRequest.model_validate(body.get("params", {}))
+        except Exception:
+            payload = body.get("params", {})
+            message = payload.get("message") if isinstance(payload, dict) else {}
+            message_text = extract_message_text(message)
+            if not message_text:
+                return error_response(request_id, -32602, "Invalid params", "Unable to extract play payload from A2A message")
+            try:
+                params = PlayRequest.model_validate(json.loads(message_text))
+            except Exception as exc:
+                return error_response(request_id, -32602, "Invalid params", str(exc))
+        try:
+            result = await run_playbook(params)
         except Exception as exc:
-            return error_response(request_id, -32602, "Invalid params", str(exc))
-    try:
-        result = await run_playbook(params)
-    except Exception as exc:
-        return error_response(request_id, -32000, "Orchestrator failed", str(exc))
-    return success_response(request_id, result)
+            return error_response(request_id, -32000, "Orchestrator failed", str(exc))
+        return success_response(request_id, result)
+    finally:
+        reset_trace_headers(trace_token)
 
 
 @app.post("/trace/event")

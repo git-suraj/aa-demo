@@ -6,6 +6,8 @@ from typing import Any
 
 import httpx
 
+from services.common.trace_context import current_trace_headers
+
 
 class MCPError(RuntimeError):
     pass
@@ -39,6 +41,7 @@ class KongMCPClient:
             "apikey": self.api_key,
             "content-type": "application/json",
             "accept": "application/json, text/event-stream",
+            **current_trace_headers(),
         }
         if self.session_id:
             headers["mcp-session-id"] = self.session_id

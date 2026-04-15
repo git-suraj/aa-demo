@@ -6,6 +6,8 @@ from typing import Any
 
 import httpx
 
+from services.common.trace_context import current_trace_headers
+
 
 class OrchestratorLLM:
     def __init__(self) -> None:
@@ -44,6 +46,7 @@ class OrchestratorLLM:
                 headers={
                     "apikey": self.kong_api_key or "",
                     "content-type": "application/json",
+                    **current_trace_headers(),
                     **({"x-demo-run-id": run_id} if run_id else {}),
                     **({"x-demo-context-id": context_id} if context_id else {}),
                     **({"x-demo-task-id": task_id} if task_id else {}),
@@ -90,6 +93,7 @@ class OrchestratorLLM:
                 headers={
                     "apikey": self.kong_api_key or "",
                     "content-type": "application/json",
+                    **current_trace_headers(),
                     **({"x-demo-run-id": run_id} if run_id else {}),
                     **({"x-demo-context-id": context_id} if context_id else {}),
                     **({"x-demo-task-id": task_id} if task_id else {}),

@@ -97,6 +97,62 @@ Diagram views:
 - `redis-stack`: vector database backing the semantic guard scenario
 - `kong-dp`: Kong Gateway `3.14.0.1` in Konnect hybrid mode
 
+## Jaeger OpenTelemetry
+
+The `3.14` branch includes Kong-side OpenTelemetry wiring and an in-compose local Jaeger deployment for inspecting Gen AI traces.
+
+What is included:
+
+- Kong tracing enabled on `kong-dp` with:
+  - `KONG_TRACING_INSTRUMENTATIONS=all`
+  - `KONG_TRACING_SAMPLING_RATE=1.0`
+- a global Kong `opentelemetry` plugin in [kong/deck/kong.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml)
+- a local Jaeger service in [docker-compose.yml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/docker-compose.yml)
+- Kong exports OTLP traces directly to `http://jaeger:4318/v1/traces`
+- Jaeger UI is available at `http://localhost:16686`
+
+Current signal split:
+
+- `LLM`: Kong plugin spans for `ai-proxy-advanced` and child Gen AI spans/attributes
+- `A2A`: Kong plugin spans for `ai-a2a-proxy` and child `kong.a2a` spans/attributes
+- `MCP`: Kong Gateway request spans plus AI MCP log/metric fields from `ai-mcp-proxy`; dedicated MCP metric time series are not displayed in Jaeger
+- `Trace correlation`: the app propagates W3C `traceparent`, `tracestate`, and `baggage` headers across orchestrator, A2A, MCP, and LLM calls so one normal run appears as a single Jaeger trace tree
+
+Notes:
+
+- Jaeger is a trace UI, not the place to inspect Prometheus-style metric time series.
+- Existing Grafana/Loki dashboards remain unchanged.
+- The previous local Opik and OpenTelemetry Collector services are retained behind the opt-in Compose profile `opik` and do not start in the normal demo path.
+- Kong adds searchable trace attributes from the demo headers: `demo.run_id`, `demo.context_id`, `a2a.task_id`, and `a2a.message_id`.
+
+### Local Startup
+
+Start the demo stack as usual:
+
+```bash
+docker compose up -d --build
+```
+
+Validation endpoints:
+
+- Jaeger UI: `http://localhost:16686`
+
+In Jaeger, select service `aa-demo-kong` and inspect traces after running a demo scenario through Kong.
+
+To find one end-to-end run, filter Jaeger by tag:
+
+```text
+demo.run_id=<run_id>
+```
+
+Then expand the returned trace. A normal run should include gateway spans for `/orchestrator`, `/support-agent`, `/success-agent`, `/mock-mcp`, `/ai/orchestrator/...`, and `/ai/subagent/...`.
+
+If you need to bring the Opik experiment back for comparison:
+
+```bash
+docker compose --profile opik up -d
+```
+
 ## Routes
 
 - `/orchestrator`

@@ -20,6 +20,9 @@ from services.common.a2a import new_task_id
 from services.common.a2a_tasks import A2ATaskStore, TERMINAL_TASK_STATES
 from services.common.llm import OrchestratorLLM
 from services.common.mcp_client import KongMCPClient
+from services.common.trace_context import extract_trace_headers
+from services.common.trace_context import reset_trace_headers
+from services.common.trace_context import set_trace_headers
 
 
 app = FastAPI(title="Support Agent", version="1.0.0")
@@ -355,6 +358,7 @@ async def agent_card() -> dict[str, Any]:
 @app.post("/a2a")
 @app.post("/support-agent/a2a")
 async def jsonrpc_endpoint(request: Request) -> dict[str, Any]:
+    trace_headers = extract_trace_headers(request.headers)
     body = await request.json()
     request_id = body.get("id")
     method = body.get("method")
@@ -404,7 +408,12 @@ async def jsonrpc_endpoint(request: Request) -> dict[str, Any]:
             RUNNING_TASKS[task_id] = asyncio.create_task(
                 execute_support_task(
                     task_id=task_id,
-                    params={**params.model_dump(), "task_id": task_id, "message_id": inbound_message_id},
+                    params={
+                        **params.model_dump(),
+                        "task_id": task_id,
+                        "message_id": inbound_message_id,
+                        "_trace_headers": trace_headers,
+                    },
                 )
             )
         if method == "message/send":
@@ -432,11 +441,13 @@ async def jsonrpc_endpoint(request: Request) -> dict[str, Any]:
     context_token = CURRENT_CONTEXT_ID.set(params.context_id)
     task_token = CURRENT_TASK_ID.set(params.task_id)
     message_token = CURRENT_MESSAGE_ID.set(inbound_message_id)
+    trace_token = set_trace_headers(trace_headers)
     try:
         graph_result = await support_graph.ainvoke({"params": {**params.model_dump(), "message_id": inbound_message_id}})
     except Exception as exc:
         return error_response(request_id, -32000, "Support agent failed", str(exc))
     finally:
+        reset_trace_headers(trace_token)
         CURRENT_MESSAGE_ID.reset(message_token)
         CURRENT_TASK_ID.reset(task_token)
         CURRENT_CONTEXT_ID.reset(context_token)
@@ -445,6 +456,7 @@ async def jsonrpc_endpoint(request: Request) -> dict[str, Any]:
 
 
 async def execute_support_task(*, task_id: str, params: dict[str, Any]) -> None:
+    trace_token = set_trace_headers(params.get("_trace_headers") or {})
     context_token = CURRENT_CONTEXT_ID.set(params["context_id"])
     task_token = CURRENT_TASK_ID.set(task_id)
     message_token = CURRENT_MESSAGE_ID.set(params.get("message_id"))
@@ -458,3 +470,4 @@ async def execute_support_task(*, task_id: str, params: dict[str, Any]) -> None:
         CURRENT_MESSAGE_ID.reset(message_token)
         CURRENT_TASK_ID.reset(task_token)
         CURRENT_CONTEXT_ID.reset(context_token)
+        reset_trace_headers(trace_token)
