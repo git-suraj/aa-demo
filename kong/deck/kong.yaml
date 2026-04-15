@@ -141,8 +141,27 @@ plugins:
             end
             return nil
           end
+          local function decode_a2a_response(value)
+            local decoded = decode_json(value)
+            if decoded ~= nil then
+              return decoded
+            end
+            if type(value) ~= 'string' or value == '' then
+              return nil
+            end
+            local last_payload = nil
+            for payload in string.gmatch(value, 'data:%s*(.-)\n\n') do
+              if payload ~= '' and string.sub(payload, 1, 1) == '{' then
+                last_payload = payload
+              end
+            end
+            if last_payload == nil then
+              return nil
+            end
+            return decode_json(last_payload)
+          end
           decoded_a2a_request = decode_json(a2a_payload['request'])
-          decoded_a2a_response = decode_json(a2a_payload['response'])
+          decoded_a2a_response = decode_a2a_response(a2a_payload['response'])
           local a2a_request_params = type(decoded_a2a_request) == 'table' and decoded_a2a_request['params'] or {}
           local a2a_request_message = type(a2a_request_params) == 'table' and a2a_request_params['message'] or {}
           local a2a_response_result = type(decoded_a2a_response) == 'table' and decoded_a2a_response['result'] or {}
@@ -220,9 +239,19 @@ plugins:
             or a2a_payload['task_id']
             or ''
           )
+          local decoded_task_state = type(a2a_response_status) == 'table' and a2a_response_status['state'] or nil
+          local plugin_task_state = a2a_entry['task_state']
+          local terminal_task_states = {
+            completed = true,
+            failed = true,
+            canceled = true,
+            rejected = true,
+            ['auth-required'] = true,
+          }
           log_payload['a2a_task_state'] = tostring(
-            a2a_entry['task_state']
-            or (type(a2a_response_status) == 'table' and a2a_response_status['state'])
+            (terminal_task_states[tostring(decoded_task_state or '')] and decoded_task_state)
+            or plugin_task_state
+            or decoded_task_state
             or ''
           )
           log_payload['a2a_message_id'] = tostring(
@@ -919,6 +948,7 @@ services:
             - apikey
       - name: ai-a2a-proxy
         config:
+          max_request_body_size: 0
           logging:
             log_payloads: true
             log_statistics: true
@@ -937,6 +967,7 @@ services:
             - apikey
       - name: ai-a2a-proxy
         config:
+          max_request_body_size: 0
           logging:
             log_payloads: true
             log_statistics: true

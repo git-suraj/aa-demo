@@ -1,0 +1,52 @@
+services:
+  kong:
+    image: kong/kong-gateway:3.14.0.1
+    container_name: a2a-log-probe-kong
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yaml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_LOG_LEVEL: notice
+      KONG_LICENSE_DATA: ${KONG_LICENSE_DATA}
+      KONG_PLUGINS: bundled,ai-a2a-proxy
+    ports:
+      - "18000:8000"
+      - "18001:8001"
+    volumes:
+      - ./kong.yaml:/kong/declarative/kong.yaml:ro
+    depends_on:
+      - a2a-server
+      - webhook
+
+  a2a-server:
+    image: python:3.12-slim
+    container_name: a2a-log-probe-server
+    working_dir: /app
+    command: /bin/sh -lc "pip install --no-cache-dir -r requirements.txt && uvicorn server:app --host 0.0.0.0 --port 8000"
+    volumes:
+      - ./app:/app
+
+  webhook:
+    image: python:3.12-slim
+    container_name: a2a-log-probe-webhook
+    working_dir: /app
+    command: /bin/sh -lc "pip install --no-cache-dir -r requirements.txt && uvicorn webhook:app --host 0.0.0.0 --port 8080"
+    ports:
+      - "18081:8080"
+    volumes:
+      - ./app:/app
+      - ./logs:/data
+
+  client:
+    image: python:3.12-slim
+    container_name: a2a-log-probe-client
+    working_dir: /app
+    command: /bin/sh -lc "pip install --no-cache-dir -r requirements.txt && python client.py"
+    volumes:
+      - ./app:/app
+    depends_on:
+      - kong

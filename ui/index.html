@@ -27,6 +27,7 @@
         <div class="topbar-actions">
           <button id="scene-button" class="secondary scene-launch" type="button">Scenes</button>
           <button id="graph-button" class="secondary" type="button">View Diagrams</button>
+          <button id="trace-explorer-button" class="secondary" type="button">Trace Explorer</button>
           <button id="reset-button" class="secondary" type="button">Reset Scene</button>
           <button id="reset-observability-button" class="secondary" type="button">Reset Observability</button>
           <button id="output-button" class="secondary" type="button">View Run Output</button>
@@ -422,6 +423,85 @@
           <div class="result-card" id="final-output">
             <h3>Awaiting run</h3>
             <p>Open View Scene and start the orchestrated demo flow from the scene popup.</p>
+          </div>
+        </div>
+      </dialog>
+
+      <dialog id="trace-explorer-modal" class="modal">
+        <div class="modal-shell modal-trace-explorer">
+          <div class="modal-head">
+            <div>
+              <p class="eyebrow">Custom Trace View</p>
+              <h2>Context Trace Explorer</h2>
+            </div>
+            <button class="ghost modal-close" data-close-modal="trace-explorer-modal" type="button">Close</button>
+          </div>
+          <p class="modal-copy">
+            This view reads normalized Loki-backed trace events by <code>context_id</code> and shows the A2A, MCP, and LLM sequence with payload details.
+          </p>
+          <div class="trace-explorer-toolbar">
+            <label class="trace-explorer-field">
+              <span class="label">Context ID</span>
+              <input id="trace-context-input" type="text" placeholder="ctx-..." />
+            </label>
+            <label class="trace-explorer-field">
+              <span class="label">Run ID</span>
+              <input id="trace-run-input" type="text" placeholder="optional run id filter" />
+            </label>
+            <button id="trace-load-button" class="primary" type="button">Load Trace</button>
+          </div>
+          <div class="trace-explorer-summary" id="trace-explorer-summary">
+            <div class="trace-explorer-stat">
+              <span class="label">Events</span>
+              <strong id="trace-event-count">0</strong>
+            </div>
+            <div class="trace-explorer-stat">
+              <span class="label">Tasks</span>
+              <strong id="trace-task-count">0</strong>
+            </div>
+            <div class="trace-explorer-stat">
+              <span class="label">Messages</span>
+              <strong id="trace-message-count">0</strong>
+            </div>
+            <div class="trace-explorer-stat">
+              <span class="label">Status</span>
+              <strong id="trace-explorer-status">Idle</strong>
+            </div>
+          </div>
+          <div class="trace-explorer-layout">
+            <section class="trace-explorer-list panel-dark">
+              <div class="trace-explorer-list-head">
+                <strong>Timeline</strong>
+              </div>
+              <div id="trace-explorer-events" class="trace-explorer-events">
+                <div class="trace-empty">
+                  <h3>No trace loaded</h3>
+                  <p>Open a recent run or enter a context id to load the custom trace explorer.</p>
+                </div>
+              </div>
+            </section>
+            <section class="trace-explorer-detail panel-dark">
+              <div class="trace-explorer-list-head">
+                <strong id="trace-detail-title">Event Details</strong>
+              </div>
+              <div class="detail-meta" id="trace-detail-meta">
+                <span class="meta-chip">Select an event</span>
+              </div>
+              <div class="detail-block">
+                <strong>Summary</strong>
+                <p id="trace-detail-summary">The selected event will show lifecycle fields and payload details here.</p>
+              </div>
+              <div class="detail-io">
+                <div class="detail-code">
+                  <strong>Request</strong>
+                  <pre id="trace-detail-request">-</pre>
+                </div>
+                <div class="detail-code">
+                  <strong>Response</strong>
+                  <pre id="trace-detail-response">-</pre>
+                </div>
+              </div>
+            </section>
           </div>
         </div>
       </dialog>

@@ -1,6 +1,6 @@
 # Kong Agent + MCP Demo
 
-This repo is a simple Konnect hybrid demo for showing how Kong governs both agent-to-agent traffic and MCP tool traffic.
+This repo is a Konnect hybrid demo for showing how Kong governs both agent-to-agent traffic and MCP tool traffic.
 
 ## What the project does
 
@@ -13,7 +13,7 @@ The demo uses:
 - an orchestrator LLM step for triage and executive synthesis
 - LLM calls from the orchestrator and sub-agents routed through Kong AI Proxy Advanced
 - separate Kong AI routes for orchestrator and sub-agents
-- Kong's `ai-a2a-proxy` plugin for agent-to-agent handoffs between the orchestrator and the sub-agents
+- Kong's `ai-a2a-proxy` plugin for agent discovery, A2A execution, and A2A observability between the orchestrator and the sub-agents
 - 1 backing REST API
 - Kong's `ai-mcp-proxy` plugin to expose that API as MCP tools
 - Consumers and Consumer Groups to control which agent can see which tools
@@ -53,6 +53,7 @@ Top-level controls:
 - `Reset Scene`
 - `Reset Observability`
 - `View Run Output`
+- `Trace Explorer`
 - `?` help modal for the demo scenario and agent roles
 
 Main UI behaviors:
@@ -94,7 +95,6 @@ Diagram views:
 - `mock-api`: backing REST API for the 7 tools
 - `ai-llm-service`: LLM traffic routed through Kong AI Proxy Advanced
 - `redis-stack`: vector database backing the semantic guard scenario
-- `kong-dp`: Kong Gateway `3.13.0.1` in Konnect hybrid mode
 - `kong-dp`: Kong Gateway `3.14.0.1` in Konnect hybrid mode
 
 ## Routes
@@ -110,7 +110,17 @@ Diagram views:
 
 The UI is also intended to be hosted through Kong, so the full demo can be reached from the same gateway entrypoint instead of exposing the UI separately.
 
-Agent-to-agent traffic now uses A2A-native `message/send` handoffs with a shared `context_id` for the conversation and a separate `run_id` for the demo execution.
+Agent-to-agent traffic now uses A2A-native discovery and streaming execution:
+
+- discovery happens through Kong at `GET /.well-known/agent-card.json`
+- Kong rewrites the agent card `url` and `additionalInterfaces[].url` fields to the gateway address
+- the orchestrator sends `message/stream` to the sub-agents through Kong
+- the sub-agents stream task snapshots back over SSE until the task reaches a terminal state
+- `tasks/get` is still implemented on the sub-agents as a compatibility and inspection endpoint, but it is no longer the orchestrator's primary execution path
+- `context_id` is the primary conversation identifier
+- `run_id` remains the demo execution identifier
+- `task_id` is the A2A task identifier
+- `message_id` is the initiating A2A message identifier, and multiple messages can belong to the same task
 
 `/mock-mcp` is the important route for the demo. Kong fronts the REST API and exposes it as MCP tools using the `ai-mcp-proxy` plugin.
 The AI routes are split by caller type:
@@ -147,6 +157,174 @@ The AI routes are split by caller type:
 The services use OpenAI-compatible clients pointed at those Kong routes, and Kong forwards the requests using the AI Proxy Advanced plugin.
 
 Prompt decoration is not applied on the standard orchestrator AI routes. It is used only in the dedicated `Prompt Decorator` scenario so the difference is easy to demonstrate.
+
+## A2A Protocol Shape
+
+The current A2A flow is aligned around the Kong `ai-a2a-proxy` plugin and the A2A protocol primitives:
+
+- `context_id`
+  - top-level conversation thread across orchestrator, support-agent, success-agent, MCP, and LLM activity
+- `task_id`
+  - a unit of work owned by a sub-agent
+- `message_id`
+  - a single A2A message within a task
+- `task_state`
+  - tracked as A2A task state on the sub-agents
+
+Current sub-agent behavior:
+
+- `message/send`
+  - creates or resumes a task and returns the current task snapshot
+- `message/stream`
+  - creates or resumes a task and streams task snapshots over SSE
+- `tasks/get`
+  - returns the current task snapshot for an existing task
+
+The orchestrator currently uses `message/stream` for sub-agent execution so task state changes are pushed rather than polled.
+
+## Trace And Observability
+
+There are now two main trace surfaces:
+
+- Grafana dashboards
+  - operational and aggregate views backed by Loki
+- in-product `Trace Explorer`
+  - a custom UI that loads normalized event detail for a `context_id`
+  - request/response previews and full payload inspection
+
+The custom trace explorer is backed by:
+
+- `/orchestrator/trace/context/{context_id}/events`
+
+That endpoint queries Loki, normalizes A2A, MCP, and LLM events, and returns them in time order for the UI.
+
+## cURL Tests Through Kong
+
+These examples go through Kong on `localhost:8000`.
+
+### 1. Discover the Support Agent Card Through Kong
+
+```bash
+curl -sS \
+  -H 'apikey: orchestrator-demo-key' \
+  http://localhost:8000/support-agent/.well-known/agent-card.json | jq
+```
+
+Expected result:
+
+- the request succeeds through Kong
+- `url` points at the Kong route, not the upstream container
+- `additionalInterfaces[].url` also point at Kong
+
+### 2. Discover the Success Agent Card Through Kong
+
+```bash
+curl -sS \
+  -H 'apikey: orchestrator-demo-key' \
+  http://localhost:8000/success-agent/.well-known/agent-card.json | jq
+```
+
+### 3. Send a Non-Streaming A2A Message Through Kong
+
+This returns the initial task snapshot.
+
+```bash
+curl -sS \
+  -H 'apikey: orchestrator-demo-key' \
+  -H 'Content-Type: application/json' \
+  -H 'x-demo-run-id: curl-a2a-run-001' \
+  -H 'x-demo-context-id: ctx-curl-a2a-001' \
+  http://localhost:8000/support-agent/a2a \
+  --data '{
+    "jsonrpc": "2.0",
+    "id": "curl-msg-001",
+    "method": "message/send",
+    "params": {
+      "contextId": "ctx-curl-a2a-001",
+      "taskId": "task-curl-a2a-001",
+      "message": {
+        "kind": "message",
+        "messageId": "msg-curl-a2a-001",
+        "role": "user",
+        "parts": [
+          {
+            "kind": "text",
+            "text": "{\"run_id\":\"curl-a2a-run-001\",\"context_id\":\"ctx-curl-a2a-001\",\"task_id\":\"task-curl-a2a-001\",\"message_id\":\"msg-curl-a2a-001\",\"customer_id\":\"cust_acme\",\"issue_summary\":\"Customer reports workflow-agent sync delays and needs technical investigation.\",\"triage_brief\":\"Investigate the incident, verify impact, and provide next steps.\"}"
+          }
+        ]
+      }
+    }
+  }' | jq
+```
+
+### 4. Stream A2A Task Updates Through Kong
+
+This returns SSE task snapshots until the task finishes.
+
+```bash
+curl -N \
+  -H 'apikey: orchestrator-demo-key' \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  -H 'x-demo-run-id: curl-a2a-run-002' \
+  -H 'x-demo-context-id: ctx-curl-a2a-002' \
+  http://localhost:8000/support-agent/a2a \
+  --data '{
+    "jsonrpc": "2.0",
+    "id": "curl-msg-002",
+    "method": "message/stream",
+    "params": {
+      "contextId": "ctx-curl-a2a-002",
+      "taskId": "task-curl-a2a-002",
+      "message": {
+        "kind": "message",
+        "messageId": "msg-curl-a2a-002",
+        "role": "user",
+        "parts": [
+          {
+            "kind": "text",
+            "text": "{\"run_id\":\"curl-a2a-run-002\",\"context_id\":\"ctx-curl-a2a-002\",\"task_id\":\"task-curl-a2a-002\",\"message_id\":\"msg-curl-a2a-002\",\"customer_id\":\"cust_acme\",\"issue_summary\":\"Customer reports workflow-agent sync delays and needs technical investigation.\",\"triage_brief\":\"Investigate the incident, verify impact, and provide next steps.\"}"
+          }
+        ]
+      }
+    }
+  }'
+```
+
+Expected stream shape:
+
+- initial task snapshot in `submitted`
+- one or more task snapshots in `working`
+- terminal task snapshot in `completed` or `failed`
+
+### 5. Inspect a Task Directly Through Kong
+
+```bash
+curl -sS \
+  -H 'apikey: orchestrator-demo-key' \
+  -H 'Content-Type: application/json' \
+  -H 'x-demo-run-id: curl-a2a-run-002' \
+  -H 'x-demo-context-id: ctx-curl-a2a-002' \
+  http://localhost:8000/support-agent/a2a \
+  --data '{
+    "jsonrpc": "2.0",
+    "id": "curl-task-001",
+    "method": "tasks/get",
+    "params": {
+      "id": "task-curl-a2a-002"
+    }
+  }' | jq
+```
+
+### 6. Validate Discovery Rewriting
+
+This should return a Kong-routed URL such as `http://kong-dp:8000/support-agent` internally, or `http://localhost:8000/support-agent` if your forwarded host headers are set that way.
+
+```bash
+curl -sS \
+  -H 'apikey: orchestrator-demo-key' \
+  http://localhost:8000/support-agent/.well-known/agent-card.json | jq '.url, .additionalInterfaces'
+```
 
 ## Governance scenarios
 
@@ -779,8 +957,8 @@ If Grafana does not show those counts for a fresh normal run, the first thing to
 
 ## Implemented services
 
-- [UI](/Users/surajpillai/Documents/work/demos/learn/aa-demo/ui/index.html): static single-screen demo UI with `Play`, `Reset`, `Reset Observability`, live flow states, selected-step detail, and a `Recent Runs` dropdown that can replay the last 20 stored traces
-- [orchestrator](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/orchestrator/app.py): receives `POST /play`, exposes `WS /trace`, serves `GET /trace/runs` and `GET /trace/runs/{run_id}` for recent trace replay, calls MCP through Kong, invokes the support-agent first, then invokes the success-agent with support context
+- [UI](/Users/surajpillai/Documents/work/demos/learn/aa-demo/ui/index.html): static single-screen demo UI with `Play`, `Reset`, `Reset Observability`, `Trace Explorer`, live flow states, selected-step detail, and a `Recent Runs` dropdown that can replay stored traces
+- [orchestrator](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/orchestrator/app.py): receives `POST /play`, exposes `WS /trace`, serves `GET /trace/runs`, `GET /trace/runs/{run_id}`, and `GET /trace/context/{context_id}/events`, calls MCP through Kong, discovers sub-agents through Kong, and invokes support/success through A2A `message/stream`
 - [orchestrator LLM helper](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/common/llm.py): shared OpenAI-compatible client used by the orchestrator and sub-agents, pointed at Kong's `/ai` route
 - [support-agent](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/support_agent/app.py): LangGraph sub-agent for technical investigation using `get_incident_status` and `search_runbook`
 - [success-agent](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/success_agent/app.py): LangGraph sub-agent for customer-success actions using `draft_customer_reply` and `create_followup_task`

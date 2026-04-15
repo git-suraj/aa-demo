@@ -5,6 +5,7 @@ const playButton = document.getElementById("scene-play-button");
 const resetButton = document.getElementById("reset-button");
 const sceneButton = document.getElementById("scene-button");
 const graphButton = document.getElementById("graph-button");
+const traceExplorerButton = document.getElementById("trace-explorer-button");
 const helpButton = document.getElementById("help-button");
 const outputButton = document.getElementById("output-button");
 const resetObservabilityButton = document.getElementById("reset-observability-button");
@@ -26,6 +27,7 @@ const scenarioOptions = document.getElementById("scenario-options");
 const sceneModal = document.getElementById("scene-modal");
 const outputModal = document.getElementById("output-modal");
 const graphModal = document.getElementById("graph-modal");
+const traceExplorerModal = document.getElementById("trace-explorer-modal");
 const helpModal = document.getElementById("help-modal");
 const sequenceModal = document.getElementById("sequence-modal");
 const sequenceFullscreenButton = document.getElementById("sequence-fullscreen-button");
@@ -63,6 +65,19 @@ const detailMeta = document.getElementById("detail-meta");
 const detailSummary = document.getElementById("detail-summary");
 const detailInput = document.getElementById("detail-input");
 const detailOutput = document.getElementById("detail-output");
+const traceContextInput = document.getElementById("trace-context-input");
+const traceRunInput = document.getElementById("trace-run-input");
+const traceLoadButton = document.getElementById("trace-load-button");
+const traceExplorerStatus = document.getElementById("trace-explorer-status");
+const traceEventCount = document.getElementById("trace-event-count");
+const traceTaskCount = document.getElementById("trace-task-count");
+const traceMessageCount = document.getElementById("trace-message-count");
+const traceExplorerEvents = document.getElementById("trace-explorer-events");
+const traceDetailTitle = document.getElementById("trace-detail-title");
+const traceDetailMeta = document.getElementById("trace-detail-meta");
+const traceDetailSummary = document.getElementById("trace-detail-summary");
+const traceDetailRequest = document.getElementById("trace-detail-request");
+const traceDetailResponse = document.getElementById("trace-detail-response");
 
 const nodes = {
   user: document.querySelector('[data-node="user"]'),
@@ -123,6 +138,7 @@ let activeScenario = "normal";
 let semanticCacheMissReturnPending = false;
 let semanticCacheProbeResolved = false;
 let semanticCacheModelVisibleUntil = 0;
+let traceExplorerState = { contextId: null, runId: null, events: [], selectedIndex: -1 };
 const componentStateTimers = {};
 const componentVisibleSince = {};
 const MIN_COMPONENT_ACTIVE_MS = 350;
@@ -250,6 +266,195 @@ function shortRunId(runId) {
     return runId;
   }
   return `${runId.slice(0, 8)}…${runId.slice(-4)}`;
+}
+
+function formatJsonBlock(value) {
+  if (value === undefined || value === null || value === "") {
+    return "-";
+  }
+  if (typeof value === "string") {
+    try {
+      return JSON.stringify(JSON.parse(value), null, 2);
+    } catch {
+      return value;
+    }
+  }
+  return JSON.stringify(value, null, 2);
+}
+
+function openTraceExplorer(prefill = {}) {
+  traceContextInput.value = prefill.contextId || traceState.contextId || "";
+  traceRunInput.value = prefill.runId || traceState.runId || "";
+  traceExplorerModal?.showModal();
+  if (traceContextInput.value) {
+    void loadTraceExplorer();
+  }
+}
+
+function updateTraceExplorerSummary() {
+  const events = traceExplorerState.events;
+  const taskIds = new Set(events.map((event) => event.task_id).filter(Boolean));
+  const messageIds = new Set(events.map((event) => event.message_id).filter(Boolean));
+  traceEventCount.textContent = String(events.length);
+  traceTaskCount.textContent = String(taskIds.size);
+  traceMessageCount.textContent = String(messageIds.size);
+}
+
+function renderTraceExplorerDetail() {
+  const event = traceExplorerState.events[traceExplorerState.selectedIndex];
+  if (!event) {
+    traceDetailTitle.textContent = "Event Details";
+    traceDetailMeta.innerHTML = '<span class="meta-chip">Select an event</span>';
+    traceDetailSummary.textContent = "The selected event will show lifecycle fields and payload details here.";
+    traceDetailRequest.textContent = "-";
+    traceDetailResponse.textContent = "-";
+    return;
+  }
+  traceDetailTitle.textContent = `${event.task_stage || event.event_type || "event"} · ${event.operation || "operation"}`;
+  traceDetailMeta.innerHTML = "";
+  [
+    event.timestamp_iso,
+    event.service,
+    event.consumer ? `consumer ${event.consumer}` : "",
+    event.task_id ? `task ${shortRunId(event.task_id)}` : "",
+    event.message_id ? `msg ${shortRunId(event.message_id)}` : "",
+    event.task_state ? `state ${event.task_state}` : "",
+    event.latency_ms ? `${event.latency_ms} ms` : "",
+  ]
+    .filter(Boolean)
+    .forEach((value) => traceDetailMeta.appendChild(makeMetaChip(value)));
+  traceDetailSummary.textContent =
+    event.task_stage_detail ||
+    event.response_preview ||
+    event.request_preview ||
+    "No additional detail.";
+  traceDetailRequest.textContent = formatJsonBlock(event.request_payload || event.raw?.request || event.raw);
+  traceDetailResponse.textContent = formatJsonBlock(event.response_payload || event.raw?.response || event.raw);
+}
+
+function renderTraceExplorerEvents() {
+  const events = traceExplorerState.events;
+  if (!events.length) {
+    traceExplorerEvents.innerHTML = `
+      <div class="trace-empty">
+        <h3>No events found</h3>
+        <p>No Loki-backed events matched this context id and run filter.</p>
+      </div>
+    `;
+    renderTraceExplorerDetail();
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  events.forEach((event, index) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = `trace-event-card${index === traceExplorerState.selectedIndex ? " active" : ""}`;
+    card.addEventListener("click", () => {
+      traceExplorerState.selectedIndex = index;
+      renderTraceExplorerEvents();
+      renderTraceExplorerDetail();
+    });
+
+    const top = document.createElement("div");
+    top.className = "trace-event-row";
+    const eventChip = document.createElement("span");
+    eventChip.className = `trace-event-chip event-${event.event_type || "other"}`;
+    eventChip.textContent = event.event_type || "event";
+    top.appendChild(eventChip);
+    if (event.task_stage) {
+      const stageChip = document.createElement("span");
+      stageChip.className = `trace-event-chip stage-${event.task_stage}`;
+      stageChip.textContent = event.task_stage;
+      top.appendChild(stageChip);
+    }
+    const timeChip = document.createElement("span");
+    timeChip.className = "trace-event-chip";
+    timeChip.textContent = new Date(event.timestamp_iso).toLocaleTimeString();
+    top.appendChild(timeChip);
+    if (event.latency_ms) {
+      const latencyChip = document.createElement("span");
+      latencyChip.className = "trace-event-chip";
+      latencyChip.textContent = `${event.latency_ms} ms`;
+      top.appendChild(latencyChip);
+    }
+
+    const title = document.createElement("div");
+    title.className = "trace-event-title";
+    title.textContent = `${event.service || "service"} · ${event.operation || event.request_uri || "event"}`;
+
+    const subtitle = document.createElement("div");
+    subtitle.className = "trace-event-subtitle";
+    const bits = [
+      event.task_id ? `task ${shortRunId(event.task_id)}` : "",
+      event.message_id ? `msg ${shortRunId(event.message_id)}` : "",
+      event.consumer ? `consumer ${event.consumer}` : "",
+      event.task_stage_detail || "",
+      event.subject ? `subject ${event.subject}` : "",
+      event.request_preview || event.response_preview || "",
+    ].filter(Boolean);
+    subtitle.textContent = bits.join(" · ");
+
+    card.appendChild(top);
+    card.appendChild(title);
+    card.appendChild(subtitle);
+    fragment.appendChild(card);
+  });
+  traceExplorerEvents.innerHTML = "";
+  traceExplorerEvents.appendChild(fragment);
+}
+
+async function loadTraceExplorer() {
+  const contextId = traceContextInput.value.trim();
+  const runId = traceRunInput.value.trim();
+  if (!contextId) {
+    traceExplorerStatus.textContent = "Missing context";
+    return;
+  }
+  traceExplorerStatus.textContent = "Loading";
+  traceExplorerEvents.innerHTML = `
+    <div class="trace-empty">
+      <h3>Loading trace</h3>
+      <p>Querying Loki-backed events for ${contextId}.</p>
+    </div>
+  `;
+  try {
+    const query = new URLSearchParams();
+    if (runId) {
+      query.set("run_id", runId);
+    }
+    query.set("limit", "800");
+    const response = await fetch(
+      `${config.apiBaseUrl}/trace/context/${encodeURIComponent(contextId)}/events?${query.toString()}`,
+      {
+        headers: { apikey: config.apiKey },
+      }
+    );
+    if (!response.ok) {
+      throw new Error(`Trace explorer load failed (${response.status})`);
+    }
+    const data = await response.json();
+    traceExplorerState = {
+      contextId,
+      runId: runId || null,
+      events: data.events || [],
+      selectedIndex: (data.events || []).length ? 0 : -1,
+    };
+    traceExplorerStatus.textContent = "Loaded";
+    updateTraceExplorerSummary();
+    renderTraceExplorerEvents();
+    renderTraceExplorerDetail();
+  } catch (error) {
+    traceExplorerStatus.textContent = "Error";
+    traceExplorerEvents.innerHTML = `
+      <div class="trace-empty">
+        <h3>Trace load failed</h3>
+        <p>${error.message}</p>
+      </div>
+    `;
+    traceExplorerState = { contextId, runId: runId || null, events: [], selectedIndex: -1 };
+    updateTraceExplorerSummary();
+    renderTraceExplorerDetail();
+  }
 }
 
 function labelForScenario(scenario) {
@@ -3356,6 +3561,16 @@ runHistorySelect?.addEventListener("change", async (event) => {
 sceneButton.addEventListener("click", () => sceneModal.showModal());
 graphButton.addEventListener("click", () => graphModal.showModal());
 outputButton.addEventListener("click", () => outputModal.showModal());
+traceExplorerButton?.addEventListener("click", () => openTraceExplorer());
+traceLoadButton?.addEventListener("click", () => {
+  void loadTraceExplorer();
+});
+traceContextInput?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    void loadTraceExplorer();
+  }
+});
 nodeInfoButtons.forEach((button) => {
   button.addEventListener("click", () => {
     const target = button.dataset.infoTarget || "kong";

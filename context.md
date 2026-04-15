@@ -7,7 +7,9 @@ This repo is a Kong-governed multi-agent demo for a customer escalation workflow
 Core flow:
 - UI sends a `Play` request through Kong to the orchestrator.
 - Orchestrator gathers account context through MCP tools exposed by Kong.
-- Orchestrator calls two sub-agents through Kong using A2A-native `message/send` handoffs:
+- Orchestrator discovers two sub-agents through Kong using `GET /.well-known/agent-card.json`.
+- Kong rewrites the discovered agent card URLs to the gateway address.
+- Orchestrator calls two sub-agents through Kong using A2A-native `message/stream` handoffs:
   - `support-agent`
   - `success-agent`
 - Orchestrator produces a final executive brief through Kong-routed LLM endpoints.
@@ -53,6 +55,7 @@ Important current UI behaviors:
 - `MCP Tools` is intentionally highlighted at lower intensity than Kong
 - `Recent Runs` in the sidebar is populated from `TraceBroker`
 - `Reset Observability` also clears the recent-runs UI state
+- `Trace Explorer` opens a custom trace UI backed by normalized Loki events
 
 Diagram modal state:
 
@@ -73,10 +76,74 @@ Important environment wiring:
 - orchestrator LLM base URL: `http://kong-dp:8000/ai/orchestrator`
 - sub-agent LLM base URL: `http://kong-dp:8000/ai/subagent`
 - agent-to-agent tracing now uses a shared `context_id` per escalation run alongside the existing `run_id`
+- `context_id` is the primary conversation key
+- `run_id` is the demo execution key
+- `task_id` is the A2A task key
+- `message_id` is the A2A message key
 - orchestrator now also has Docker access for the demo-only observability reset flow:
   - Docker socket mounted
   - repo mounted read-only at the host-absolute path
   - `docker-compose` installed in the service image
+
+## Current A2A Shape
+
+Important current A2A behavior:
+
+- Kong Gateway is `3.14.0.1`
+- `ai-a2a-proxy` is applied at service scope for:
+  - `support-agent-service`
+  - `success-agent-service`
+- discovery is through Kong on:
+  - `/support-agent/.well-known/agent-card.json`
+  - `/success-agent/.well-known/agent-card.json`
+- execution is through Kong on:
+  - `/support-agent/a2a`
+  - `/success-agent/a2a`
+- the orchestrator now uses `message/stream` instead of polling `tasks/get`
+- sub-agents still expose `tasks/get` as a protocol-compatible inspection endpoint
+
+Task lifecycle model:
+
+- one `context_id` can contain multiple A2A tasks
+- one `task_id` can contain multiple `message_id`s
+- sub-agent task state is tracked in-memory with:
+  - `submitted`
+  - `working`
+  - `completed`
+  - `failed`
+
+Current implementation files:
+
+- `/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/common/a2a.py`
+- `/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/common/a2a_tasks.py`
+- `/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/orchestrator/app.py`
+- `/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/support_agent/app.py`
+- `/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/success_agent/app.py`
+
+## Trace Surfaces
+
+There are now three trace surfaces:
+
+- `TraceBroker`
+  - recent runs and live run updates for the main UI
+- Grafana + Loki
+  - operational dashboarding and context trace tables
+- custom `Trace Explorer`
+  - a UI for loading normalized events for a `context_id`
+
+The custom trace explorer endpoint is:
+
+- `/orchestrator/trace/context/{context_id}/events`
+
+It queries Loki and normalizes:
+
+- A2A discovery
+- A2A execution
+- MCP `initialize`
+- MCP `notifications/initialized`
+- MCP `tools/list`
+- MCP `tools/call`
+- LLM planning and synthesis calls
 
 ## Expected LLM Call Counts Per Normal Run
 
@@ -97,6 +164,29 @@ Expected per-model totals for a normal run:
 - `gemini-2.5-flash` = `6`
 
 ## Grafana / Loki Findings
+
+### Current Table Semantics
+
+Important interpretation notes for the A2A context table:
+
+- `tasks/get`
+  - protocol-compatible task inspection endpoint on the sub-agents
+  - no longer the orchestrator's main execution path after the SSE refactor
+- `message/stream`
+  - current orchestrator-to-subagent execution path
+- `notifications/initialized`
+  - MCP lifecycle handshake noise after `initialize`
+- `task_stage = planning`
+  - synthetic label for orchestrator or sub-agent LLM planner calls before tool execution
+
+The Grafana A2A table was simplified to remove:
+
+- `TTFB`
+- `Stage Detail`
+- `Subject`
+- `SSE Events`
+- `A2A Binding`
+- `A2A Task ID`
 
 ### Dashboard Consolidation
 

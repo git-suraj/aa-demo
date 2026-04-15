@@ -63,6 +63,23 @@ def build_message_send_request(
     return payload
 
 
+def build_message_stream_request(
+    *,
+    context_id: str,
+    task_id: str,
+    message: dict[str, Any],
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = build_message_send_request(
+        context_id=context_id,
+        task_id=task_id,
+        message=message,
+        metadata=metadata,
+    )
+    payload["method"] = "message/stream"
+    return payload
+
+
 def build_tasks_get_request(*, task_id: str) -> dict[str, Any]:
     return {
         "jsonrpc": "2.0",

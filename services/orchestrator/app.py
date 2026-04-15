@@ -20,8 +20,7 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel
 
 from services.common.jsonrpc import error_response, success_response
-from services.common.a2a import build_message_send_request
-from services.common.a2a import build_tasks_get_request
+from services.common.a2a import build_message_stream_request
 from services.common.a2a import build_text_message
 from services.common.a2a import extract_task_payload
 from services.common.a2a import extract_message_text
@@ -54,10 +53,9 @@ REDIS_PORT = int(os.getenv("REDIS_PORT") or "6379")
 COMPOSE_PROJECT_DIR = os.getenv("OBSERVABILITY_COMPOSE_DIR", "/workspace")
 COMPOSE_PROJECT_NAME = os.getenv("OBSERVABILITY_COMPOSE_PROJECT_NAME", "aa-demo")
 COMPOSE_FILE_PATH = os.getenv("OBSERVABILITY_COMPOSE_FILE", "docker-compose.yml")
+LOKI_QUERY_URL = os.getenv("LOKI_QUERY_URL", "http://loki:3100/loki/api/v1/query_range")
 SUBAGENT_DISCOVERY_ATTEMPTS = 3
 SUBAGENT_DISCOVERY_BACKOFF_MS = 350
-SUBAGENT_TASK_POLL_INTERVAL_MS = 500
-SUBAGENT_TASK_POLL_ATTEMPTS = 120
 CURRENT_CONTEXT_ID: ContextVar[str | None] = ContextVar("orchestrator_context_id", default=None)
 
 
@@ -570,7 +568,7 @@ async def call_subagent(route_prefix: str, params: dict[str, Any]) -> dict[str, 
             "scenario": params.get("governance_scenario"),
         },
     )
-    payload = build_message_send_request(
+    payload = build_message_stream_request(
         context_id=context_id or "",
         task_id=task_id,
         message=message,
@@ -580,31 +578,16 @@ async def call_subagent(route_prefix: str, params: dict[str, Any]) -> dict[str, 
             "target_agent": card.get("agent_id") or route_prefix.strip("/"),
         },
     )
-    async with httpx.AsyncClient(timeout=45.0) as client:
-        response = await client.post(
-            endpoint_url,
-            headers={
-                "apikey": AGENT_API_KEY,
-                **({"x-demo-run-id": run_id} if run_id else {}),
-                **({"x-demo-context-id": context_id} if context_id else {}),
-                **({"x-demo-task-id": task_id} if task_id else {}),
-                **({"x-demo-message-id": message.get("messageId")} if message.get("messageId") else {}),
-            },
-            json=payload,
-        )
-        response.raise_for_status()
-        data = response.json()
-    if "error" in data:
-        raise RuntimeError(data["error"]["message"])
-    initial_task = data["result"]
-    task_id = str(initial_task.get("id") or task_id)
-    final_task = await poll_subagent_task(
+    final_task = await stream_subagent_task(
         endpoint_url=endpoint_url,
-        task_id=task_id,
+        payload=payload,
         run_id=run_id,
         context_id=context_id,
+        task_id=task_id,
         message_id=message.get("messageId"),
+        agent_name=card.get("agent_id") or route_prefix.strip("/"),
     )
+    task_id = str(final_task.get("id") or task_id)
     return {
         "card": card,
         "result": extract_task_payload(final_task),
@@ -614,41 +597,64 @@ async def call_subagent(route_prefix: str, params: dict[str, Any]) -> dict[str, 
     }
 
 
-async def poll_subagent_task(
+async def stream_subagent_task(
     *,
     endpoint_url: str,
-    task_id: str,
+    payload: dict[str, Any],
     run_id: str | None,
     context_id: str | None,
+    task_id: str,
     message_id: str | None,
+    agent_name: str,
 ) -> dict[str, Any]:
-    payload = build_tasks_get_request(task_id=task_id)
     terminal_states = {"completed", "failed", "canceled", "rejected", "auth-required"}
-    async with httpx.AsyncClient(timeout=45.0) as client:
-        for _ in range(SUBAGENT_TASK_POLL_ATTEMPTS):
-            response = await client.post(
-                endpoint_url,
-                headers={
-                    "apikey": AGENT_API_KEY,
-                    **({"x-demo-run-id": run_id} if run_id else {}),
-                    **({"x-demo-context-id": context_id} if context_id else {}),
-                    **({"x-demo-task-id": task_id} if task_id else {}),
-                    **({"x-demo-message-id": message_id} if message_id else {}),
-                },
-                json=payload,
-            )
+    final_task: dict[str, Any] | None = None
+    last_state: str | None = None
+    async with httpx.AsyncClient(timeout=90.0) as client:
+        async with client.stream(
+            "POST",
+            endpoint_url,
+            headers={
+                "apikey": AGENT_API_KEY,
+                **({"x-demo-run-id": run_id} if run_id else {}),
+                **({"x-demo-context-id": context_id} if context_id else {}),
+                **({"x-demo-task-id": task_id} if task_id else {}),
+                **({"x-demo-message-id": message_id} if message_id else {}),
+            },
+            json=payload,
+        ) as response:
             response.raise_for_status()
-            data = response.json()
-            if "error" in data:
-                raise RuntimeError(data["error"]["message"])
-            task = data["result"]
-            state = str(task.get("status", {}).get("state") or "unknown")
-            if state in terminal_states:
-                if state != "completed":
-                    raise RuntimeError(f"Subagent task {task_id} ended in state {state}")
-                return task
-            await asyncio.sleep(SUBAGENT_TASK_POLL_INTERVAL_MS / 1000)
-    raise TimeoutError(f"Timed out waiting for subagent task {task_id}")
+            async for line in response.aiter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                raw = line[len("data:") :].strip()
+                if not raw:
+                    continue
+                data = json.loads(raw)
+                if "error" in data:
+                    raise RuntimeError(data["error"]["message"])
+                task = data.get("result") or {}
+                state = str(task.get("status", {}).get("state") or "unknown")
+                final_task = task
+                if state != last_state:
+                    await emit(
+                        run_id or "unknown-run",
+                        "subagent_task_update",
+                        agent=agent_name,
+                        context_id=context_id,
+                        task_id=task.get("id") or task_id,
+                        message_id=message_id,
+                        task_state=state,
+                        output=task,
+                    )
+                    last_state = state
+                if state in terminal_states:
+                    if state != "completed":
+                        raise RuntimeError(f"Subagent task {task.get('id') or task_id} ended in state {state}")
+                    break
+    if not final_task:
+        raise RuntimeError(f"No streamed task updates received for {agent_name}")
+    return final_task
 
 
 def unwrap_mcp_result(result: Any) -> Any:
@@ -1609,6 +1615,109 @@ async def reset_observability_stack() -> dict[str, Any]:
     return {"steps": steps}
 
 
+def _to_preview(value: Any, limit: int = 180) -> str:
+    if value is None or value == "":
+        return ""
+    if isinstance(value, str):
+        text = value
+    else:
+        text = json.dumps(value, ensure_ascii=False)
+    text = " ".join(text.split())
+    return text if len(text) <= limit else f"{text[:limit - 1]}…"
+
+
+def _parse_nested_json(value: Any) -> Any:
+    if not isinstance(value, str) or not value:
+        return value
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return value
+
+
+def _extract_request_payload(event: dict[str, Any]) -> Any:
+    for key in ("a2a_request_body", "ai_proxy_payload_request"):
+        if event.get(key):
+            return _parse_nested_json(event[key])
+    if event.get("request"):
+        return event["request"]
+    return None
+
+
+def _extract_response_payload(event: dict[str, Any]) -> Any:
+    for key in ("a2a_response_body", "ai_proxy_payload_response"):
+        if event.get(key):
+            return _parse_nested_json(event[key])
+    if event.get("response"):
+        return event["response"]
+    return None
+
+
+def _normalize_loki_event(ts_ns: str, raw_line: str) -> dict[str, Any]:
+    payload = json.loads(raw_line)
+    task_id = payload.get("task_id_extracted") or payload.get("a2a_task_id") or payload.get("task_id") or ""
+    message_id = payload.get("message_id_extracted") or payload.get("a2a_message_id") or payload.get("a2a_id") or payload.get("message_id") or ""
+    request_payload = _extract_request_payload(payload)
+    response_payload = _extract_response_payload(payload)
+    return {
+        "timestamp_ns": int(ts_ns),
+        "timestamp_iso": datetime.fromtimestamp(int(ts_ns) / 1_000_000_000, tz=UTC).isoformat(),
+        "run_id": payload.get("run_id") or "",
+        "context_id": payload.get("context_id") or payload.get("a2a_context_id") or "",
+        "task_id": task_id,
+        "message_id": message_id,
+        "task_stage": payload.get("task_stage") or "",
+        "task_stage_detail": payload.get("task_stage_detail") or "",
+        "task_state": payload.get("a2a_task_state") or "",
+        "event_type": payload.get("trace_event_type") or payload.get("component") or "",
+        "operation": payload.get("trace_operation") or payload.get("a2a_method") or payload.get("mcp_method") or payload.get("request_uri") or "",
+        "subject": payload.get("trace_subject") or payload.get("mcp_tool_name") or "",
+        "latency_ms": payload.get("trace_latency_ms") or payload.get("a2a_latency") or payload.get("mcp_tool_latency") or payload.get("llm_latency_ms") or 0,
+        "service": payload.get("service_name_extracted") or payload.get("service") or "",
+        "route": payload.get("route_name_extracted") or payload.get("route") or "",
+        "consumer": payload.get("consumer_username") or payload.get("consumer") or "",
+        "status": payload.get("response_status") or payload.get("status") or "",
+        "request_uri": payload.get("request_uri") or "",
+        "a2a_method": payload.get("a2a_method") or "",
+        "a2a_binding": payload.get("a2a_binding") or "",
+        "mcp_method": payload.get("mcp_method") or "",
+        "mcp_tool_name": payload.get("mcp_tool_name") or "",
+        "request_preview": _to_preview(request_payload),
+        "response_preview": _to_preview(response_payload),
+        "request_payload": request_payload,
+        "response_payload": response_payload,
+        "raw": payload,
+    }
+
+
+async def fetch_context_events_from_loki(context_id: str, run_id: str | None = None, limit: int = 500) -> list[dict[str, Any]]:
+    query = f'{{context_id="{context_id}"}} | json'
+    end_ns = int(time.time() * 1_000_000_000)
+    start_ns = end_ns - (7 * 24 * 60 * 60 * 1_000_000_000)
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(
+            LOKI_QUERY_URL,
+            params={
+                "query": query,
+                "limit": min(max(limit, 1), 2000),
+                "direction": "forward",
+                "start": str(start_ns),
+                "end": str(end_ns),
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+    events: list[dict[str, Any]] = []
+    for stream in data.get("data", {}).get("result", []):
+        for ts_ns, raw_line in stream.get("values", []):
+            event = _normalize_loki_event(ts_ns, raw_line)
+            if run_id and event["run_id"] != run_id:
+                continue
+            events.append(event)
+    events.sort(key=lambda item: item["timestamp_ns"])
+    return events
+
+
 @app.get("/health")
 @app.get("/orchestrator/health")
 async def health() -> dict[str, str]:
@@ -1704,6 +1813,18 @@ async def trace_run(run_id: str) -> dict[str, Any]:
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
     return run
+
+
+@app.get("/trace/context/{context_id}/events")
+@app.get("/orchestrator/trace/context/{context_id}/events")
+async def trace_context_events(context_id: str, run_id: str | None = None, limit: int = 500) -> dict[str, Any]:
+    events = await fetch_context_events_from_loki(context_id, run_id=run_id, limit=limit)
+    return {
+        "context_id": context_id,
+        "run_id": run_id,
+        "event_count": len(events),
+        "events": events,
+    }
 
 
 @app.websocket("/trace")

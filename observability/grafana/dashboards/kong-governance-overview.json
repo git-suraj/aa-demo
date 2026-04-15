@@ -997,7 +997,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"support-agent-service\",method=\"POST\",status=\"200\",run_id!=\"\",run_id=~\"$run_id\"} | json | request_uri =~ \".*/support-agent/v1/jsonrpc\" | unwrap latencies_request [1h]))",
+          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"support-agent-service\",method=\"POST\",status=\"200\",run_id!=\"\",run_id=~\"$run_id\"} | json | request_uri =~ \".*/support-agent/(a2a|v1/jsonrpc)\" | unwrap latencies_request [1h]))",
           "legendFormat": "Support Agent",
           "queryType": "range",
           "refId": "B"
@@ -1008,7 +1008,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"success-agent-service\",method=\"POST\",status=\"200\",run_id!=\"\",run_id=~\"$run_id\"} | json | request_uri =~ \".*/success-agent/v1/jsonrpc\" | unwrap latencies_request [1h]))",
+          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"success-agent-service\",method=\"POST\",status=\"200\",run_id!=\"\",run_id=~\"$run_id\"} | json | request_uri =~ \".*/success-agent/(a2a|v1/jsonrpc)\" | unwrap latencies_request [1h]))",
           "legendFormat": "Success Agent",
           "queryType": "range",
           "refId": "C"
@@ -1017,6 +1017,162 @@
       "title": "Agent Execution Latency By Agent",
       "type": "bargauge",
       "description": "Derived from Kong request latency logs over the recent lookback. This averages only the real agent execution requests, excluding long-lived trace websocket traffic."
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false,
+            "filterable": true
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 67
+      },
+      "id": 1102,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "{service=~\"support-agent-service|success-agent-service|mock-api-service|ai-subagent-service|ai-orchestrator-service\",run_id!=\"\",run_id=~\"$run_id\"} | json | context_id =~ \"$context_id\" | consumer_username != \"anonymous\" | trace_event_type =~ \"a2a|mcp|llm\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Run Trace Table",
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "format": "json",
+            "replace": false,
+            "source": "Line"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "Time",
+                "context_id",
+                "run_id",
+                "task_id_extracted",
+                "message_id_extracted",
+                "trace_event_type",
+                "trace_operation",
+                "trace_latency_ms",
+                "service_name_extracted",
+                "consumer_username",
+                "a2a_method",
+                "a2a_task_state",
+                "a2a_latency",
+                "mcp_method",
+                "mcp_tool_name",
+                "mcp_tool_latency",
+                "request_uri",
+                "response_status"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "Time": 0,
+              "context_id": 1,
+              "run_id": 2,
+              "task_id_extracted": 3,
+              "message_id_extracted": 4,
+              "trace_event_type": 5,
+              "trace_operation": 6,
+              "trace_latency_ms": 7,
+              "service_name_extracted": 8,
+              "consumer_username": 9,
+              "a2a_method": 10,
+              "a2a_task_state": 11,
+              "a2a_latency": 12,
+              "mcp_method": 13,
+              "mcp_tool_name": 14,
+              "mcp_tool_latency": 15,
+              "request_uri": 16,
+              "response_status": 17
+            },
+            "renameByName": {
+              "Time": "Time",
+              "context_id": "Context ID",
+              "run_id": "Run ID",
+              "task_id_extracted": "Task ID",
+              "message_id_extracted": "Message ID",
+              "trace_event_type": "Event Type",
+              "trace_operation": "Operation",
+              "trace_latency_ms": "Latency (ms)",
+              "service_name_extracted": "Service",
+              "consumer_username": "Consumer",
+              "a2a_method": "A2A Method",
+              "a2a_task_state": "Task State",
+              "a2a_latency": "A2A Latency (ms)",
+              "mcp_method": "MCP Method",
+              "mcp_tool_name": "MCP Tool",
+              "mcp_tool_latency": "MCP Latency (ms)",
+              "request_uri": "Request URI",
+              "response_status": "Status"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "desc": false,
+                "field": "Time"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "table"
     },
     {
       "datasource": {
@@ -1296,6 +1452,31 @@
   "templating": {
     "list": [
       {
+        "allValue": ".+",
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": ".+"
+        },
+        "datasource": {
+          "type": "loki",
+          "uid": "grafana-loki"
+        },
+        "definition": "label_values({run_id=~\".+\", run_id!=\"\"}, context_id)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Context ID",
+        "multi": true,
+        "name": "context_id",
+        "options": [],
+        "query": "label_values({run_id=~\".+\", run_id!=\"\"}, context_id)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
         "allValue": ".*",
         "current": {
           "selected": true,
@@ -1334,6 +1515,6 @@
   "timezone": "",
   "title": "Kong Governance Overview",
   "uid": "kong-governance-overview",
-  "version": 6,
+  "version": 7,
   "weekStart": ""
 }

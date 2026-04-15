@@ -10,13 +10,14 @@ from typing import TypedDict
 
 import httpx
 from fastapi import FastAPI, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from langgraph.graph import END, START, StateGraph
 
 from services.common.jsonrpc import error_response, success_response
-from services.common.a2a import build_completed_task_result, extract_message_text
+from services.common.a2a import extract_message_text
 from services.common.a2a import new_task_id
-from services.common.a2a_tasks import A2ATaskStore
+from services.common.a2a_tasks import A2ATaskStore, TERMINAL_TASK_STATES
 from services.common.llm import OrchestratorLLM
 from services.common.mcp_client import KongMCPClient
 
@@ -61,6 +62,17 @@ async def emit_trace(run_id: str, event_type: str, **payload: Any) -> None:
     payload.setdefault("context_id", CURRENT_CONTEXT_ID.get())
     payload.setdefault("task_id", CURRENT_TASK_ID.get())
     payload.setdefault("message_id", CURRENT_MESSAGE_ID.get())
+    task_id = payload.get("task_id")
+    if task_id:
+        await TASK_STORE.append_history(
+            str(task_id),
+            event_type,
+            actor=payload.get("actor"),
+            stage=payload.get("stage"),
+            tool=payload.get("tool"),
+            component=payload.get("component"),
+            duration_ms=payload.get("duration_ms"),
+        )
     async with httpx.AsyncClient(timeout=5.0) as client:
         await client.post(
             TRACE_COLLECTOR_URL,
@@ -346,7 +358,7 @@ async def jsonrpc_endpoint(request: Request) -> dict[str, Any]:
     body = await request.json()
     request_id = body.get("id")
     method = body.get("method")
-    if method not in {"agent.run", "message/send", "tasks/get"}:
+    if method not in {"agent.run", "message/send", "message/stream", "tasks/get"}:
         return error_response(request_id, -32601, "Unsupported method")
 
     if method == "tasks/get":
@@ -364,7 +376,7 @@ async def jsonrpc_endpoint(request: Request) -> dict[str, Any]:
     try:
         params = SupportRunParams.model_validate(body.get("params", {}))
     except Exception as exc:
-        if method != "message/send":
+        if method not in {"message/send", "message/stream"}:
             return error_response(request_id, -32602, "Invalid params", str(exc))
         payload = body.get("params", {})
         message = payload.get("message") if isinstance(payload, dict) else {}
@@ -379,7 +391,7 @@ async def jsonrpc_endpoint(request: Request) -> dict[str, Any]:
     payload = body.get("params", {})
     message = payload.get("message") if isinstance(payload, dict) else {}
     inbound_message_id = message.get("messageId") if isinstance(message, dict) else None
-    if method == "message/send":
+    if method in {"message/send", "message/stream"}:
         task_id = params.task_id or (payload.get("task_id") if isinstance(payload, dict) else None) or new_task_id()
         task = await TASK_STORE.upsert_inbound_message(
             task_id=task_id,
@@ -395,7 +407,27 @@ async def jsonrpc_endpoint(request: Request) -> dict[str, Any]:
                     params={**params.model_dump(), "task_id": task_id, "message_id": inbound_message_id},
                 )
             )
-        return success_response(request_id, task)
+        if method == "message/send":
+            return success_response(request_id, task)
+        queue = await TASK_STORE.subscribe(task_id)
+
+        async def event_stream():
+            try:
+                while True:
+                    snapshot = await queue.get()
+                    envelope = {"jsonrpc": "2.0", "id": request_id, "result": snapshot}
+                    yield f"data: {json.dumps(envelope, ensure_ascii=False)}\n\n"
+                    state = str(snapshot.get("status", {}).get("state") or "unknown")
+                    if state in TERMINAL_TASK_STATES:
+                        break
+            finally:
+                await TASK_STORE.unsubscribe(task_id, queue)
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        )
 
     context_token = CURRENT_CONTEXT_ID.set(params.context_id)
     task_token = CURRENT_TASK_ID.set(params.task_id)
@@ -409,17 +441,6 @@ async def jsonrpc_endpoint(request: Request) -> dict[str, Any]:
         CURRENT_TASK_ID.reset(task_token)
         CURRENT_CONTEXT_ID.reset(context_token)
     result = graph_result["result"]
-    if method == "message/send":
-        return success_response(
-            request_id,
-            build_completed_task_result(
-                agent_id="support-agent",
-                context_id=params.context_id,
-                task_id=params.task_id or CURRENT_TASK_ID.get() or "task-missing",
-                payload=result,
-                run_id=params.run_id,
-            ),
-        )
     return success_response(request_id, result)
 
 

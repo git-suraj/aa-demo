@@ -1,0 +1,41 @@
+_format_version: "3.0"
+
+consumers:
+  - username: probe-client
+    keyauth_credentials:
+      - key: probe-demo-key
+
+plugins:
+  - name: http-log
+    config:
+      http_endpoint: http://webhook:8080/logs
+      method: POST
+      timeout: 10000
+      keepalive: 60000
+      flush_timeout: 1
+      queue:
+        max_entries: 1000
+        max_batch_size: 1
+
+services:
+  - name: probe-a2a-service
+    url: http://a2a-server:8000
+    routes:
+      - name: probe-a2a-route
+        paths:
+          - /probe-server
+        protocols:
+          - http
+          - https
+        strip_path: true
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-a2a-proxy
+        config:
+          max_request_body_size: 0
+          logging:
+            log_payloads: true
+            log_statistics: true
