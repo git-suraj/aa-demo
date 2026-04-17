@@ -386,28 +386,45 @@ Field ownership:
 - Kong post-function adds:
   - source: `/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml`
   - behavior:
-    - reads request headers at the Kong layer
-    - writes attributes onto the root span and the current active span
-  - exact fields:
+    - in `access` phase, reads request headers at the Kong layer and writes attributes onto the root span and the current active span
+  - exact fields in `access` phase:
     - `demo.run_id` from request header `x-demo-run-id`
     - `demo.context_id` from request header `x-demo-context-id`
-    - `a2a.task_id` from request header `x-a2a-task-id`
-    - `a2a.message_id` from request header `x-a2a-message-id`
+    - `a2a.task_id` from request header `x-demo-task-id`
+    - `a2a.message_id` from request header `x-demo-message-id`
+- custom `mcp-trace-enricher` plugin adds:
+  - source:
+    - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/mcp-trace-enricher/handler.lua`
+    - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/mcp-trace-enricher/schema.lua`
+  - route attachment:
+    - `mock-mcp-route`
+  - behavior:
+    - runs in `log` phase with priority `100`
+    - executes before the OpenTelemetry plugin exports the span
+    - reads serialized MCP request data from Kong and writes MCP attributes onto the root span and current active span
+  - exact fields for MCP traffic:
+    - `demo.run_id` from request header `x-demo-run-id`
+    - `demo.context_id` from request header `x-demo-context-id`
+    - `a2a.task_id` from request header `x-demo-task-id`
+    - `a2a.message_id` from request header `x-demo-message-id`
+    - `mcp.session_id` from `ai.mcp.mcp_session_id`
+    - `mcp.request.id` from `ai.mcp.rpc[0].id`
+    - `mcp.method` from `ai.mcp.rpc[0].method`
+    - `mcp.tool_name` from `ai.mcp.rpc[0].tool_name`
+    - `mcp.error` from `ai.mcp.rpc[0].error`
+    - `mcp.latency_ms` from `ai.mcp.rpc[0].latency`
+    - `mcp.response_body_size` from `ai.mcp.rpc[0].response_body_size`
+    - `mcp.request.payload` from `ai.mcp.rpc[0].payload.request`
+    - `mcp.response.payload` from `ai.mcp.rpc[0].payload.response`
 - collector adds:
   - source: `/Users/surajpillai/Documents/work/demos/learn/aa-demo/observability/otel-collector/config.yaml`
   - processors on the traces pipeline:
     - `attributes/kong_trace_context`
-    - `attributes/llm_preview`
     - `batch`
   - exact actions in `attributes/kong_trace_context`:
     - upsert `demo.observability.source=kong`
     - upsert `demo.observability.pipeline=kong->otel-collector->jaeger`
     - upsert `demo.trace_backend=jaeger`
-    - upsert `demo.a2a.task_id` from `a2a.task_id`
-    - upsert `demo.a2a.message_id` from `a2a.message_id`
-  - exact actions in `attributes/llm_preview`:
-    - upsert `llm.request.preview` from `gen_ai.input.messages`
-    - upsert `llm.response.preview` from `gen_ai.output.messages`
   - transport behavior:
     - receives OTLP traces from Kong on port `4318`
     - exports traces to Jaeger at `http://jaeger:4318`
@@ -417,6 +434,16 @@ Important collector limitation:
 - it preserves and copies existing span attributes
 - it does not parse Loki logs or full request/response bodies
 - full payload inspection remains a Loki/Grafana concern
+
+Important `/mock-mcp` ordering limitation:
+- plugin execution order in `log` phase is priority-based and dynamic ordering does not apply there
+- the working MCP enrichment path is the custom plugin because it runs before `opentelemetry`
+- `post-function` remains useful for `access`-phase header attributes only
+
+Important current trace-shape behavior:
+- A2A traffic currently appears inside the main end-to-end Jaeger trace.
+- `/mock-mcp` traffic currently appears as separate Jaeger traces even though the MCP payload now carries `_meta.traceparent`.
+- the custom `mcp-trace-enricher` plugin copies `demo.run_id`, `demo.context_id`, `a2a.task_id`, and `a2a.message_id` onto those separate `/mock-mcp` traces so they remain searchable by the same run-level correlation tags.
 
 Latest SDK validation run:
 - run id: `f34eb1d2-899f-4727-bb32-ae23a3788985`
@@ -429,6 +456,21 @@ Latest SDK validation run:
   - `kong.access.plugin.ai-proxy-advanced`
   - GenAI span tags
   - A2A span tags including `kong.a2a.task.state`, `kong.a2a.task.id`, `kong.a2a.sse_events_count`, and `kong.a2a.streaming`
+
+Latest MCP trace-enricher validation:
+- run id: `324de727-d66a-44ac-8308-a598588cc9c0`
+- example MCP trace id: `f10a53d57b595a395985f3fc1c8a72f9`
+- example MCP request id: `44e9ce4615a7433e3b5fd92a6e8e897a`
+- confirmed Jaeger MCP span tags:
+  - `demo.run_id`
+  - `demo.context_id`
+  - `mcp.session_id`
+  - `mcp.request.id`
+  - `mcp.method=tools/call`
+  - `mcp.tool_name=get_customer_account`
+  - `mcp.latency_ms`
+  - `mcp.request.payload`
+  - `mcp.response.payload`
 
 Interpretation:
 - Jaeger is good for one end-to-end trace tree when trace context is propagated.

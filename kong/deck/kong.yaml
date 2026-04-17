@@ -4,6 +4,18 @@ plugins:
   - name: opentelemetry
     config:
       traces_endpoint: http://otel-collector:4318/v1/traces
+      propagation:
+        default_format: w3c
+        extract:
+          - w3c
+          - b3
+          - jaeger
+          - ot
+          - aws
+          - datadog
+          - gcp
+        inject:
+          - w3c
       resource_attributes:
         service.name: aa-demo-kong
   - name: post-function
@@ -1037,6 +1049,10 @@ services:
             config:
               key_names:
                 - apikey
+          - name: mcp-trace-enricher
+            config:
+              include_payloads: true
+              payload_max_len: 4000
           - name: ai-mcp-proxy
             config:
               logging:

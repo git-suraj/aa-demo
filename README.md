@@ -162,24 +162,62 @@ The trace pipeline now has three layers with distinct responsibilities:
     - [kong/deck/kong.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml)
   - behavior:
     - reads request headers seen by Kong during the request
-    - writes the values onto both the root span and the currently active plugin/request span when present
-  - exact fields added:
+    - in `access` phase, writes request-header-derived attributes onto both the root span and the currently active plugin/request span when present
+  - exact fields added in `access` phase:
     - `demo.run_id`
     - `demo.context_id`
     - `a2a.task_id`
     - `a2a.message_id`
+  - field source in `access` phase:
+    - `demo.run_id` <- request header `x-demo-run-id`
+    - `demo.context_id` <- request header `x-demo-context-id`
+    - `a2a.task_id` <- request header `x-demo-task-id`
+    - `a2a.message_id` <- request header `x-demo-message-id`
+
+- Custom MCP trace enricher plugin
+  - source files:
+    - [kong/plugins/mcp-trace-enricher/handler.lua](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/mcp-trace-enricher/handler.lua)
+    - [kong/plugins/mcp-trace-enricher/schema.lua](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/mcp-trace-enricher/schema.lua)
+  - attachment point:
+    - `mock-mcp-route`
+  - behavior:
+    - runs in `log` phase with priority `100`, ahead of `opentelemetry`
+    - reads serialized MCP request data from Kong
+    - writes MCP attributes onto the root span and active span before the OpenTelemetry plugin exports the trace
+  - exact fields added for MCP traffic:
+    - `demo.run_id`
+    - `demo.context_id`
+    - `a2a.task_id`
+    - `a2a.message_id`
+    - `mcp.session_id`
+    - `mcp.request.id`
+    - `mcp.method`
+    - `mcp.tool_name`
+    - `mcp.error`
+    - `mcp.latency_ms`
+    - `mcp.response_body_size`
+    - `mcp.request.payload`
+    - `mcp.response.payload`
   - field source:
     - `demo.run_id` <- request header `x-demo-run-id`
     - `demo.context_id` <- request header `x-demo-context-id`
-    - `a2a.task_id` <- request header `x-a2a-task-id`
-    - `a2a.message_id` <- request header `x-a2a-message-id`
+    - `a2a.task_id` <- request header `x-demo-task-id`
+    - `a2a.message_id` <- request header `x-demo-message-id`
+    - `mcp.session_id` <- `ai.mcp.mcp_session_id`
+    - `mcp.request.id` <- `ai.mcp.rpc[0].id`
+    - `mcp.method` <- `ai.mcp.rpc[0].method`
+    - `mcp.tool_name` <- `ai.mcp.rpc[0].tool_name`
+    - `mcp.error` <- `ai.mcp.rpc[0].error`
+    - `mcp.latency_ms` <- `ai.mcp.rpc[0].latency`
+    - `mcp.response_body_size` <- `ai.mcp.rpc[0].response_body_size`
+    - `mcp.request.payload` <- `ai.mcp.rpc[0].payload.request`
+    - `mcp.response.payload` <- `ai.mcp.rpc[0].payload.response`
 
 - OpenTelemetry Collector enrichment
   - source file:
     - [observability/otel-collector/config.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/observability/otel-collector/config.yaml)
   - processors currently used on traces:
     - `attributes/kong_trace_context`
-    - `attributes/llm_preview`
     - `batch`
   - behavior:
     - preserves all attributes received from Kong
@@ -189,11 +227,6 @@ The trace pipeline now has three layers with distinct responsibilities:
     - upsert `demo.observability.source = kong`
     - upsert `demo.observability.pipeline = kong->otel-collector->jaeger`
     - upsert `demo.trace_backend = jaeger`
-    - upsert `demo.a2a.task_id` from existing attribute `a2a.task_id`
-    - upsert `demo.a2a.message_id` from existing attribute `a2a.message_id`
-  - exact actions in `attributes/llm_preview`:
-    - upsert `llm.request.preview` from existing attribute `gen_ai.input.messages`
-    - upsert `llm.response.preview` from existing attribute `gen_ai.output.messages`
   - forwarding behavior:
     - receives OTLP traces from Kong on `4318`
     - exports enriched traces to Jaeger at `http://jaeger:4318`
@@ -204,6 +237,7 @@ Important limitation:
 - the collector is not parsing Kong log payloads or raw JSON bodies
 - full request/response bodies still belong in Loki
 - Jaeger is used for trace tree plus compact span attributes, not raw-body inspection
+- MCP payload fields make Jaeger spans heavier; they are enabled here for demo/debug visibility, not as a default production recommendation
 
 ### Jaeger Span Attributes
 
@@ -220,8 +254,6 @@ The most relevant attributes visible in Jaeger for this demo are:
   - `gen_ai.usage.output_tokens`
   - `gen_ai.input.messages`
   - `gen_ai.output.messages`
-  - `llm.request.preview`
-  - `llm.response.preview`
 
 - A2A
   - `kong.a2a.operation`
@@ -235,8 +267,6 @@ The most relevant attributes visible in Jaeger for this demo are:
   - `rpc.method`
   - `a2a.task_id`
   - `a2a.message_id`
-  - `demo.a2a.task_id`
-  - `demo.a2a.message_id`
 
 - MCP
   - standard Kong request/span context is present in Jaeger:
@@ -244,7 +274,20 @@ The most relevant attributes visible in Jaeger for this demo are:
     - `kong.route.name`
     - `kong.auth.consumer.name`
     - request/response status and latency-related span data
-  - MCP-specific observability remains richer in Loki and metrics than in native Jaeger attributes
+  - MCP-specific span attributes added by the custom `mcp-trace-enricher` plugin:
+    - `demo.run_id`
+    - `demo.context_id`
+    - `a2a.task_id`
+    - `a2a.message_id`
+    - `mcp.session_id`
+    - `mcp.request.id`
+    - `mcp.method`
+    - `mcp.tool_name`
+    - `mcp.error`
+    - `mcp.latency_ms`
+    - `mcp.response_body_size`
+    - `mcp.request.payload`
+    - `mcp.response.payload`
 
 - Kong post-function
   - `demo.run_id`
@@ -256,10 +299,6 @@ The most relevant attributes visible in Jaeger for this demo are:
   - `demo.observability.source`
   - `demo.observability.pipeline`
   - `demo.trace_backend`
-  - `demo.a2a.task_id`
-  - `demo.a2a.message_id`
-  - `llm.request.preview`
-  - `llm.response.preview`
 
 ### Local Startup
 
@@ -283,6 +322,12 @@ demo.run_id=<run_id>
 
 Then expand the returned trace. A normal run should include gateway spans for `/orchestrator`, `/support-agent`, `/success-agent`, `/mock-mcp`, `/ai/orchestrator/...`, and `/ai/subagent/...`.
 
+Important note on MCP trace shape:
+
+- A2A requests currently appear inside the main end-to-end trace tree.
+- `/mock-mcp` requests currently show up as separate Jaeger traces even though the MCP payload carries `_meta.traceparent`.
+- The custom `mcp-trace-enricher` plugin copies `demo.run_id`, `demo.context_id`, `a2a.task_id`, and `a2a.message_id` onto those separate `/mock-mcp` traces so they can still be found with the same Jaeger tag filters as the main run.
+
 Latest validation after the A2A SDK migration:
 
 - run id: `f34eb1d2-899f-4727-bb32-ae23a3788985`
@@ -293,6 +338,22 @@ Latest validation after the A2A SDK migration:
   - `a2a`: `4`
   - `mcp`: `20`
   - `llm`: `11`
+
+Latest MCP trace-enricher validation:
+
+- run id: `324de727-d66a-44ac-8308-a598588cc9c0`
+- example MCP trace id: `f10a53d57b595a395985f3fc1c8a72f9`
+- example MCP request id: `44e9ce4615a7433e3b5fd92a6e8e897a`
+- confirmed Jaeger MCP span tags:
+  - `demo.run_id`
+  - `demo.context_id`
+  - `mcp.session_id`
+  - `mcp.request.id`
+  - `mcp.method=tools/call`
+  - `mcp.tool_name=get_customer_account`
+  - `mcp.latency_ms`
+  - `mcp.request.payload`
+  - `mcp.response.payload`
 
 If you need to bring the Opik experiment back for comparison:
 

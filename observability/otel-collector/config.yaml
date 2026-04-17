@@ -17,20 +17,6 @@ processors:
       - key: demo.trace_backend
         value: jaeger
         action: upsert
-      - key: demo.a2a.task_id
-        from_attribute: a2a.task_id
-        action: upsert
-      - key: demo.a2a.message_id
-        from_attribute: a2a.message_id
-        action: upsert
-  attributes/llm_preview:
-    actions:
-      - key: llm.request.preview
-        from_attribute: gen_ai.input.messages
-        action: upsert
-      - key: llm.response.preview
-        from_attribute: gen_ai.output.messages
-        action: upsert
   batch:
 
 exporters:
@@ -48,7 +34,6 @@ service:
         - otlp
       processors:
         - attributes/kong_trace_context
-        - attributes/llm_preview
         - batch
       exporters:
         - otlphttp/jaeger

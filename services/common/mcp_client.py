@@ -36,12 +36,38 @@ class KongMCPClient:
         self.session_id: str | None = None
         self._initialized = False
 
+    def _trace_headers(self) -> dict[str, str]:
+        trace_headers = current_trace_headers()
+        return {key: value for key, value in trace_headers.items() if value}
+
+    def _attach_trace_meta(self, payload: dict[str, Any]) -> dict[str, Any]:
+        trace_headers = self._trace_headers()
+        if not trace_headers:
+            return payload
+
+        params = payload.get("params")
+        if not isinstance(params, dict):
+            params = {}
+            payload["params"] = params
+
+        meta = params.get("_meta")
+        if not isinstance(meta, dict):
+            meta = {}
+            params["_meta"] = meta
+
+        for header_name in ("traceparent", "tracestate", "baggage"):
+            header_value = trace_headers.get(header_name)
+            if header_value:
+                meta[header_name] = header_value
+
+        return payload
+
     def _headers(self) -> dict[str, str]:
         headers = {
             "apikey": self.api_key,
             "content-type": "application/json",
             "accept": "application/json, text/event-stream",
-            **current_trace_headers(),
+            **self._trace_headers(),
         }
         if self.session_id:
             headers["mcp-session-id"] = self.session_id
@@ -74,6 +100,7 @@ class KongMCPClient:
         return json.loads(payload)
 
     async def _request(self, payload: dict[str, Any]) -> dict[str, Any]:
+        payload = self._attach_trace_meta(payload)
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(self.base_url, headers=self._headers(), json=payload)
             response.raise_for_status()
@@ -90,6 +117,7 @@ class KongMCPClient:
         payload = {"jsonrpc": "2.0", "method": method}
         if params:
             payload["params"] = params
+        payload = self._attach_trace_meta(payload)
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(self.base_url, headers=self._headers(), json=payload)
             response.raise_for_status()
