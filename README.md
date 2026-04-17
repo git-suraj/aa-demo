@@ -99,7 +99,7 @@ Diagram views:
 
 ## Jaeger OpenTelemetry
 
-The `3.14` branch includes Kong-side OpenTelemetry wiring and an in-compose local Jaeger deployment for inspecting Gen AI traces.
+The `3.14` branch includes Kong-side OpenTelemetry wiring, an in-compose OpenTelemetry Collector, and a local Jaeger deployment for inspecting traces.
 
 What is included:
 
@@ -107,8 +107,11 @@ What is included:
   - `KONG_TRACING_INSTRUMENTATIONS=all`
   - `KONG_TRACING_SAMPLING_RATE=1.0`
 - a global Kong `opentelemetry` plugin in [kong/deck/kong.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml)
+- a local OpenTelemetry Collector service in [docker-compose.yml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/docker-compose.yml)
+- collector config in [observability/otel-collector/config.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/observability/otel-collector/config.yaml)
 - a local Jaeger service in [docker-compose.yml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/docker-compose.yml)
-- Kong exports OTLP traces directly to `http://jaeger:4318/v1/traces`
+- Kong exports OTLP traces to `http://otel-collector:4318/v1/traces`
+- the collector exports traces onward to Jaeger at `http://jaeger:4318`
 - Jaeger UI is available at `http://localhost:16686`
 
 Current signal split:
@@ -122,8 +125,141 @@ Notes:
 
 - Jaeger is a trace UI, not the place to inspect Prometheus-style metric time series.
 - Existing Grafana/Loki dashboards remain unchanged.
-- The previous local Opik and OpenTelemetry Collector services are retained behind the opt-in Compose profile `opik` and do not start in the normal demo path.
 - Kong adds searchable trace attributes from the demo headers: `demo.run_id`, `demo.context_id`, `a2a.task_id`, and `a2a.message_id`.
+
+### Field Ownership
+
+The trace pipeline now has three layers with distinct responsibilities:
+
+- Kong plugin native span attributes
+  - LLM:
+    - `gen_ai.operation.name`
+    - `gen_ai.provider.name`
+    - `gen_ai.request.model`
+    - `gen_ai.response.model`
+    - `gen_ai.response.id`
+    - `gen_ai.response.finish_reasons`
+    - `gen_ai.usage.input_tokens`
+    - `gen_ai.usage.output_tokens`
+    - `gen_ai.input.messages`
+    - `gen_ai.output.messages`
+  - A2A:
+    - `kong.a2a.operation`
+    - `kong.a2a.protocol.version`
+    - `kong.a2a.task.id`
+    - `kong.a2a.task.state`
+    - `kong.a2a.context.id`
+    - `kong.a2a.streaming`
+    - `kong.a2a.ttfb_latency`
+    - `kong.a2a.sse_events_count`
+    - `rpc.method`
+  - MCP:
+    - request/service/route span context from Kong Gateway
+    - MCP remains richer in logs/metrics than in native trace attributes
+
+- Kong `post-function` span tagging
+  - source file:
+    - [kong/deck/kong.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml)
+  - behavior:
+    - reads request headers seen by Kong during the request
+    - writes the values onto both the root span and the currently active plugin/request span when present
+  - exact fields added:
+    - `demo.run_id`
+    - `demo.context_id`
+    - `a2a.task_id`
+    - `a2a.message_id`
+  - field source:
+    - `demo.run_id` <- request header `x-demo-run-id`
+    - `demo.context_id` <- request header `x-demo-context-id`
+    - `a2a.task_id` <- request header `x-a2a-task-id`
+    - `a2a.message_id` <- request header `x-a2a-message-id`
+
+- OpenTelemetry Collector enrichment
+  - source file:
+    - [observability/otel-collector/config.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/observability/otel-collector/config.yaml)
+  - processors currently used on traces:
+    - `attributes/kong_trace_context`
+    - `attributes/llm_preview`
+    - `batch`
+  - behavior:
+    - preserves all attributes received from Kong
+    - does not parse raw HTTP bodies or Loki log payloads
+    - adds a small number of fixed and copied attributes before forwarding to Jaeger
+  - exact actions in `attributes/kong_trace_context`:
+    - upsert `demo.observability.source = kong`
+    - upsert `demo.observability.pipeline = kong->otel-collector->jaeger`
+    - upsert `demo.trace_backend = jaeger`
+    - upsert `demo.a2a.task_id` from existing attribute `a2a.task_id`
+    - upsert `demo.a2a.message_id` from existing attribute `a2a.message_id`
+  - exact actions in `attributes/llm_preview`:
+    - upsert `llm.request.preview` from existing attribute `gen_ai.input.messages`
+    - upsert `llm.response.preview` from existing attribute `gen_ai.output.messages`
+  - forwarding behavior:
+    - receives OTLP traces from Kong on `4318`
+    - exports enriched traces to Jaeger at `http://jaeger:4318`
+    - exposes Prometheus metrics on `9464`
+
+Important limitation:
+
+- the collector is not parsing Kong log payloads or raw JSON bodies
+- full request/response bodies still belong in Loki
+- Jaeger is used for trace tree plus compact span attributes, not raw-body inspection
+
+### Jaeger Span Attributes
+
+The most relevant attributes visible in Jaeger for this demo are:
+
+- LLM
+  - `gen_ai.operation.name`
+  - `gen_ai.provider.name`
+  - `gen_ai.request.model`
+  - `gen_ai.response.model`
+  - `gen_ai.response.id`
+  - `gen_ai.response.finish_reasons`
+  - `gen_ai.usage.input_tokens`
+  - `gen_ai.usage.output_tokens`
+  - `gen_ai.input.messages`
+  - `gen_ai.output.messages`
+  - `llm.request.preview`
+  - `llm.response.preview`
+
+- A2A
+  - `kong.a2a.operation`
+  - `kong.a2a.protocol.version`
+  - `kong.a2a.task.id`
+  - `kong.a2a.task.state`
+  - `kong.a2a.context.id`
+  - `kong.a2a.streaming`
+  - `kong.a2a.ttfb_latency`
+  - `kong.a2a.sse_events_count`
+  - `rpc.method`
+  - `a2a.task_id`
+  - `a2a.message_id`
+  - `demo.a2a.task_id`
+  - `demo.a2a.message_id`
+
+- MCP
+  - standard Kong request/span context is present in Jaeger:
+    - `kong.service.name`
+    - `kong.route.name`
+    - `kong.auth.consumer.name`
+    - request/response status and latency-related span data
+  - MCP-specific observability remains richer in Loki and metrics than in native Jaeger attributes
+
+- Kong post-function
+  - `demo.run_id`
+  - `demo.context_id`
+  - `a2a.task_id`
+  - `a2a.message_id`
+
+- OTel collector
+  - `demo.observability.source`
+  - `demo.observability.pipeline`
+  - `demo.trace_backend`
+  - `demo.a2a.task_id`
+  - `demo.a2a.message_id`
+  - `llm.request.preview`
+  - `llm.response.preview`
 
 ### Local Startup
 

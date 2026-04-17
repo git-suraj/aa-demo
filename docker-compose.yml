@@ -41,18 +41,16 @@ services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.139.0
     container_name: otel-collector
-    profiles: ["opik"]
     restart: unless-stopped
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
-    environment:
-      OPIK_OTLP_TRACES_ENDPOINT: ${OPIK_OTLP_TRACES_ENDPOINT:-http://opik-frontend:5173/api/v1/private/otel}
-      OPIK_PROJECT_NAME: ${OPIK_PROJECT_NAME:-aa-demo}
-      OPIK_WORKSPACE: ${OPIK_WORKSPACE:-default}
-    ports:
-      - "4318:4318"
-      - "9464:9464"
+    expose:
+      - "4318"
+      - "9464"
     volumes:
       - ./observability/otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    depends_on:
+      jaeger:
+        condition: service_started
 
   opik-mysql:
     image: mysql:8.4.2
@@ -316,7 +314,7 @@ services:
     ports:
       - "3001:3000"
     environment:
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/kong-metering-billing-overview.json
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/kong-governance-overview.json
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_USERS_ALLOW_SIGN_UP: "false"

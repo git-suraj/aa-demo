@@ -1,18 +1,41 @@
 receivers:
   otlp:
     protocols:
+      grpc:
       http:
         endpoint: 0.0.0.0:4318
 
 processors:
+  attributes/kong_trace_context:
+    actions:
+      - key: demo.observability.source
+        value: kong
+        action: upsert
+      - key: demo.observability.pipeline
+        value: kong->otel-collector->jaeger
+        action: upsert
+      - key: demo.trace_backend
+        value: jaeger
+        action: upsert
+      - key: demo.a2a.task_id
+        from_attribute: a2a.task_id
+        action: upsert
+      - key: demo.a2a.message_id
+        from_attribute: a2a.message_id
+        action: upsert
+  attributes/llm_preview:
+    actions:
+      - key: llm.request.preview
+        from_attribute: gen_ai.input.messages
+        action: upsert
+      - key: llm.response.preview
+        from_attribute: gen_ai.output.messages
+        action: upsert
   batch:
 
 exporters:
-  otlphttp/opik:
-    endpoint: ${env:OPIK_OTLP_TRACES_ENDPOINT}
-    headers:
-      projectName: ${env:OPIK_PROJECT_NAME}
-      Comet-Workspace: ${env:OPIK_WORKSPACE}
+  otlphttp/jaeger:
+    endpoint: http://jaeger:4318
   prometheus:
     endpoint: 0.0.0.0:9464
   debug:
@@ -24,9 +47,11 @@ service:
       receivers:
         - otlp
       processors:
+        - attributes/kong_trace_context
+        - attributes/llm_preview
         - batch
       exporters:
-        - otlphttp/opik
+        - otlphttp/jaeger
         - debug
     metrics:
       receivers:

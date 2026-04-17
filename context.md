@@ -364,16 +364,59 @@ Additional dashboard cleanup:
 
 Current implementation:
 - `jaeger` runs as part of the normal Docker Compose stack
+- `otel-collector` runs as part of the normal Docker Compose stack
 - Kong tracing is enabled with:
   - `KONG_TRACING_INSTRUMENTATIONS=all`
   - `KONG_TRACING_SAMPLING_RATE=1.0`
 - Kong has a global `opentelemetry` plugin exporting traces to:
-  - `http://jaeger:4318/v1/traces`
+  - `http://otel-collector:4318/v1/traces`
+- the collector exports traces onward to:
+  - `http://jaeger:4318`
 - Kong post-function tagging adds searchable trace attributes:
   - `demo.run_id`
   - `demo.context_id`
   - `a2a.task_id`
   - `a2a.message_id`
+
+Field ownership:
+- native Kong LLM span attributes:
+  - `gen_ai.*`
+- native Kong A2A span attributes:
+  - `kong.a2a.*`
+- Kong post-function adds:
+  - source: `/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml`
+  - behavior:
+    - reads request headers at the Kong layer
+    - writes attributes onto the root span and the current active span
+  - exact fields:
+    - `demo.run_id` from request header `x-demo-run-id`
+    - `demo.context_id` from request header `x-demo-context-id`
+    - `a2a.task_id` from request header `x-a2a-task-id`
+    - `a2a.message_id` from request header `x-a2a-message-id`
+- collector adds:
+  - source: `/Users/surajpillai/Documents/work/demos/learn/aa-demo/observability/otel-collector/config.yaml`
+  - processors on the traces pipeline:
+    - `attributes/kong_trace_context`
+    - `attributes/llm_preview`
+    - `batch`
+  - exact actions in `attributes/kong_trace_context`:
+    - upsert `demo.observability.source=kong`
+    - upsert `demo.observability.pipeline=kong->otel-collector->jaeger`
+    - upsert `demo.trace_backend=jaeger`
+    - upsert `demo.a2a.task_id` from `a2a.task_id`
+    - upsert `demo.a2a.message_id` from `a2a.message_id`
+  - exact actions in `attributes/llm_preview`:
+    - upsert `llm.request.preview` from `gen_ai.input.messages`
+    - upsert `llm.response.preview` from `gen_ai.output.messages`
+  - transport behavior:
+    - receives OTLP traces from Kong on port `4318`
+    - exports traces to Jaeger at `http://jaeger:4318`
+    - exposes Prometheus metrics on port `9464`
+
+Important collector limitation:
+- it preserves and copies existing span attributes
+- it does not parse Loki logs or full request/response bodies
+- full payload inspection remains a Loki/Grafana concern
 
 Latest SDK validation run:
 - run id: `f34eb1d2-899f-4727-bb32-ae23a3788985`

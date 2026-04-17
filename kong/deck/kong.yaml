@@ -3,7 +3,7 @@ _format_version: "3.0"
 plugins:
   - name: opentelemetry
     config:
-      traces_endpoint: http://jaeger:4318/v1/traces
+      traces_endpoint: http://otel-collector:4318/v1/traces
       resource_attributes:
         service.name: aa-demo-kong
   - name: post-function
@@ -307,6 +307,17 @@ plugins:
           log_payload['a2a_sse_events_count'] = tonumber(a2a_entry['sse_events_count'] or 0) or 0
           log_payload['a2a_request_body'] = a2a_payload['request'] or a2a_entry['request'] or log_payload['request']
           log_payload['a2a_response_body'] = a2a_payload['response'] or a2a_entry['response'] or log_payload['response']
+          log_payload['request_id_extracted'] = tostring(
+            (type(log_payload['request']) == 'table' and log_payload['request']['id'])
+            or (type(log_payload['response']) == 'table' and (
+              log_payload['response']['request_id']
+              or (type(log_payload['response']['headers']) == 'table' and (
+                log_payload['response']['headers']['x-kong-request-id']
+                or log_payload['response']['headers']['X-Kong-Request-Id']
+              ))
+            ))
+            or ''
+          )
           log_payload['task_id_extracted'] = tostring(log_payload['a2a_task_id'] ~= '' and log_payload['a2a_task_id'] or header_task_id)
           log_payload['message_id_extracted'] = tostring(log_payload['a2a_message_id'] ~= '' and log_payload['a2a_message_id'] or log_payload['a2a_id'] ~= '' and log_payload['a2a_id'] or header_message_id)
           local task_stage = ''

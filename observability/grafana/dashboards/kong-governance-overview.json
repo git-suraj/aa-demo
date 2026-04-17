@@ -1406,11 +1406,197 @@
         "type": "loki",
         "uid": "grafana-loki"
       },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 102
+      },
+      "id": 1103,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "{service=~\"support-agent-service|success-agent-service|mock-api-service|ai-subagent-service|ai-orchestrator-service\",run_id!=\"\",run_id=~\"$run_id\"} | json | context_id =~ \"$context_id\" | consumer_username != \"anonymous\" | trace_event_type =~ \"a2a|mcp|llm\" | request_id_extracted != \"\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Request Trace Explorer",
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "format": "json",
+            "replace": false,
+            "source": "Line"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "Time",
+                "request_id_extracted",
+                "trace_event_type",
+                "service_name_extracted",
+                "consumer_username",
+                "request_uri",
+                "trace_operation",
+                "trace_subject",
+                "response_status",
+                "trace_latency_ms",
+                "a2a_task_state"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "Time": 0,
+              "request_id_extracted": 1,
+              "trace_event_type": 2,
+              "service_name_extracted": 3,
+              "consumer_username": 4,
+              "request_uri": 5,
+              "trace_operation": 6,
+              "trace_subject": 7,
+              "response_status": 8,
+              "trace_latency_ms": 9,
+              "a2a_task_state": 10
+            },
+            "renameByName": {
+              "Time": "Time",
+              "request_id_extracted": "Request ID",
+              "trace_event_type": "Trace Type",
+              "service_name_extracted": "Service",
+              "consumer_username": "Consumer",
+              "request_uri": "Request URI",
+              "trace_operation": "Operation",
+              "trace_subject": "Subject",
+              "response_status": "Status",
+              "trace_latency_ms": "Latency (ms)",
+              "a2a_task_state": "Task State"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "desc": true,
+                "field": "Time"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 112
+      },
+      "id": 1105,
+      "options": {
+        "content": "Copy a **Request ID** from **Request Trace Explorer**, then use it in Grafana Explore with this LogQL query:\n\n```logql\n{run_id!=\"\"}\n| json\n| request_id_extracted=\"$request_id\"\n```",
+        "mode": "markdown"
+      },
+      "title": "Request ID Search Template",
+      "type": "text"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 116
+      },
+      "id": 1104,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": true,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "{service=~\"support-agent-service|success-agent-service|mock-api-service|ai-subagent-service|ai-orchestrator-service\",run_id!=\"\",run_id=~\"$run_id\"} | json | context_id =~ \"$context_id\" | consumer_username != \"anonymous\" | trace_event_type =~ \"a2a|mcp|llm\" | request_id_extracted != \"\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Request / Response Details",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
       "gridPos": {
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 102
+        "y": 127
       },
       "id": 321,
       "options": {
