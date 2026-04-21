@@ -43,6 +43,11 @@ services:
     container_name: otel-collector
     restart: unless-stopped
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    environment:
+      OPIK_OTLP_TRACES_ENDPOINT: ${OPIK_OTLP_TRACES_ENDPOINT:-http://opik-frontend:5173/api/v1/private/otel}
+      OPIK_API_KEY: ${OPIK_API_KEY:-}
+      OPIK_WORKSPACE: ${OPIK_WORKSPACE:-default}
+      OPIK_PROJECT_NAME: ${OPIK_PROJECT_NAME:-aa-demo-kong}
     expose:
       - "4318"
       - "9464"
@@ -351,7 +356,8 @@ services:
       KONG_PROXY_LISTEN: 0.0.0.0:8000, 0.0.0.0:8443 ssl
       KONG_STATUS_LISTEN: 0.0.0.0:8100
       KONG_LOG_LEVEL: notice
-      KONG_PLUGINS: bundled,trace-enricher
+      KONG_PLUGINS: bundled,trace-enricher,workflow-graph
+      KONG_NGINX_HTTP_LUA_SHARED_DICT: workflow_graph 10m
       KONG_UNTRUSTED_LUA: "on"
       KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES: resty.http,cjson
     ports:
@@ -361,6 +367,7 @@ services:
     volumes:
       - ./kong/certs:/etc/kong/certs:ro
       - ./kong/plugins/trace-enricher:/usr/local/share/lua/5.1/kong/plugins/trace-enricher:ro
+      - ./kong/plugins/workflow-graph:/usr/local/share/lua/5.1/kong/plugins/workflow-graph:ro
     depends_on:
       jaeger:
         condition: service_started

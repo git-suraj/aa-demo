@@ -126,6 +126,25 @@ Notes:
 - Jaeger is a trace UI, not the place to inspect Prometheus-style metric time series.
 - Existing Grafana/Loki dashboards remain unchanged.
 - Kong adds searchable trace attributes from the demo headers: `demo.run_id`, `demo.context_id`, `a2a.task_id`, and `a2a.message_id`.
+- Kong also derives generic workflow metadata for Opik export with:
+  - `workflow.kind`
+  - `workflow.actor`
+  - `workflow.run_id`
+  - `workflow.node_id`
+  - `workflow.parent_node_id`
+
+Opik export behavior:
+
+- Jaeger receives the full raw Kong trace set through the OTEL collector.
+- Opik receives a synthetic workflow trace written directly by the `workflow-graph` plugin.
+- That synthetic trace is keyed by `demo.run_id` and contains one workflow tree with:
+  - workflow root
+  - agent branch nodes
+  - A2A handoff events
+  - MCP tool calls
+  - LLM interactions
+- Relationship mapping for sub-agent traffic is resolved in Kong using a small in-memory shared dictionary keyed by run/task/message correlation IDs.
+- The direct Opik write is scheduled from Kong via `ngx.timer.at(...)` because outbound HTTP is not allowed directly in `log_by_lua`.
 
 ### Field Ownership
 
@@ -179,14 +198,12 @@ The trace pipeline now has three layers with distinct responsibilities:
     - [kong/plugins/trace-enricher/handler.lua](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/trace-enricher/handler.lua)
     - [kong/plugins/trace-enricher/schema.lua](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/trace-enricher/schema.lua)
   - attachment points:
-    - `support-agent-service`
-    - `success-agent-service`
-    - `mock-mcp-route`
+    - global plugin
   - behavior:
     - runs in `log` phase with priority `100`, ahead of `opentelemetry`
-    - reads serialized A2A and MCP request data from Kong
-    - writes A2A/MCP attributes onto the root span and active span before the OpenTelemetry plugin exports the trace
-  - exact fields added for A2A and MCP traffic:
+    - reads serialized A2A, MCP, and LLM request data from Kong
+    - writes detailed A2A, MCP, and LLM attributes onto the root span and active span before the OpenTelemetry plugin exports the trace
+  - exact fields added for A2A, MCP, and LLM traffic:
     - `demo.run_id`
     - `demo.context_id`
     - `a2a.task_id`
@@ -207,6 +224,47 @@ The trace pipeline now has three layers with distinct responsibilities:
     - `mcp.response_body_size`
     - `mcp.request.payload`
     - `mcp.response.payload`
+    - `llm.provider`
+    - `llm.request_model`
+    - `llm.response_model`
+    - `llm.latency_ms`
+    - `llm.prompt_tokens`
+    - `llm.completion_tokens`
+    - `llm.total_tokens`
+    - `llm.cost`
+    - `llm.request.payload`
+    - `llm.response.payload`
+
+- Custom workflow graph plugin
+  - source files:
+    - [kong/plugins/workflow-graph/handler.lua](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/workflow-graph/handler.lua)
+    - [kong/plugins/workflow-graph/schema.lua](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/workflow-graph/schema.lua)
+  - attachment points:
+    - global plugin
+  - behavior:
+    - runs in `log` phase with priority `101`
+    - builds one synthetic workflow trace per `demo.run_id`
+    - creates a branch-level `agent` node for each subagent branch
+    - attaches `handoff`, `tool`, and `llm` spans under that agent node
+    - writes the synthetic trace directly to Opik from a background timer
+  - exact workflow fields:
+    - `workflow.run_id`
+    - `workflow.kind`
+    - `workflow.actor`
+    - `workflow.label`
+    - `workflow.branch_id`
+    - `workflow.node_id`
+    - `workflow.parent_node_id`
+    - `llm.provider`
+    - `llm.request_model`
+    - `llm.response_model`
+    - `llm.latency_ms`
+    - `llm.prompt_tokens`
+    - `llm.completion_tokens`
+    - `llm.total_tokens`
+    - `llm.cost`
+    - `llm.request.payload`
+    - `llm.response.payload`
   - field source:
     - `demo.run_id` <- request header `x-demo-run-id`
     - `demo.context_id` <- request header `x-demo-context-id`

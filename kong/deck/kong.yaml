@@ -404,6 +404,20 @@ plugins:
               }
             }
           }
+  - name: trace-enricher
+    config:
+      include_payloads: true
+      payload_max_len: 4000
+      include_llm: true
+  - name: workflow-graph
+    config:
+      include_payloads: true
+      payload_max_len: 4000
+      export_directly: true
+      opik_api_base_url: http://opik-frontend:5173/api/v1/private
+      project_name: aa-demo-kong
+      timeout_ms: 2000
+      relation_ttl_seconds: 3600
 
 services:
   - name: ui-service
@@ -1007,10 +1021,6 @@ services:
         config:
           key_names:
             - apikey
-      - name: trace-enricher
-        config:
-          include_payloads: true
-          payload_max_len: 4000
       - name: ai-a2a-proxy
         config:
           max_request_body_size: 0
@@ -1030,10 +1040,6 @@ services:
         config:
           key_names:
             - apikey
-      - name: trace-enricher
-        config:
-          include_payloads: true
-          payload_max_len: 4000
       - name: ai-a2a-proxy
         config:
           max_request_body_size: 0
@@ -1057,10 +1063,6 @@ services:
             config:
               key_names:
                 - apikey
-          - name: trace-enricher
-            config:
-              include_payloads: true
-              payload_max_len: 4000
           - name: ai-mcp-proxy
             config:
               logging:

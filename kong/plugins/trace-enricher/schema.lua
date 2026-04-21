@@ -31,6 +31,13 @@ return {
               between = { 0, 20000 },
             },
           },
+          {
+            include_llm = {
+              type = "boolean",
+              required = true,
+              default = true,
+            },
+          },
         },
       },
     },

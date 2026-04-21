@@ -377,6 +377,17 @@ Current implementation:
   - `demo.context_id`
   - `a2a.task_id`
   - `a2a.message_id`
+- Kong derives generic workflow metadata for Opik with:
+  - `workflow.kind`
+  - `workflow.actor`
+  - `workflow.run_id`
+  - `workflow.node_id`
+  - `workflow.parent_node_id`
+- Kong resolves sub-agent parent relationships for the synthetic Opik workflow tree using a shared-memory mapping keyed by run/task/message ids.
+- The synthetic Opik tree is shaped as:
+  - workflow root
+  - agent branch nodes
+  - handoff/tool/llm nodes beneath each agent branch
 
 Field ownership:
 - native Kong LLM span attributes:
@@ -397,14 +408,13 @@ Field ownership:
     - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/trace-enricher/handler.lua`
     - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/trace-enricher/schema.lua`
   - attachment points:
-    - `support-agent-service`
-    - `success-agent-service`
-    - `mock-mcp-route`
+    - global plugin
   - behavior:
     - runs in `log` phase with priority `100`
     - executes before the OpenTelemetry plugin exports the span
-    - reads serialized A2A and MCP request data from Kong and writes A2A/MCP attributes onto the root span and current active span
-  - exact fields for A2A and MCP traffic:
+    - reads serialized A2A, MCP, and LLM request data from Kong
+    - writes detailed interaction attributes onto the root span and current active span
+  - exact fields for A2A, MCP, and LLM traffic:
     - `demo.run_id` from request header `x-demo-run-id`
     - `demo.context_id` from request header `x-demo-context-id`
     - `a2a.task_id` from request header `x-demo-task-id`
@@ -425,6 +435,16 @@ Field ownership:
     - `mcp.response_body_size` from `ai.mcp.rpc[0].response_body_size`
     - `mcp.request.payload` from `ai.mcp.rpc[0].payload.request`
     - `mcp.response.payload` from `ai.mcp.rpc[0].payload.response`
+    - `llm.provider` from `ai.proxy.meta.provider_name`
+    - `llm.request_model` from `ai.proxy.meta.request_model`
+    - `llm.response_model` from `ai.proxy.meta.response_model`
+    - `llm.latency_ms` from `ai.proxy.meta.llm_latency`
+    - `llm.prompt_tokens` from `ai.proxy.usage.prompt_tokens`
+    - `llm.completion_tokens` from `ai.proxy.usage.completion_tokens`
+    - `llm.total_tokens` from `ai.proxy.usage.total_tokens`
+    - `llm.cost` from `ai.proxy.usage.cost`
+    - `llm.request.payload` from `ai.proxy.payload.request`
+    - `llm.response.payload` from `ai.proxy.payload.response`
 - collector adds:
   - source: `/Users/surajpillai/Documents/work/demos/learn/aa-demo/observability/otel-collector/config.yaml`
   - processors on the traces pipeline:
@@ -438,6 +458,28 @@ Field ownership:
     - receives OTLP traces from Kong on port `4318`
     - exports traces to Jaeger at `http://jaeger:4318`
     - exposes Prometheus metrics on port `9464`
+
+- custom `workflow-graph` plugin adds:
+  - source:
+    - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/workflow-graph/handler.lua`
+    - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/workflow-graph/schema.lua`
+  - attachment points:
+    - global plugin
+  - behavior:
+    - runs in `log` phase with priority `101`
+    - derives one synthetic workflow trace per `demo.run_id`
+    - writes that workflow trace directly to Opik's `/api/v1/private/traces` and `/api/v1/private/spans` endpoints
+    - stores short-lived branch mappings in Kong shared memory for downstream llm/tool parent resolution
+    - creates branch-level `agent` spans and attaches `handoff`, `tool`, and `llm` spans beneath them
+    - performs the outbound Opik HTTP write from `ngx.timer.at(...)` because Kong disallows direct cosocket HTTP in `log_by_lua`
+  - exact workflow fields:
+    - `workflow.run_id`
+    - `workflow.kind`
+    - `workflow.actor`
+    - `workflow.label`
+    - `workflow.branch_id`
+    - `workflow.node_id`
+    - `workflow.parent_node_id`
 
 Important collector limitation:
 - it preserves and copies existing span attributes
@@ -453,6 +495,7 @@ Important current trace-shape behavior:
 - A2A traffic currently appears inside the main end-to-end Jaeger trace.
 - `/mock-mcp` traffic currently appears as separate Jaeger traces even though the MCP payload now carries `_meta.traceparent`.
 - the custom `trace-enricher` plugin copies `demo.run_id`, `demo.context_id`, `a2a.task_id`, and `a2a.message_id` onto those separate `/mock-mcp` traces so they remain searchable by the same run-level correlation tags.
+- Opik is no longer fed from raw Kong OTEL traces; the `workflow-graph` plugin writes a separate synthetic workflow tree directly to Opik.
 
 Latest SDK validation run:
 - run id: `f34eb1d2-899f-4727-bb32-ae23a3788985`

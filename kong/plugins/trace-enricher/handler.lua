@@ -1,5 +1,5 @@
 local TraceEnricher = {
-  VERSION = "0.1.0",
+  VERSION = "0.2.0",
   PRIORITY = 100,
 }
 
@@ -28,6 +28,7 @@ local function set_attributes(span, attributes)
   end
 end
 
+
 local function enrich_mcp(attributes, ai, conf)
   local mcp = ai["mcp"] or {}
   local rpc_entries = mcp["rpc"] or {}
@@ -35,7 +36,7 @@ local function enrich_mcp(attributes, ai, conf)
   local mcp_payload = mcp_entry["payload"] or {}
 
   if next(mcp) == nil and next(mcp_entry) == nil then
-    return
+    return false
   end
 
   attributes["mcp.session_id"] = mcp["mcp_session_id"]
@@ -61,7 +62,7 @@ local function enrich_a2a(attributes, ai, conf)
   local a2a_payload = a2a_entry["payload"] or {}
 
   if next(a2a) == nil and next(a2a_entry) == nil then
-    return
+    return false
   end
 
   attributes["a2a.method"] = a2a_entry["method"]
@@ -78,23 +79,48 @@ local function enrich_a2a(attributes, ai, conf)
   return true
 end
 
+local function enrich_llm(attributes, ai, conf)
+  if not conf.include_llm then
+    return false
+  end
+
+  local proxy = ai["proxy"] or {}
+  local proxy_meta = proxy["meta"] or {}
+  local proxy_usage = proxy["usage"] or {}
+  local proxy_payload = proxy["payload"] or {}
+
+  if next(proxy) == nil and next(proxy_meta) == nil then
+    return false
+  end
+
+  attributes["llm.provider"] = proxy_meta["provider_name"]
+  attributes["llm.request_model"] = proxy_meta["request_model"]
+  attributes["llm.response_model"] = proxy_meta["response_model"]
+  attributes["llm.latency_ms"] = proxy_meta["llm_latency"]
+  attributes["llm.prompt_tokens"] = proxy_usage["prompt_tokens"] or proxy_usage["input_tokens"]
+  attributes["llm.completion_tokens"] = proxy_usage["completion_tokens"] or proxy_usage["output_tokens"]
+  attributes["llm.total_tokens"] = proxy_usage["total_tokens"]
+  attributes["llm.cost"] = proxy_usage["cost"]
+
+  if conf.include_payloads then
+    attributes["llm.request.payload"] = truncate(proxy_payload["request"], conf.payload_max_len)
+    attributes["llm.response.payload"] = truncate(proxy_payload["response"], conf.payload_max_len)
+  end
+
+  return true
+end
+
 function TraceEnricher:log(conf)
   local log_payload = kong.log.serialize() or {}
-  local request = log_payload["request"] or {}
-  local request_headers = request["headers"] or {}
   local ai = log_payload["ai"] or {}
 
-  local attributes = {
-    ["demo.run_id"] = request_headers["x-demo-run-id"] or request_headers["X-Demo-Run-Id"],
-    ["demo.context_id"] = request_headers["x-demo-context-id"] or request_headers["X-Demo-Context-Id"],
-    ["a2a.task_id"] = request_headers["x-demo-task-id"] or request_headers["X-Demo-Task-Id"],
-    ["a2a.message_id"] = request_headers["x-demo-message-id"] or request_headers["X-Demo-Message-Id"],
-  }
+  local attributes = {}
 
   local has_mcp = enrich_mcp(attributes, ai, conf)
   local has_a2a = enrich_a2a(attributes, ai, conf)
+  local has_llm = enrich_llm(attributes, ai, conf)
 
-  if not has_mcp and not has_a2a then
+  if not has_mcp and not has_a2a and not has_llm then
     return
   end
 
