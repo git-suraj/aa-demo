@@ -356,7 +356,7 @@ services:
       KONG_PROXY_LISTEN: 0.0.0.0:8000, 0.0.0.0:8443 ssl
       KONG_STATUS_LISTEN: 0.0.0.0:8100
       KONG_LOG_LEVEL: notice
-      KONG_PLUGINS: bundled,trace-enricher,workflow-graph
+      KONG_PLUGINS: bundled,trace-enricher,workflow-graph,prompt-capture
       KONG_NGINX_HTTP_LUA_SHARED_DICT: workflow_graph 10m
       KONG_UNTRUSTED_LUA: "on"
       KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES: resty.http,cjson
@@ -366,6 +366,7 @@ services:
       - "8100:8100"
     volumes:
       - ./kong/certs:/etc/kong/certs:ro
+      - ./kong/plugins/prompt-capture:/usr/local/share/lua/5.1/kong/plugins/prompt-capture:ro
       - ./kong/plugins/trace-enricher:/usr/local/share/lua/5.1/kong/plugins/trace-enricher:ro
       - ./kong/plugins/workflow-graph:/usr/local/share/lua/5.1/kong/plugins/workflow-graph:ro
     depends_on:

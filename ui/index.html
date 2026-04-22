@@ -106,6 +106,7 @@
                 <path id="line-kong-mcp" d="M730 456 L936 696" />
                 <path id="line-kong-backend" d="M830 404 L1186 780" />
                 <path id="line-kong-redis" d="M830 396 L968 396 L968 520 L1090 520" />
+                <path id="line-kong-lakera" d="M830 410 L1004 410 L1004 560 L1090 560" />
                 <path id="line-kong-pii" d="M830 420 L942 420 L942 560 L1090 560" />
                 <path id="line-kong-observability" class="telemetry-line" d="M700 456 L700 860" />
               </svg>
@@ -180,6 +181,13 @@
                 <p>Used by Kong Semantic Guard and Semantic Cache policies to compare embeddings.</p>
               </article>
 
+              <article class="topology-node lakera-node scenario-optional" data-node="lakera">
+                <button class="node-info-button" data-info-target="lakera" type="button" aria-label="View Lakera details">+</button>
+                <span class="node-label">Policy Guard</span>
+                <h3>Lakera</h3>
+                <p>Used by Kong AI Lakera Guard to inspect prompts before they can reach the model.</p>
+              </article>
+
               <article class="topology-node pii-node scenario-optional" data-node="pii-service">
                 <button class="node-info-button" data-info-target="pii-service" type="button" aria-label="View AI PII Service details">+</button>
                 <span class="node-label">Sanitization</span>
@@ -251,7 +259,7 @@
             A renewal-risk account reports a billing issue and a workflow sync issue. The UI stays
             focused on the topology and trace, while the form lives here in the scene popup.
           </p>
-          <section class="scene-presets">
+          <section class="scene-presets" hidden>
             <span class="scene-presets-label">Choose a preset</span>
             <div class="preset-options" id="preset-options">
               <label class="preset-option">
@@ -307,6 +315,10 @@
                 <input type="radio" name="scenario_choice" value="rag" />
                 <span>RAG</span>
               </label>
+              <label class="preset-option">
+                <input type="radio" name="scenario_choice" value="lakera_guard" />
+                <span>Lakera Policy Guard</span>
+              </label>
             </div>
           </section>
           <form id="play-form" class="form-grid">
@@ -336,21 +348,23 @@
             </label>
             <input type="hidden" name="governance_scenario" value="normal" />
             <input type="hidden" name="semantic_cache_step" value="single" />
+            <input type="hidden" name="semantic_guard_mode" value="credentials" />
             <input type="hidden" name="pii_sanitizer_mode" value="placeholder" />
             <input type="hidden" name="rag_mode" value="before" />
+            <input type="hidden" name="lakera_mode" value="content_moderation" />
           </form>
           <section id="semantic-cache-controls" class="semantic-cache-controls" hidden>
             <div class="semantic-cache-grid">
               <article class="semantic-cache-card">
                 <span class="semantic-cache-label">First Request</span>
                 <p class="semantic-cache-copy">Seeds Kong semantic cache for the orchestrator triage prompt.</p>
-                <pre id="semantic-cache-seed-payload" class="semantic-cache-payload"></pre>
+                <textarea id="semantic-cache-seed-payload" class="semantic-cache-payload probe-payload" rows="4"></textarea>
                 <button id="semantic-cache-seed-button" class="primary" type="button">Send First Request</button>
               </article>
               <article class="semantic-cache-card">
                 <span class="semantic-cache-label">Second Request</span>
                 <p class="semantic-cache-copy">Replays the same triage payload so Kong can return a cache hit.</p>
-                <pre id="semantic-cache-hit-payload" class="semantic-cache-payload"></pre>
+                <textarea id="semantic-cache-hit-payload" class="semantic-cache-payload probe-payload" rows="4"></textarea>
                 <button id="semantic-cache-hit-button" class="primary" type="button">Send Second Request</button>
               </article>
             </div>
@@ -362,8 +376,26 @@
           <section id="semantic-guard-controls" class="probe-controls" hidden>
             <article class="probe-card">
               <span class="probe-label">Semantic Guard Request</span>
-              <p class="probe-copy">This is the actual orchestrator prompt body sent through Kong for the Semantic Guard scenario. Kong compares embeddings against denied topics before allowing any model call.</p>
-              <pre id="semantic-guard-payload" class="probe-payload"></pre>
+              <p class="probe-copy">Edit the prompt and run one of the semantic-guard actions. Kong compares embeddings against denied topics before allowing any model call.</p>
+              <div class="preset-options" id="semantic-guard-mode-options">
+                <label class="preset-option">
+                  <input type="radio" name="semantic_guard_mode_choice" value="safe" checked />
+                  <span>Safe Prompt</span>
+                </label>
+                <label class="preset-option">
+                  <input type="radio" name="semantic_guard_mode_choice" value="violence_bomb" />
+                  <span>Violence / Bomb</span>
+                </label>
+                <label class="preset-option">
+                  <input type="radio" name="semantic_guard_mode_choice" value="employee_info" />
+                  <span>Employee / Confidential Info</span>
+                </label>
+                <label class="preset-option">
+                  <input type="radio" name="semantic_guard_mode_choice" value="policy_bypass" />
+                  <span>Policy / Access Bypass</span>
+                </label>
+              </div>
+              <textarea id="semantic-guard-payload" class="probe-payload" rows="6"></textarea>
             </article>
           </section>
           <section id="llm-judge-controls" class="probe-controls" hidden>
@@ -405,7 +437,7 @@
                   <span>Block</span>
                 </label>
               </div>
-              <pre id="pii-mode-payload" class="probe-payload"></pre>
+              <textarea id="pii-mode-payload" class="probe-payload" rows="10"></textarea>
               <button id="pii-send-button" class="primary" type="button">Send PII Sanitization Request</button>
             </article>
           </section>
@@ -414,16 +446,41 @@
               <article class="semantic-cache-card">
                 <span class="semantic-cache-label">Before</span>
                 <p class="semantic-cache-copy">Sends the AtlasFlow support question through the baseline route without Kong RAG injection.</p>
-                <pre id="rag-before-payload" class="semantic-cache-payload"></pre>
+                <textarea id="rag-before-payload" class="semantic-cache-payload probe-payload" rows="4"></textarea>
                 <button id="rag-before-button" class="primary" type="button">Run Baseline</button>
               </article>
               <article class="semantic-cache-card">
                 <span class="semantic-cache-label">After</span>
                 <p class="semantic-cache-copy">Sends the same AtlasFlow support question through the Kong RAG route backed by Redis.</p>
-                <pre id="rag-after-payload" class="semantic-cache-payload"></pre>
+                <textarea id="rag-after-payload" class="semantic-cache-payload probe-payload" rows="4"></textarea>
                 <button id="rag-after-button" class="primary" type="button">Run With RAG</button>
               </article>
             </div>
+          </section>
+          <section id="lakera-controls" class="probe-controls" hidden>
+            <article class="probe-card">
+              <span class="probe-label">Lakera Policy Guard Request</span>
+              <p class="probe-copy">Edit the prompt and run one of the Lakera safety modes. Kong should block the request and return the Lakera detector category when the policy triggers.</p>
+              <div class="preset-options" id="lakera-mode-options">
+                <label class="preset-option">
+                  <input type="radio" name="lakera_mode_choice" value="safe" checked />
+                  <span>Safe Prompt</span>
+                </label>
+                <label class="preset-option">
+                  <input type="radio" name="lakera_mode_choice" value="content_moderation" />
+                  <span>Content Moderation</span>
+                </label>
+                <label class="preset-option">
+                  <input type="radio" name="lakera_mode_choice" value="prompt_defense" />
+                  <span>Prompt Defense</span>
+                </label>
+                <label class="preset-option">
+                  <input type="radio" name="lakera_mode_choice" value="data_leak_prevention" />
+                  <span>Data Leak Prevention</span>
+                </label>
+              </div>
+              <textarea id="lakera-payload" class="probe-payload" rows="6"></textarea>
+            </article>
           </section>
           <div class="modal-actions">
             <button id="scene-play-button" class="primary" type="button">Play</button>

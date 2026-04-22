@@ -566,7 +566,6 @@
       }
     }
   ],
-  "template_id": "SHARED_SERVICES",
   "preset_filters": [
     {
       "field": "control_plane",

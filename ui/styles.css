@@ -29,6 +29,10 @@ body {
   min-height: 100%;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
   color: var(--text);
@@ -803,6 +807,7 @@ button:hover {
 
 .redis-node,
 .judge-node,
+.lakera-node,
 .pii-node,
 .observability-node {
   top: 468px;
@@ -823,6 +828,13 @@ button:hover {
   border-color: rgba(131, 255, 94, 0.5);
   background:
     linear-gradient(180deg, rgba(131, 255, 94, 0.12), rgba(131, 255, 94, 0.04)),
+    rgba(11, 13, 18, 0.94);
+}
+
+.lakera-node {
+  border-color: rgba(255, 120, 120, 0.56);
+  background:
+    linear-gradient(180deg, rgba(255, 120, 120, 0.14), rgba(255, 120, 120, 0.04)),
     rgba(11, 13, 18, 0.94);
 }
 

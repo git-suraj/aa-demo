@@ -438,7 +438,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum(count_over_time({route=\"ai-orchestrator-semantic-guard-demo-chat-route\",status=\"400\",run_id!=\"\",run_id=~\"$run_id\"}[$__range]))",
+          "expr": "sum(count_over_time({gateway=\"kong-unified-governance\",route=\"ai-orchestrator-semantic-guard-demo-chat-route\",status=\"400\",run_id!=\"\",run_id=~\"$run_id\"}[$__range]))",
           "legendFormat": "Blocked Requests",
           "queryType": "range",
           "refId": "A"
@@ -1071,7 +1071,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "{service=~\"support-agent-service|success-agent-service|mock-api-service|ai-subagent-service|ai-orchestrator-service\",run_id!=\"\",run_id=~\"$run_id\"} | json | context_id =~ \"$context_id\" | consumer_username != \"anonymous\" | trace_event_type =~ \"a2a|mcp|llm\"",
+          "expr": "{service=~\"support-agent-service|success-agent-service|mock-api-service|ai-subagent-service|ai-orchestrator.*service\",run_id!=\"\",run_id=~\"$run_id\"} | json | context_id =~ \"$context_id\" | consumer_username != \"anonymous\" | trace_event_type =~ \"a2a|mcp|llm\"",
           "queryType": "range",
           "refId": "A"
         }
@@ -1453,7 +1453,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "{service=~\"support-agent-service|success-agent-service|mock-api-service|ai-subagent-service|ai-orchestrator-service\",run_id!=\"\",run_id=~\"$run_id\"} | json | context_id =~ \"$context_id\" | consumer_username != \"anonymous\" | trace_event_type =~ \"a2a|mcp|llm\" | request_id_extracted != \"\"",
+          "expr": "{service=~\"support-agent-service|success-agent-service|mock-api-service|ai-subagent-service|ai-orchestrator.*service\",run_id!=\"\",run_id=~\"$run_id\"} | json | context_id =~ \"$context_id\" | consumer_username != \"anonymous\" | trace_event_type =~ \"a2a|mcp|llm\" | request_id_extracted != \"\"",
           "queryType": "range",
           "refId": "A"
         }
@@ -1544,7 +1544,7 @@
       },
       "id": 1105,
       "options": {
-        "content": "Copy a **Request ID** from **Request Trace Explorer**, then use it in Grafana Explore with this LogQL query:\n\n```logql\n{run_id!=\"\"}\n| json\n| request_id_extracted=\"$request_id\"\n```",
+        "content": "Copy a **Request ID** from **Request Trace Explorer**, then use it in Grafana Explore with this LogQL query:\n\n```logql\n{gateway=\"kong-unified-governance\",run_id!=\"\"}\n| json\n| request_id_extracted=\"$request_id\"\n```",
         "mode": "markdown"
       },
       "title": "Request ID Search Template",
@@ -1579,7 +1579,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "{service=~\"support-agent-service|success-agent-service|mock-api-service|ai-subagent-service|ai-orchestrator-service\",run_id!=\"\",run_id=~\"$run_id\"} | json | context_id =~ \"$context_id\" | consumer_username != \"anonymous\" | trace_event_type =~ \"a2a|mcp|llm\" | request_id_extracted != \"\"",
+          "expr": "{service=~\"support-agent-service|success-agent-service|mock-api-service|ai-subagent-service|ai-orchestrator.*service\",run_id!=\"\",run_id=~\"$run_id\"} | json | context_id =~ \"$context_id\" | consumer_username != \"anonymous\" | trace_event_type =~ \"a2a|mcp|llm\" | request_id_extracted != \"\"",
           "queryType": "range",
           "refId": "A"
         }
@@ -1749,6 +1749,135 @@
       ],
       "title": "RAG Fetch Latency p95",
       "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false,
+            "filterable": true
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 86
+      },
+      "id": 313,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "{route=\"ai-orchestrator-lakera-demo-chat-route\",run_id!=\"\",run_id=~\"$run_id\"} | json | ai_lakera_input_block_reason != \"\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Lakera Block Events",
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "format": "json",
+            "replace": false,
+            "source": "Line"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "Time",
+                "run_id",
+                "ai_lakera_mode",
+                "ai_lakera_input_faulty_prompt",
+                "ai_lakera_input_block_reason",
+                "ai_lakera_detector_type",
+                "ai_lakera_input_processing_latency",
+                "ai_lakera_guards_triggered_count",
+                "ai_lakera_input_request_uuid"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "Time": 0,
+              "run_id": 1,
+              "ai_lakera_mode": 2,
+              "ai_lakera_input_faulty_prompt": 3,
+              "ai_lakera_input_block_reason": 4,
+              "ai_lakera_detector_type": 5,
+              "ai_lakera_input_processing_latency": 6,
+              "ai_lakera_guards_triggered_count": 7,
+              "ai_lakera_input_request_uuid": 8
+            },
+            "renameByName": {
+              "Time": "Time",
+              "run_id": "Run ID",
+              "ai_lakera_mode": "Mode",
+              "ai_lakera_input_faulty_prompt": "Prompt",
+              "ai_lakera_input_block_reason": "Block Reason",
+              "ai_lakera_detector_type": "Detector Type",
+              "ai_lakera_input_processing_latency": "Latency (ms)",
+              "ai_lakera_guards_triggered_count": "Guards Triggered",
+              "ai_lakera_input_request_uuid": "Lakera Request UUID"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "desc": true,
+                "field": "Time"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "table"
     }
   ],
   "refresh": "10s",
@@ -1827,6 +1956,6 @@
   "timezone": "",
   "title": "Kong Governance Overview",
   "uid": "kong-governance-overview",
-  "version": 8,
+  "version": 9,
   "weekStart": ""
 }

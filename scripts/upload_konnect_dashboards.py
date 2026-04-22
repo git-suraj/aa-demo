@@ -43,41 +43,37 @@ DASHBOARD_DIR = REPO_ROOT / "observability" / "konnect" / "dashboards"
 DEFAULT_SERVER_URL = "https://us.api.konghq.com"
 DEFAULT_DASHBOARDS_PATH = "/v2/dashboards"
 
-DASHBOARD_SPECS = [
-    {
-        "file": DASHBOARD_DIR / "aa-demo-api-analytics.json",
-        "name": "AA Demo API Analytics",
-        "description": "Konnect API analytics dashboard for the aa-demo project.",
-    },
-    {
-        "file": DASHBOARD_DIR / "aa-demo-ai-dashboard.json",
-        "name": "AA Demo AI Dashboard",
-        "description": "Konnect AI analytics dashboard for the aa-demo project.",
-    },
-]
-
-DEFAULT_API_DASHBOARD_NAME = DASHBOARD_SPECS[0]["name"]
-DEFAULT_AI_DASHBOARD_NAME = DASHBOARD_SPECS[1]["name"]
-
-
 class KonnectApiError(RuntimeError):
     pass
+
+
+def default_dashboard_name(path: Path) -> str:
+    stem = path.stem.strip().replace("_", " ").replace("-", " ")
+    words = [word for word in stem.split() if word]
+    return " ".join(word.upper() if word.lower() == "aa" else word.capitalize() for word in words)
+
+
+def default_dashboard_description(path: Path) -> str:
+    return f"Konnect analytics dashboard for {default_dashboard_name(path)}."
+
+
+def discover_dashboard_specs(dashboard_dir: Path) -> list[dict[str, Any]]:
+    specs: list[dict[str, Any]] = []
+    for file_path in sorted(dashboard_dir.glob("*.json")):
+        specs.append(
+            {
+                "file": file_path,
+                "name": default_dashboard_name(file_path),
+                "description": default_dashboard_description(file_path),
+            }
+        )
+    return specs
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Upload aa-demo Konnect dashboards and scope them to a control plane.")
     parser.add_argument("--control-plane-id", "--cpid", required=True, help="Konnect control plane id to scope dashboard data to.")
     parser.add_argument("--pat", required=True, help="Konnect personal access token.")
-    parser.add_argument(
-        "--api-dashboard-name",
-        default=DEFAULT_API_DASHBOARD_NAME,
-        help=f"Dashboard name to use for the API analytics definition. Default: {DEFAULT_API_DASHBOARD_NAME}",
-    )
-    parser.add_argument(
-        "--ai-dashboard-name",
-        default=DEFAULT_AI_DASHBOARD_NAME,
-        help=f"Dashboard name to use for the AI analytics definition. Default: {DEFAULT_AI_DASHBOARD_NAME}",
-    )
     parser.add_argument(
         "--server-url",
         default=DEFAULT_SERVER_URL,
@@ -225,23 +221,14 @@ def upsert_dashboard(
 def main() -> int:
     args = parse_args()
     dashboard_dir = Path(args.dashboard_dir).resolve()
-    dashboard_name_overrides = {
-        "aa-demo-api-analytics.json": args.api_dashboard_name,
-        "aa-demo-ai-dashboard.json": args.ai_dashboard_name,
-    }
-    specs = []
-    for spec in DASHBOARD_SPECS:
-        file_path = dashboard_dir / spec["file"].name
-        if not file_path.exists():
-            print(f"Missing dashboard file: {file_path}", file=sys.stderr)
-            return 1
-        specs.append(
-            {
-                "file": file_path,
-                "name": dashboard_name_overrides.get(spec["file"].name, spec["name"]),
-                "description": spec["description"],
-            }
-        )
+    if not dashboard_dir.exists():
+        print(f"Dashboard directory not found: {dashboard_dir}", file=sys.stderr)
+        return 1
+
+    specs = discover_dashboard_specs(dashboard_dir)
+    if not specs:
+        print(f"No dashboard JSON files found in: {dashboard_dir}", file=sys.stderr)
+        return 1
 
     try:
         existing = [] if args.dry_run else list_dashboards(args.server_url, args.dashboards_path, args.pat)

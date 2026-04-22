@@ -447,7 +447,6 @@
       }
     }
   ],
-  "template_id": "AI_GATEWAY",
   "preset_filters": [
     {
       "field": "control_plane",

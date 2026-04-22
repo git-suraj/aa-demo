@@ -34,6 +34,7 @@ class OrchestratorLLM:
         context_id: str | None = None,
         task_id: str | None = None,
         message_id: str | None = None,
+        scenario_mode: str | None = None,
     ) -> dict[str, Any]:
         if not self.enabled:
             raise RuntimeError("Kong-routed LLM is not configured")
@@ -51,6 +52,7 @@ class OrchestratorLLM:
                     **({"x-demo-context-id": context_id} if context_id else {}),
                     **({"x-demo-task-id": task_id} if task_id else {}),
                     **({"x-demo-message-id": message_id} if message_id else {}),
+                    **({"x-demo-scenario-mode": scenario_mode} if scenario_mode else {}),
                 },
                 json={
                     "model": resolved_model,
@@ -81,6 +83,7 @@ class OrchestratorLLM:
         context_id: str | None = None,
         task_id: str | None = None,
         message_id: str | None = None,
+        scenario_mode: str | None = None,
     ) -> dict[str, Any]:
         if not self.enabled:
             raise RuntimeError("Kong-routed LLM is not configured")
@@ -98,6 +101,7 @@ class OrchestratorLLM:
                     **({"x-demo-context-id": context_id} if context_id else {}),
                     **({"x-demo-task-id": task_id} if task_id else {}),
                     **({"x-demo-message-id": message_id} if message_id else {}),
+                    **({"x-demo-scenario-mode": scenario_mode} if scenario_mode else {}),
                 },
                 json={
                     "model": resolved_model,

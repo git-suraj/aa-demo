@@ -1,0 +1,407 @@
+{
+  "tiles": [
+    {
+      "id": "5017ba0a-4986-4266-9c18-e79ae0982c72",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 2,
+          "rows": 1
+        },
+        "position": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "single_value",
+          "chart_title": "Total MCP requests"
+        },
+        "query": {
+          "filters": [
+            {
+              "field": "mcp_method",
+              "operator": "not_empty"
+            }
+          ],
+          "metrics": [
+            "request_count"
+          ],
+          "datasource": "agentic_usage",
+          "dimensions": []
+        }
+      }
+    },
+    {
+      "id": "9e90d50a-848a-4801-96ee-33a1e394f0c7",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 4,
+          "rows": 2
+        },
+        "position": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "top_n",
+          "chart_title": "Top 10 MCP Servers"
+        },
+        "query": {
+          "limit": 10,
+          "filters": [
+            {
+              "field": "mcp_method",
+              "operator": "not_empty"
+            }
+          ],
+          "metrics": [
+            "request_count",
+            "response_latency_average",
+            "error_rate"
+          ],
+          "datasource": "agentic_usage",
+          "dimensions": [
+            "gateway_service"
+          ]
+        }
+      }
+    },
+    {
+      "id": "66fb4378-017b-4f6c-a1be-b4e8beedc253",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 2,
+          "rows": 1
+        },
+        "position": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "single_value",
+          "chart_title": "Total MCP errors"
+        },
+        "query": {
+          "filters": [
+            {
+              "field": "mcp_error",
+              "operator": "not_empty"
+            }
+          ],
+          "metrics": [
+            "request_count"
+          ],
+          "datasource": "agentic_usage",
+          "dimensions": []
+        }
+      }
+    },
+    {
+      "id": "6069ed17-8704-4bd7-8e3d-fdb73b612cf0",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 6,
+          "rows": 2
+        },
+        "position": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "timeseries_line",
+          "stacked": false,
+          "chart_title": "Avg MCP latency by tool"
+        },
+        "query": {
+          "filters": [
+            {
+              "field": "mcp_tool_name",
+              "operator": "not_empty"
+            }
+          ],
+          "metrics": [
+            "response_latency_average"
+          ],
+          "datasource": "agentic_usage",
+          "dimensions": [
+            "mcp_tool_name",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "id": "fb428fb3-f7fb-41a7-bea2-3cd8323b0a99",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 3,
+          "rows": 2
+        },
+        "position": {
+          "col": 0,
+          "row": 4
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "horizontal_bar",
+          "stacked": true,
+          "chart_title": "MCP tool usage"
+        },
+        "query": {
+          "filters": [
+            {
+              "field": "mcp_tool_name",
+              "operator": "not_empty"
+            }
+          ],
+          "metrics": [
+            "request_count"
+          ],
+          "datasource": "agentic_usage",
+          "dimensions": [
+            "mcp_tool_name"
+          ]
+        }
+      }
+    },
+    {
+      "id": "7e8ffe02-a9ba-4710-bf55-e2bdcaef8519",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 3,
+          "rows": 2
+        },
+        "position": {
+          "col": 3,
+          "row": 4
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "vertical_bar",
+          "stacked": true,
+          "chart_title": "MCP tool calls by agent"
+        },
+        "query": {
+          "filters": [
+            {
+              "field": "consumer",
+              "operator": "not_empty"
+            },
+            {
+              "field": "mcp_tool_name",
+              "operator": "not_empty"
+            }
+          ],
+          "metrics": [
+            "request_count"
+          ],
+          "datasource": "agentic_usage",
+          "dimensions": [
+            "consumer",
+            "mcp_tool_name"
+          ]
+        }
+      }
+    },
+    {
+      "id": "20c69e04-f345-4d80-b7ce-f93942205840",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 2,
+          "rows": 1
+        },
+        "position": {
+          "col": 0,
+          "row": 6
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "single_value",
+          "chart_title": "Total A2A Requests"
+        },
+        "query": {
+          "filters": [
+            {
+              "field": "a2a_method",
+              "operator": "not_empty"
+            }
+          ],
+          "metrics": [
+            "request_count"
+          ],
+          "datasource": "agentic_usage",
+          "dimensions": []
+        }
+      }
+    },
+    {
+      "id": "16938b65-3e83-4b42-86ab-9ae850b9a9fc",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 4,
+          "rows": 2
+        },
+        "position": {
+          "col": 2,
+          "row": 6
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "top_n",
+          "chart_title": "Top A2A Agents by Usage"
+        },
+        "query": {
+          "limit": 10,
+          "filters": [
+            {
+              "field": "consumer",
+              "operator": "not_empty"
+            },
+            {
+              "field": "a2a_method",
+              "operator": "not_empty"
+            }
+          ],
+          "metrics": [
+            "request_count"
+          ],
+          "datasource": "agentic_usage",
+          "dimensions": [
+            "consumer"
+          ]
+        }
+      }
+    },
+    {
+      "id": "3eab3713-dd3d-44ba-a649-75d5b0860deb",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 2,
+          "rows": 1
+        },
+        "position": {
+          "col": 0,
+          "row": 8
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "single_value",
+          "chart_title": "A2A Errors"
+        },
+        "query": {
+          "filters": [
+            {
+              "field": "a2a_error",
+              "operator": "not_empty"
+            }
+          ],
+          "metrics": [
+            "request_count"
+          ],
+          "datasource": "agentic_usage",
+          "dimensions": []
+        }
+      }
+    },
+    {
+      "id": "c9fc50c7-e5ae-447f-bd4e-2a94c740e66d",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 3,
+          "rows": 3
+        },
+        "position": {
+          "col": 0,
+          "row": 10
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "vertical_bar",
+          "stacked": true,
+          "chart_title": "Method Calls by Agent (Consumer)"
+        },
+        "query": {
+          "filters": [
+            {
+              "field": "consumer",
+              "operator": "not_empty"
+            },
+            {
+              "field": "a2a_method",
+              "operator": "not_empty"
+            }
+          ],
+          "metrics": [
+            "request_count"
+          ],
+          "datasource": "agentic_usage",
+          "dimensions": [
+            "consumer",
+            "a2a_method"
+          ]
+        }
+      }
+    },
+    {
+      "id": "24f90497-c7ed-4f88-bfdc-c7edaa851cf5",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 3,
+          "rows": 3
+        },
+        "position": {
+          "col": 3,
+          "row": 10
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "timeseries_line",
+          "stacked": false,
+          "chart_title": "A2A Latency per method"
+        },
+        "query": {
+          "filters": [
+            {
+              "field": "a2a_method",
+              "operator": "not_empty"
+            }
+          ],
+          "metrics": [
+            "a2a_latency_average"
+          ],
+          "datasource": "agentic_usage",
+          "dimensions": [
+            "a2a_method",
+            "time"
+          ]
+        }
+      }
+    }
+  ],
+  "template_id": "MCP_ANALYTICS"
+}

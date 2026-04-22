@@ -53,7 +53,6 @@ Top-level controls:
 - `Reset Scene`
 - `Reset Observability`
 - `View Run Output`
-- `Trace Explorer`
 - `?` help modal for the demo scenario and agent roles
 
 Main UI behaviors:
@@ -538,7 +537,8 @@ There are now two main trace surfaces:
 - Grafana dashboards
   - operational and aggregate views backed by Loki
 - in-product `Trace Explorer`
-  - a custom UI that loads normalized event detail for a `context_id`
+  - a custom UI surfaced from the sidebar/recent-runs flow
+  - loads normalized event detail for a `context_id`
   - request/response previews and full payload inspection
 
 The custom trace explorer is backed by:
@@ -1355,13 +1355,21 @@ If Grafana does not show those counts for a fresh normal run, the first thing to
 
 ## Implemented services
 
-- [UI](/Users/surajpillai/Documents/work/demos/learn/aa-demo/ui/index.html): static single-screen demo UI with `Play`, `Reset`, `Reset Observability`, `Trace Explorer`, live flow states, selected-step detail, and a `Recent Runs` dropdown that can replay stored traces
+- [UI](/Users/surajpillai/Documents/work/demos/learn/aa-demo/ui/index.html): static single-screen demo UI with `Play`, `Reset`, `Reset Observability`, `View Run Output`, live flow states, selected-step detail, and a `Recent Runs` dropdown that can replay stored traces
 - [orchestrator](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/orchestrator/app.py): receives `POST /play`, exposes `WS /trace`, serves `GET /trace/runs`, `GET /trace/runs/{run_id}`, and `GET /trace/context/{context_id}/events`, calls MCP through Kong, discovers sub-agents through Kong, and invokes support/success through A2A `message/stream`
 - [orchestrator LLM helper](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/common/llm.py): shared OpenAI-compatible client used by the orchestrator and sub-agents, pointed at Kong's `/ai` route
 - [support-agent](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/support_agent/app.py): LangGraph sub-agent for technical investigation using `get_incident_status` and `search_runbook`
 - [success-agent](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/success_agent/app.py): LangGraph sub-agent for customer-success actions using `draft_customer_reply` and `create_followup_task`
 - [mock-api](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/mock_api/app.py): backing REST API for the 7 tool endpoints plus OpenAPI schema
 - [shared MCP client](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/common/mcp_client.py): lightweight streamable HTTP MCP client for the agents
+
+## Implemented Kong Custom Plugins
+
+- [trace-enricher](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/trace-enricher): payload and LLM enrichment for Kong-side traces/logs
+- [workflow-graph](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/workflow-graph): synthetic workflow-tree export for Opik
+- [prompt-capture](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/prompt-capture): captures the inbound chat prompt in `access` and stores it in `kong.ctx.shared` so blocked semantic-guard requests still log:
+  - `semantic_guard_input_prompt`
+  - `llm_input_prompt`
 
 ## Tool access model
 

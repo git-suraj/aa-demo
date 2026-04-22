@@ -57,7 +57,7 @@ Important current UI behaviors:
 - `MCP Tools` is intentionally highlighted at lower intensity than Kong
 - `Recent Runs` in the sidebar is populated from `TraceBroker`
 - `Reset Observability` also clears the recent-runs UI state
-- `Trace Explorer` opens a custom trace UI backed by normalized Loki events
+- `Trace Explorer` is still available through the run sidebar / trace details flow and opens a custom trace UI backed by normalized Loki events
 
 Diagram modal state:
 
@@ -771,6 +771,7 @@ Current practical state:
 - semantic guard blocked requests
 - semantic cache hits
 - semantic cache misses
+- Lakera block events table
 
 Current implementation:
 - `Semantic Guard Blocked Requests`
@@ -779,6 +780,8 @@ Current implementation:
   - counts `ai_cache_status = "hit"` on `ai-orchestrator-semantic-cache-demo-chat-route`
 - `Semantic Cache Misses`
   - counts `ai_cache_status = "miss"` on `ai-orchestrator-semantic-cache-demo-chat-route`
+- `Lakera Block Events`
+  - table panel showing prompt, block reason, detector type, latency, and Lakera request UUID
 
 Important correction:
 - initial cache hit/miss implementation inferred hits from missing `llm_usage_model`
@@ -788,6 +791,16 @@ Important correction:
 Kong log transform change:
 - `kong/deck/kong.yaml` now flattens semantic-cache audit fields into the Loki payload:
   - `ai_cache_status`
+
+Prompt capture change:
+- blocked semantic-guard requests do not populate the normal AI proxy payload fields
+- a dedicated custom plugin now captures the inbound chat prompt in Kong `access` phase:
+  - `kong/plugins/prompt-capture/handler.lua`
+  - `kong/plugins/prompt-capture/schema.lua`
+- the logger then emits:
+  - `llm_input_prompt`
+  - `semantic_guard_input_prompt`
+- this is the path used for Grafana/Loki inspection of blocked semantic-guard requests
   - `ai_cache_fetch_latency`
   - `ai_cache_embeddings_provider`
   - `ai_cache_embeddings_model`

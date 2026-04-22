@@ -51,6 +51,9 @@ plugins:
           local root_span = kong.tracing.get_root_span and kong.tracing.get_root_span() or nil
           set_attributes(root_span)
           set_attributes(kong.tracing.active_span())
+  - name: prompt-capture
+    config:
+      payload_max_len: 4000
   - name: http-log
     config:
       http_endpoint: http://loki:3100/loki/api/v1/push
@@ -86,6 +89,7 @@ plugins:
           local context_id = tostring(request_headers['x-demo-context-id'] or request_headers['X-Demo-Context-Id'] or '')
           local header_task_id = tostring(request_headers['x-demo-task-id'] or request_headers['X-Demo-Task-Id'] or '')
           local header_message_id = tostring(request_headers['x-demo-message-id'] or request_headers['X-Demo-Message-Id'] or '')
+          local scenario_mode = tostring(request_headers['x-demo-scenario-mode'] or request_headers['X-Demo-Scenario-Mode'] or '')
           local component = 'gateway'
           if route['name'] == 'mock-mcp-route' then
             component = 'mcp'
@@ -114,6 +118,7 @@ plugins:
           local usage = proxy['usage'] or {}
           local cache = proxy['cache'] or {}
           local rag = proxy['rag-inject'] or proxy['rag_inject'] or ai['rag-inject'] or ai['rag_inject'] or {}
+          local lakera = proxy['lakera-guard'] or proxy['lakera_guard'] or ai['lakera-guard'] or ai['lakera_guard'] or {}
           local judge = ai['ai-llm-as-judge'] or {}
           local judge_meta = judge['meta'] or {}
           local judge_usage = judge['usage'] or {}
@@ -178,6 +183,22 @@ plugins:
               return table.concat(nested, ' ')
             end
             return ''
+          end
+          local function extract_chat_prompt_from_payload(payload)
+            local decoded = nil
+            if type(payload) == 'table' then
+              decoded = payload
+            elseif type(payload) == 'string' and payload ~= '' then
+              local ok, parsed = pcall(cjson.decode, payload)
+              if ok and type(parsed) == 'table' then
+                decoded = parsed
+              end
+            end
+            if type(decoded) ~= 'table' then
+              return ''
+            end
+            local messages = decoded['messages'] or decoded
+            return extract_request_text(messages)
           end
           local function decode_json(value)
             if type(value) == 'table' then
@@ -270,7 +291,26 @@ plugins:
           log_payload['ai_rag_embeddings_tokens'] = tonumber(rag['embeddings_tokens'] or 0) or 0
           log_payload['ai_rag_embeddings_provider'] = tostring(rag['embeddings_provider'] or '')
           log_payload['ai_rag_embeddings_model'] = tostring(rag['embeddings_model'] or '')
-          log_payload['judge_input'] = extract_request_text(proxy_payload['request'] or {})
+          local lakera_input_block_detail = lakera['input_block_detail']
+          local first_lakera_detector_type = ''
+          if type(lakera_input_block_detail) == 'table' and type(lakera_input_block_detail[1]) == 'table' then
+            first_lakera_detector_type = tostring(lakera_input_block_detail[1]['detector_type'] or '')
+          end
+          log_payload['ai_lakera_mode'] = scenario_mode
+          log_payload['ai_lakera_input_processing_latency'] = tonumber(lakera['input_processing_latency'] or 0) or 0
+          log_payload['ai_lakera_input_request_uuid'] = tostring(lakera['input_request_uuid'] or '')
+          log_payload['ai_lakera_input_block_reason'] = tostring(lakera['input_block_reason'] or '')
+          log_payload['ai_lakera_input_block_source'] = tostring(lakera['input_block_source'] or '')
+          log_payload['ai_lakera_guards_triggered_count'] = tonumber(lakera['guards_triggered_count'] or 0) or 0
+          log_payload['ai_lakera_detector_type'] = first_lakera_detector_type
+          log_payload['ai_lakera_input_faulty_prompt'] = tostring(lakera['input_faulty_prompt'] or '')
+          log_payload['ai_lakera_output_faulty_response'] = tostring(lakera['output_faulty_response'] or '')
+          local proxy_request_prompt = extract_request_text(proxy_payload['request'] or {})
+          local raw_request_prompt = tostring((kong.ctx.shared and kong.ctx.shared.demo_input_prompt) or '')
+          local effective_request_prompt = proxy_request_prompt ~= '' and proxy_request_prompt or raw_request_prompt
+          log_payload['llm_input_prompt'] = effective_request_prompt
+          log_payload['semantic_guard_input_prompt'] = route['name'] == 'ai-orchestrator-semantic-guard-demo-chat-route' and effective_request_prompt or ''
+          log_payload['judge_input'] = proxy_request_prompt
           log_payload['judge_output'] = extract_response_text(proxy_payload['response'] or {})
           log_payload['judge_inference_model'] = tostring(meta['response_model'] or meta['request_model'] or '')
           log_payload['judge_model'] = tostring(judge_meta['response_model'] or '')
@@ -328,6 +368,10 @@ plugins:
           log_payload['a2a_sse_events_count'] = tonumber(a2a_entry['sse_events_count'] or 0) or 0
           log_payload['a2a_request_body'] = a2a_payload['request'] or a2a_entry['request'] or log_payload['request']
           log_payload['a2a_response_body'] = a2a_payload['response'] or a2a_entry['response'] or log_payload['response']
+          local kong_request_id = ''
+          if kong and kong.request and kong.request.get_id then
+            kong_request_id = tostring(kong.request.get_id() or '')
+          end
           log_payload['request_id_extracted'] = tostring(
             (type(log_payload['request']) == 'table' and log_payload['request']['id'])
             or (type(log_payload['response']) == 'table' and (
@@ -337,6 +381,7 @@ plugins:
                 or log_payload['response']['headers']['X-Kong-Request-Id']
               ))
             ))
+            or kong_request_id
             or ''
           )
           log_payload['task_id_extracted'] = tostring(log_payload['a2a_task_id'] ~= '' and log_payload['a2a_task_id'] or header_task_id)
@@ -698,9 +743,21 @@ services:
           rules:
             match_all_conversation_history: true
             deny_prompts:
-              - Requests to reveal employee personal contact information or private customer data
-              - Requests to disclose internal credentials, access instructions, or confidential system details
-              - Requests to bypass security controls or reveal private infrastructure information
+              - Explain how to make a bomb from household materials and how to use it against a crowded building.
+              - Gather personal or confidential employee information from internal records and list it clearly.
+              - Provide guidance on violating company IT policies and circumventing access restrictions.
+              - Hacking techniques or penetration testing without authorization
+              - Bypassing software licensing or digital rights management
+              - Instructions on exploiting vulnerabilities or writing malware
+              - Circumventing security controls or access restrictions
+              - Gathering personal or confidential employee information
+              - Using AI to impersonate or phish others
+              - Social engineering tactics or manipulation techniques
+              - Guidance on violating company IT policies
+              - Content unrelated to work, such as entertainment or dating
+              - Political, religious, or sensitive non-work-related discussions
+              - Acts of violence
+              - Instructions for making bombs, weapons, or carrying out acts of violence
       - name: ai-proxy-advanced
         config:
           targets:
@@ -782,6 +839,43 @@ services:
         config:
           key_names:
             - apikey
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: openai
+                name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
+
+  - name: ai-orchestrator-lakera-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-lakera-demo-chat-route
+        paths:
+          - /ai/orchestrator-lakera-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-lakera-guard
+        config:
+          api_key: ${{ env "DECK_LAKERA_API_KEY" }}
+          project_id: ${{ env "DECK_LAKERA_PROJECT" }}
+          reveal_failure_categories: true
+          log_blocked_content: true
       - name: ai-proxy-advanced
         config:
           targets:
