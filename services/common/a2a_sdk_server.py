@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from contextvars import ContextVar
 from typing import Any
 
@@ -15,6 +16,8 @@ from pydantic import BaseModel
 
 from services.common.trace_context import reset_trace_headers
 from services.common.trace_context import set_trace_headers_from_request
+
+logger = logging.getLogger(__name__)
 
 
 class GraphAgentExecutor(AgentExecutor):
@@ -68,7 +71,9 @@ class GraphAgentExecutor(AgentExecutor):
                 updater.new_agent_message(parts, metadata={"agent_id": self.agent_id, "run_id": params_payload.get("run_id")})
             )
         except Exception as exc:
-            message = updater.new_agent_message([Part(root=TextPart(text=str(exc)))], metadata={"agent_id": self.agent_id})
+            logger.exception("A2A task failed for %s", self.agent_id)
+            error_text = str(exc) or repr(exc)
+            message = updater.new_agent_message([Part(root=TextPart(text=error_text))], metadata={"agent_id": self.agent_id})
             await updater.update_status(TaskState.failed, message=message, final=True, metadata={"agent_id": self.agent_id})
         finally:
             self.message_var.reset(message_token)

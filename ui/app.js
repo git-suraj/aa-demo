@@ -1879,6 +1879,118 @@ function upsertSemanticCacheProbeNode(payload, status = "active") {
   return node;
 }
 
+function upsertScenarioProbeNode(probeKey, title, summary, payload, status = "active") {
+  const actor = payload.actor || "orchestrator";
+  const parentId = ensureActorRoot(actor);
+  const key = `${probeKey}:${actor}`;
+  let nodeId = traceState.systemNodes[key];
+  if (!nodeId) {
+    nodeId = `system:${key}`;
+    traceState.systemNodes[key] = nodeId;
+    const node = createTraceNode(
+      nodeId,
+      traceState.nodes[parentId].level + 1,
+      title,
+      summary,
+      {
+        actor,
+        timestamp: payload.timestamp,
+        status,
+      },
+    );
+    addTraceNode(node, parentId);
+  }
+
+  const node = traceState.nodes[nodeId];
+  node.timestamp = payload.timestamp || node.timestamp;
+  node.status = status;
+  if (summary) {
+    node.summary = summary;
+  }
+  if (payload.input !== undefined) {
+    node.input = payload.input;
+  }
+  if (payload.output !== undefined) {
+    node.output = payload.output;
+  }
+  return node;
+}
+
+function upsertSemanticGuardProbeNode(payload, status = "active", summary) {
+  return upsertScenarioProbeNode(
+    "semantic-guard-probe",
+    "Redis semantic guard lookup",
+    summary || "Kong is comparing the prompt against Redis-backed semantic guard policies before any model call.",
+    payload,
+    status,
+  );
+}
+
+function upsertLakeraProbeNode(payload, status = "active", summary) {
+  return upsertScenarioProbeNode(
+    "lakera-probe",
+    "Lakera policy inspection",
+    summary || "Kong is sending the prompt to Lakera Guard to decide whether it should be allowed to reach the model.",
+    payload,
+    status,
+  );
+}
+
+function upsertPiiProbeNode(payload, status = "active", summary) {
+  return upsertScenarioProbeNode(
+    "pii-sanitizer-probe",
+    "PII sanitization service",
+    summary || "Kong is inspecting and sanitizing content through the PII service.",
+    payload,
+    status,
+  );
+}
+
+function upsertRagProbeNode(payload, status = "active", summary) {
+  return upsertScenarioProbeNode(
+    "rag-probe",
+    "Redis RAG retrieval",
+    summary || "Kong is retrieving relevant support knowledge before the model call.",
+    payload,
+    status,
+  );
+}
+
+function shouldCreateLlmTreeNode(payload) {
+  if (traceState.scenario === "semantic_guard" || traceState.scenario === "lakera_guard") {
+    return false;
+  }
+  if (traceState.scenario === "pii_sanitizer" && String(payload.stage || "").includes("block")) {
+    return false;
+  }
+  return true;
+}
+
+function parentIdForPolicyEvent(payload) {
+  const actor = payload.actor || "orchestrator";
+  const stage = payload.stage;
+
+  if (stage === "semantic_guard") {
+    return upsertSemanticGuardProbeNode(payload, "complete", payload.summary).id;
+  }
+  if (stage === "semantic_cache_miss" || stage === "semantic_cache_hit") {
+    return upsertSemanticCacheProbeNode(payload, "complete").id;
+  }
+  if (stage === "lakera_blocked") {
+    return upsertLakeraProbeNode(payload, "complete", payload.summary).id;
+  }
+  if (stage === "pii_sanitizer" || stage === "pii_sanitizer_request" || stage === "pii_sanitizer_response" || stage === "pii_sanitizer_blocked") {
+    return upsertPiiProbeNode(payload, "complete", payload.summary).id;
+  }
+  if (stage === "rag_injection") {
+    return upsertRagProbeNode(payload, "complete", payload.summary).id;
+  }
+  if (payload.llm_stage) {
+    return upsertLlmNode({ actor, stage: payload.llm_stage, timestamp: payload.timestamp }).id;
+  }
+  return ensureActorRoot(actor);
+}
+
 function resetTopology() {
   Object.values(componentStateTimers).forEach((timer) => clearTimeout(timer));
   Object.keys(componentStateTimers).forEach((key) => delete componentStateTimers[key]);
@@ -2942,12 +3054,14 @@ function handleTraceEvent(payload) {
         clearOrchestratorLlmPath();
         activateRedisPath("active");
       } else if (traceState.scenario === "semantic_guard") {
+        upsertSemanticGuardProbeNode(payload, "active", payload.message);
         setFlowStage("Semantic guard probe", payload.message);
         hideTopologyActivity();
         clearOrchestratorLlmPath();
         activateActorPath("orchestrator", "active");
         activateRedisPath("active");
       } else if (traceState.scenario === "lakera_guard") {
+        upsertLakeraProbeNode(payload, "active", payload.message);
         setFlowStage("Lakera policy probe", payload.message);
         hideTopologyActivity();
         clearOrchestratorLlmPath();
@@ -2967,6 +3081,7 @@ function handleTraceEvent(payload) {
         markNode("openai", "complete");
         markLine("kong-openai", "complete");
       } else if (traceState.scenario === "pii_sanitizer") {
+        upsertPiiProbeNode(payload, "active", payload.message);
         setFlowStage("PII sanitization probe", payload.message);
         hideTopologyActivity();
         clearOrchestratorLlmPath();
@@ -2976,6 +3091,9 @@ function handleTraceEvent(payload) {
         setOpenAiNodeState("complete");
         markLine("kong-openai", "complete");
       } else if (traceState.scenario === "rag") {
+        if (payload.rag_mode === "after") {
+          upsertRagProbeNode(payload, "active", payload.message);
+        }
         setFlowStage("RAG probe", payload.message);
         hideTopologyActivity();
         activateActorPath("orchestrator", "active");
@@ -3031,7 +3149,9 @@ function handleTraceEvent(payload) {
       break;
 
     case "llm_started":
-      upsertLlmNode(payload);
+      if (shouldCreateLlmTreeNode(payload)) {
+        upsertLlmNode(payload);
+      }
       setFlowStage(`LLM call: ${payload.stage}`, `${labelForActor(payload.actor || "orchestrator")} is calling its AI route through Kong.`);
       if (payload.component && !["semantic_guard", "lakera_guard"].includes(traceState.scenario)) {
         applyComponentState(payload.component, "active");
@@ -3121,6 +3241,7 @@ function handleTraceEvent(payload) {
         applyComponentState(payload.component, "complete");
       }
       if (traceState.scenario === "semantic_guard") {
+        upsertSemanticGuardProbeNode(payload, "complete");
         completeRedisPath();
         setOpenAiNodeState("active");
         markLine("kong-openai", "active");
@@ -3129,6 +3250,7 @@ function handleTraceEvent(payload) {
         break;
       }
       if (traceState.scenario === "lakera_guard") {
+        upsertLakeraProbeNode(payload, "complete");
         markNode("lakera", "complete");
         markLine("kong-lakera", "complete");
         setOpenAiNodeState("active");
@@ -3162,6 +3284,7 @@ function handleTraceEvent(payload) {
         break;
       }
       if (traceState.scenario === "pii_sanitizer") {
+        upsertPiiProbeNode(payload, "complete");
         if (piiSanitizerHandoffTimer) {
           clearTimeout(piiSanitizerHandoffTimer);
           piiSanitizerHandoffTimer = null;
@@ -3206,11 +3329,7 @@ function handleTraceEvent(payload) {
     }
 
     case "policy_event": {
-      const actor = payload.actor || "orchestrator";
-      const llmStage = payload.llm_stage;
-      const parentId = llmStage
-        ? upsertLlmNode({ actor, stage: llmStage, timestamp: payload.timestamp }).id
-        : ensureActorRoot(actor);
+      const parentId = parentIdForPolicyEvent(payload);
       const decoratorPolicy =
         payload.stage === "prompt_decoration"
           ? payload.output?.decorator_prompt ||
@@ -3235,7 +3354,7 @@ function handleTraceEvent(payload) {
         failover: "Kong selected fallback model",
       };
       const node = upsertSystemNode(
-        `policy:${payload.stage}:${llmStage || "actor"}:${payload.timestamp}`,
+        `policy:${payload.stage}:${payload.llm_stage || "actor"}:${payload.timestamp}`,
         parentId,
         titleMap[payload.stage] || `Policy event: ${payload.stage}`,
         decoratorPolicy || payload.summary || "Kong governance policy event.",

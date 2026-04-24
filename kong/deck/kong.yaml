@@ -1190,6 +1190,9 @@ services:
 
   - name: orchestrator-service
     url: http://orchestrator:8000
+    connect_timeout: 180000
+    read_timeout: 180000
+    write_timeout: 180000
     routes:
       - name: orchestrator-route
         paths:
