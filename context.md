@@ -7,6 +7,7 @@ This repo is a Kong-governed multi-agent demo for a customer escalation workflow
 Core flow:
 - UI sends a `Play` request through Kong to the orchestrator.
 - Orchestrator gathers account context through MCP tools exposed by Kong.
+- The same MCP server is published in Konnect MCP Registry for internal discovery metadata.
 - Orchestrator discovers two sub-agents through Kong using `GET /.well-known/agent-card.json`.
 - Kong rewrites the discovered agent card URLs to the gateway address.
 - Orchestrator calls two sub-agents through Kong using A2A-native `message/stream` handoffs:
@@ -39,6 +40,25 @@ Relevant services in `docker-compose.yml`:
 - `grafana`
 - `redis-stack`
 - `ui`
+
+## MCP Registry
+
+The demo now also publishes its MCP server into Konnect MCP Registry.
+
+Current shape:
+
+- registry:
+  - `AA Demo MCP Registry`
+- published server:
+  - `com.aa-demo/mock-mcp`
+- published remote:
+  - `http://localhost:8000/mock-mcp`
+
+Important distinction:
+
+- Konnect MCP Registry is used here for discovery/governance metadata
+- Kong `ai-mcp-proxy` on `/mock-mcp` remains the runtime execution path for the demo
+- the startup flow creates or reuses the registry and republishes the server if it already exists
 
 ## Current UI State
 

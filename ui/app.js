@@ -674,15 +674,19 @@ function nodeInfoDetails(target, scenario = activeScenario || "normal") {
     },
     mcp: {
       title: "MCP Tools",
-      intro: "Kong exposes the backing APIs as MCP tools and filters the allowed tool set per agent.",
+      intro: "Kong exposes the backing APIs as MCP tools, publishes the server in Konnect MCP Registry, and filters the allowed tool set per agent.",
       plainEnglish: [
         "Agents ask Kong for the tool list instead of discovering raw APIs directly.",
+        "The same MCP server is published in Konnect as AA Demo MCP Registry for internal discovery.",
         "Kong applies auth and access control before returning tools.",
         "Tool invocations still route back through Kong before reaching backend services.",
       ],
-      why: "It is where API governance becomes agent-tool governance.",
+      why: "It is where API governance becomes agent-tool governance, with Konnect Registry handling discovery metadata and Kong handling runtime control.",
       config: [
         ["Protocol", "MCP via Kong"],
+        ["Registry", "AA Demo MCP Registry"],
+        ["Published server", "com.aa-demo/mock-mcp"],
+        ["Registry remote", "http://localhost:8000/mock-mcp"],
         ["Governed by", "Per-agent auth and authorization"],
         ["Orchestrator tools", "get_customer_account, get_renewal_risk, get_open_tickets"],
         ["Support tools", "get_incident_status, search_runbook"],

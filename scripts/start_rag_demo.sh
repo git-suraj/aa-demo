@@ -207,6 +207,10 @@ python3 scripts/upload_konnect_dashboards.py \
   --server-url "$KONNECT_API_URL"
 ok "Konnect dashboards synced"
 
+step "Registering Konnect MCP Registry"
+python3 scripts/register_konnect_mcp_registry.py
+ok "Konnect MCP registry synced"
+
 step "Ingesting fictional AtlasFlow support KB"
 python3 scripts/ingest_rag_kb.py
 ok "RAG knowledge base ingested"
@@ -221,4 +225,9 @@ printf "  ${CYAN}UI${RESET}       %s\n" "$(link "http://localhost:8000" "http://
 printf "  ${CYAN}Grafana${RESET}  %s\n" "$(link "http://localhost:3001" "http://localhost:3001")"
 printf "  ${CYAN}Opik${RESET}     %s\n" "$(link "http://localhost:5173" "http://localhost:5173")"
 printf "  ${CYAN}Jaeger${RESET}   %s\n" "$(link "http://localhost:16686" "http://localhost:16686")"
+echo
+echo "${BOLD}Konnect MCP Registry:${RESET}"
+printf "  ${CYAN}Registry${RESET}  %s\n" "AA Demo MCP Registry"
+printf "  ${CYAN}Server${RESET}    %s\n" "com.aa-demo/mock-mcp"
+printf "  ${CYAN}Remote${RESET}    %s\n" "http://localhost:8000/mock-mcp"
 echo

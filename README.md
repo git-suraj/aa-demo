@@ -16,6 +16,7 @@ The demo uses:
 - Kong's `ai-a2a-proxy` plugin for agent discovery, A2A execution, and A2A observability between the orchestrator and the sub-agents
 - 1 backing REST API
 - Kong's `ai-mcp-proxy` plugin to expose that API as MCP tools
+- Konnect MCP Registry to publish the demo MCP server for internal discovery
 - Consumers and Consumer Groups to control which agent can see which tools
 - a lightweight UI that shows the flow in real time
 
@@ -38,9 +39,19 @@ This makes Kong's role easy to explain:
 - route control
 - authentication
 - tool exposure through MCP
+- MCP server publishing through Konnect MCP Registry
 - LLM routing through AI Proxy Advanced
 - per-agent tool restrictions
 - observability of agent traffic
+
+MCP discovery shape:
+
+- the runtime MCP traffic still goes through Kong on `/mock-mcp`
+- the same server is also published in Konnect as:
+  - registry: `AA Demo MCP Registry`
+  - server: `com.aa-demo/mock-mcp`
+  - remote: `http://localhost:8000/mock-mcp`
+- this keeps discovery/governance metadata in Konnect while Kong remains the runtime control point for auth, routing, and observability
 
 ## Current UI
 
