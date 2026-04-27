@@ -20,6 +20,10 @@ Focused governance scenario example for PII sanitization:
 
 ![PII sanitization scenario](img/image3.png)
 
+Focused topology view showing the AI PII Service in the governed path:
+
+![PII topology view](img/image4.png)
+
 The demo uses:
 
 - 1 LangGraph orchestrator
