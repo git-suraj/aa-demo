@@ -6,6 +6,20 @@ This repo is a Konnect hybrid demo for showing how Kong governs both agent-to-ag
 
 This project demonstrates a small, visually clear agent system running behind Kong in Konnect hybrid mode.
 
+Example screens:
+
+Normal governed flow:
+
+![Normal governed flow](img/image1.png)
+
+Scene selector and baseline escalation input:
+
+![Scene selector and baseline input](img/image2.png)
+
+Focused governance scenario example for PII sanitization:
+
+![PII sanitization scenario](img/image3.png)
+
 The demo uses:
 
 - 1 LangGraph orchestrator
@@ -60,11 +74,17 @@ The UI is now opinionated around Kong as the control plane.
 Top-level controls:
 
 - `Scenes`
+  - opens the scene modal where you choose the governance scenario and edit the demo input
 - `View Diagrams`
+  - opens the sequence diagram and LangGraph state diagrams for the orchestrator and sub-agents
 - `Reset Scene`
+  - clears the current run state and resets the topology back to its idle demo view
 - `Reset Observability`
+  - clears Loki/Grafana demo state and the recent-runs list used by the UI
 - `View Run Output`
-- `?` help modal for the demo scenario and agent roles
+  - opens the structured business output produced by the selected run
+- `?`
+  - opens the help modal with the demo scenario summary and the role of each agent/component
 
 Main UI behaviors:
 
