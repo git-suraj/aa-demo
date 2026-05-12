@@ -72,6 +72,8 @@ class PlayRequest(BaseModel):
     incident_id: str = "INC-1007"
     governance_scenario: str = "normal"
     semantic_cache_step: str = "single"
+    prompt_compression_mode: str = "rate"
+    prompt_compression_value: int = 50
     pii_sanitizer_mode: str = "placeholder"
     rag_mode: str = "before"
     lakera_mode: str = "content_moderation"
@@ -93,6 +95,8 @@ class OrchestratorState(TypedDict, total=False):
     context_id: str
     governance_scenario: str
     semantic_cache_step: str
+    prompt_compression_mode: str
+    prompt_compression_value: int
     pii_sanitizer_mode: str
     rag_mode: str
     lakera_mode: str
@@ -105,6 +109,7 @@ class OrchestratorState(TypedDict, total=False):
     renewal_risk: Any
     open_tickets: Any
     semantic_cache_probe: dict[str, Any]
+    prompt_compression_probe: dict[str, Any]
     pii_sanitizer_probe: dict[str, Any]
     llm_judge_probe: dict[str, Any]
     triage_brief: dict[str, Any]
@@ -138,6 +143,7 @@ def timed_ms(started_at: float) -> int:
 def ai_route_for_scenario(
     scenario: str,
     pii_mode: str = "placeholder",
+    prompt_compression_mode: str = "rate",
     rag_mode: str = "before",
     lakera_mode: str = "content_moderation",
 ) -> str:
@@ -146,6 +152,11 @@ def ai_route_for_scenario(
         "llm_failover": f"{KONG_PROXY_URL}/ai/orchestrator-failover-demo",
         "token_limit": f"{KONG_PROXY_URL}/ai/orchestrator-token-demo",
         "prompt_enhancement": f"{KONG_PROXY_URL}/ai/orchestrator-prompt-enhance-demo",
+        "prompt_compression": (
+            f"{KONG_PROXY_URL}/ai/orchestrator-prompt-compress-token-demo"
+            if prompt_compression_mode == "token_count"
+            else f"{KONG_PROXY_URL}/ai/orchestrator-prompt-compress-ratio-demo"
+        ),
         "semantic_guard": f"{KONG_PROXY_URL}/ai/orchestrator-semantic-guard-demo",
         "semantic_cache": f"{KONG_PROXY_URL}/ai/orchestrator-semantic-cache-demo",
         "llm_as_judge": f"{KONG_PROXY_URL}/ai/orchestrator-judge-demo",
@@ -174,6 +185,7 @@ def scenario_summary(scenario: str) -> str:
         "llm_failover": "OpenAI primary is expected to fail and Kong should fail over to Gemini.",
         "token_limit": "Kong AI token governance is expected to block a later orchestrator LLM call.",
         "prompt_enhancement": "Kong prompt decoration applies stronger executive-governance instructions so the orchestrator output becomes more structured and enterprise-safe.",
+        "prompt_compression": "Kong AI Prompt Compressor is expected to shrink the verbose prompt before the model call so the run saves input tokens.",
         "semantic_guard": "Kong semantic guard is expected to block prompts that request sensitive personal or internal system information.",
         "semantic_cache": "Kong semantic cache is expected to serve a repeated orchestrator prompt from Redis after the first miss populates the cache.",
         "llm_as_judge": "Kong AI LLM as Judge is expected to score the candidate model response for accuracy using a separate judge model.",
@@ -198,6 +210,86 @@ def build_prompt_decoration(scenario: str, system_prompt: str, user_prompt: str)
         "decorated_system_prompt": f"{system_prompt}\n\n{decorator}",
         "decorated_user_prompt": user_prompt,
     }
+
+
+def build_prompt_compression_prompts(request: PlayRequest) -> dict[str, str]:
+    default_prompt = (
+        "Create an executive-ready escalation update for the account team.\n"
+        f"Account: {request.account_name}\n"
+        f"Customer ID: {request.customer_id}\n"
+        f"Issue summary: {request.issue_summary}\n"
+        f"Product issue: {request.product_issue}\n"
+        f"Billing issue: {request.billing_issue}\n"
+        f"Incident ID: {request.incident_id}\n"
+        "Context notes:\n"
+        "- The customer wants a same-day executive update.\n"
+        "- The customer wants a same-day executive update with explicit owners and next checkpoints.\n"
+        "- The customer wants a same-day executive update with explicit owners and next checkpoints, including a billing remediation status.\n"
+        "- The customer also wants the technical recovery posture explained in plain business language for leadership.\n"
+        "- Repeat and reconcile all account details, incident details, business risks, and next actions before writing the answer.\n"
+        "- Repeat and reconcile all account details, incident details, business risks, and next actions before writing the answer.\n"
+        "- Repeat and reconcile all account details, incident details, business risks, and next actions before writing the answer.\n"
+        "Requirements:\n"
+        "1) Write Situation, Risk, Actions, and Next Checkpoint.\n"
+        "2) Mention billing remediation, engineering mitigation, executive communication, and ownership.\n"
+        "3) Keep it concise and executive-safe.\n"
+    )
+    return {
+        "system_prompt": (
+            "You are an executive escalation assistant. "
+            "Return four short sections only: Situation, Risk, Actions, and Next Checkpoint."
+        ),
+        "user_prompt": (request.user_prompt or "").strip() or default_prompt,
+    }
+
+
+async def fetch_prompt_compression_metrics(run_id: str, mode: str) -> dict[str, Any] | None:
+    route_name = (
+        "ai-orchestrator-prompt-compress-token-demo-chat-route"
+        if mode == "token_count"
+        else "ai-orchestrator-prompt-compress-ratio-demo-chat-route"
+    )
+    end_ns = int(time.time() * 1_000_000_000)
+    start_ns = end_ns - (10 * 60 * 1_000_000_000)
+    query = f'{{component="llm",run_id="{run_id}",route="{route_name}"}} | json'
+    for attempt in range(5):
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.get(
+                LOKI_QUERY_URL,
+                params={
+                    "query": query,
+                    "limit": 20,
+                    "direction": "backward",
+                    "start": str(start_ns),
+                    "end": str(end_ns),
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+        for stream in data.get("data", {}).get("result", []):
+            for _, raw_line in stream.get("values", []):
+                payload = json.loads(raw_line)
+                if not any(
+                    payload.get(field) not in (None, "", 0)
+                    for field in (
+                        "compressor_original_tokens",
+                        "compressor_compressed_tokens",
+                        "compressor_saved_tokens",
+                    )
+                ):
+                    continue
+                return {
+                    "original_token_count": payload.get("compressor_original_tokens"),
+                    "compress_token_count": payload.get("compressor_compressed_tokens"),
+                    "save_token_count": payload.get("compressor_saved_tokens"),
+                    "compress_value": payload.get("compressor_value"),
+                    "compress_type": payload.get("compressor_type"),
+                    "compressor_model": payload.get("compressor_model"),
+                    "information": payload.get("compressor_information"),
+                }
+        if attempt < 4:
+            await asyncio.sleep(0.6)
+    return None
 
 
 def prompts_for_scenario(prompts: dict[str, str], scenario: str) -> dict[str, str]:
@@ -1190,10 +1282,18 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
     started = time.perf_counter()
     scenario = request.governance_scenario
     semantic_cache_step = request.semantic_cache_step
+    prompt_compression_mode = request.prompt_compression_mode
+    prompt_compression_value = request.prompt_compression_value
     pii_sanitizer_mode = request.pii_sanitizer_mode
     rag_mode = request.rag_mode
     lakera_mode = request.lakera_mode
-    ai_route_base_url = ai_route_for_scenario(scenario, pii_sanitizer_mode, rag_mode, lakera_mode)
+    ai_route_base_url = ai_route_for_scenario(
+        scenario,
+        pii_sanitizer_mode,
+        prompt_compression_mode,
+        rag_mode,
+        lakera_mode,
+    )
     await emit(
         run_id,
         "run_started",
@@ -1212,6 +1312,106 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         output={"ai_route_base_url": ai_route_base_url},
         context_id=context_id,
     )
+    if scenario == "prompt_compression":
+        prompts = build_prompt_compression_prompts(request)
+        stage = f"prompt_compression_{prompt_compression_mode}"
+        value_label = (
+            f"{prompt_compression_value}%"
+            if prompt_compression_mode == "rate"
+            else f"{prompt_compression_value} tokens"
+        )
+        await emit(
+            run_id,
+            "planning",
+            message=(
+                "Kong AI Prompt Compressor is shrinking the verbose user prompt before it reaches the model "
+                f"using {prompt_compression_mode} mode at {value_label}."
+            ),
+        )
+        await emit(
+            run_id,
+            "policy_event",
+            actor="orchestrator",
+            stage="prompt_compression",
+            llm_stage=stage,
+            summary=(
+                "Kong AI Prompt Compressor is applying prompt compression before the model call to reduce input tokens."
+            ),
+            input={
+                "compression_mode": prompt_compression_mode,
+                "compression_value": prompt_compression_value,
+                "original_prompt": prompts,
+            },
+            output={
+                "compression_mode": prompt_compression_mode,
+                "compression_value": prompt_compression_value,
+                "compressor_url": "http://ai-compress-service:8080",
+            },
+        )
+        await emit_component(run_id, "compressor", "active", actor="orchestrator", stage=stage)
+        await emit(run_id, "llm_started", actor="orchestrator", stage=stage, component="openai", input=prompts)
+        llm_started = time.perf_counter()
+        compression_result = await llm.generate(
+            base_url=ai_route_base_url,
+            run_id=run_id,
+            context_id=context_id,
+            **prompts,
+        )
+        await emit(
+            run_id,
+            "llm_completed",
+            actor="orchestrator",
+            stage=stage,
+            component=compression_result["model"] if compression_result.get("model") else "openai",
+            llm_used=compression_result["llm_used"],
+            model=compression_result["model"],
+            output=compression_result,
+            duration_ms=timed_ms(llm_started),
+        )
+        await emit_component(run_id, "compressor", "complete", actor="orchestrator", stage=stage)
+        compressor_metrics = await fetch_prompt_compression_metrics(run_id, prompt_compression_mode)
+        if compressor_metrics:
+            await emit(
+                run_id,
+                "policy_event",
+                actor="orchestrator",
+                stage="prompt_compression_result",
+                llm_stage=stage,
+                summary=(
+                    f"Kong compressed the prompt from {compressor_metrics.get('original_token_count')} to "
+                    f"{compressor_metrics.get('compress_token_count')} tokens and saved "
+                    f"{compressor_metrics.get('save_token_count')} tokens."
+                ),
+                output=compressor_metrics,
+            )
+        final_response = {
+            "headline": "Prompt compression probe completed",
+            "governance_scenario": scenario,
+            "prompt_compression_probe": {
+                "mode": prompt_compression_mode,
+                "requested_value": prompt_compression_value,
+                "request_payload": request.model_dump(),
+                "original_prompt": prompts,
+                "metrics": compressor_metrics,
+            },
+            "executive_brief": compression_result,
+            "recommended_summary": compression_result["summary"],
+            "available_tools": [],
+            "called_mcp_tools": [],
+            "tool_plan_steps": [],
+            "mcp_tools_by_agent": {
+                "orchestrator": [],
+                "support-agent": [],
+                "success-agent": [],
+            },
+        }
+        await emit(run_id, "final_response", headline=final_response["headline"], output=final_response)
+        await emit_component(run_id, "dashboard", "complete")
+        await emit_component(run_id, "kong", "complete")
+        await emit_component(run_id, "orchestrator", "complete")
+        await emit_component(run_id, "observability", "complete")
+        await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=final_response)
+        return {"run_id": run_id, "context_id": context_id, "result": final_response}
     if scenario == "pii_sanitizer":
         prompts = build_pii_probe_prompts(request, pii_sanitizer_mode)
         stage = f"pii_{pii_sanitizer_mode}_probe"

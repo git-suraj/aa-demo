@@ -14,6 +14,17 @@ services:
     expose:
       - "8080"
 
+  ai-compress-service:
+    image: docker.cloudsmith.io/kong/ai-compress/service:v0.0.2
+    container_name: ai-compress-service
+    restart: unless-stopped
+    environment:
+      GUNICORN_WORKERS: "1"
+      LLMLINGUA_DEVICE_MAP: cpu
+      LLMLINGUA_MODEL_NAME: microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank
+    expose:
+      - "8080"
+
   loki:
     image: grafana/loki:3.0.0
     container_name: loki
@@ -377,6 +388,8 @@ services:
       redis-stack:
         condition: service_started
       ai-pii-service:
+        condition: service_started
+      ai-compress-service:
         condition: service_started
       orchestrator:
         condition: service_started

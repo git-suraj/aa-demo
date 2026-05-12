@@ -1881,6 +1881,361 @@
         }
       ],
       "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 143
+      },
+      "id": 1110,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | compressor_saved_tokens > 0 | unwrap compressor_saved_tokens [$__range]))",
+          "legendFormat": "Saved Tokens",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Prompt Compression Tokens Saved",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 143
+      },
+      "id": 1111,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(count_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | compressor_saved_tokens > 0 [$__range]))",
+          "legendFormat": "Compression Requests",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Prompt Compression Requests",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 143
+      },
+      "id": 1112,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "avg(avg_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | compressor_saved_tokens > 0 | unwrap compressor_saved_tokens [$__range]))",
+          "legendFormat": "Avg Saved / Request",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Average Tokens Saved Per Request",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 151
+      },
+      "id": 1113,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum by (consumer) (sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | compressor_saved_tokens > 0 | unwrap compressor_saved_tokens [$__range]))",
+          "legendFormat": "{{consumer}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Saved Tokens By Consumer",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 151
+      },
+      "id": 1114,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | compressor_original_tokens > 0 | unwrap compressor_original_tokens [$__range]))",
+          "legendFormat": "Original Tokens",
+          "queryType": "range",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | compressor_compressed_tokens > 0 | unwrap compressor_compressed_tokens [$__range]))",
+          "legendFormat": "Compressed Tokens",
+          "queryType": "range",
+          "refId": "B"
+        }
+      ],
+      "title": "Original vs Compressed Tokens",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 160
+      },
+      "id": 1115,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": true,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "{component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | compressor_saved_tokens > 0",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Prompt Compression Log Stream",
+      "type": "logs"
     }
   ],
   "refresh": "10s",
@@ -1959,6 +2314,6 @@
   "timezone": "",
   "title": "Kong Governance Overview",
   "uid": "kong-governance-overview",
-  "version": 9,
+  "version": 10,
   "weekStart": ""
 }

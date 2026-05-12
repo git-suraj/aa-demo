@@ -42,6 +42,10 @@ const semanticCacheHitPayload = document.getElementById("semantic-cache-hit-payl
 const semanticCacheSeedButton = document.getElementById("semantic-cache-seed-button");
 const semanticCacheHitButton = document.getElementById("semantic-cache-hit-button");
 const semanticCacheClearButton = document.getElementById("semantic-cache-clear-button");
+const promptCompressionControls = document.getElementById("prompt-compression-controls");
+const promptCompressionModeOptions = document.getElementById("prompt-compression-mode-options");
+const promptCompressionPayload = document.getElementById("prompt-compression-payload");
+const promptCompressionSendButton = document.getElementById("prompt-compression-send-button");
 const semanticGuardControls = document.getElementById("semantic-guard-controls");
 const semanticGuardModeOptions = document.getElementById("semantic-guard-mode-options");
 const semanticGuardPayloadPreview = document.getElementById("semantic-guard-payload");
@@ -99,6 +103,7 @@ const nodes = {
   "judge-model": document.querySelector('[data-node="judge-model"]'),
   redis: document.querySelector('[data-node="redis"]'),
   lakera: document.querySelector('[data-node="lakera"]'),
+  compressor: document.querySelector('[data-node="compressor"]'),
   "pii-service": document.querySelector('[data-node="pii-service"]'),
   observability: document.querySelector('[data-node="observability"]'),
   mcp: document.querySelector('[data-node="mcp"]'),
@@ -116,6 +121,7 @@ const lineMap = {
   "kong-judge": document.getElementById("line-kong-judge"),
   "kong-redis": document.getElementById("line-kong-redis"),
   "kong-lakera": document.getElementById("line-kong-lakera"),
+  "kong-compress": document.getElementById("line-kong-compress"),
   "kong-pii": document.getElementById("line-kong-pii"),
   "kong-observability": document.getElementById("line-kong-observability"),
   "kong-mcp": document.getElementById("line-kong-mcp"),
@@ -143,6 +149,7 @@ let judgeReturnTimer = null;
 let judgeUiTimer = null;
 let judgeCompleteTimer = null;
 let piiSanitizerHandoffTimer = null;
+let promptCompressionHandoffTimer = null;
 let piiModelHandoffPending = false;
 let piiResponseCompleteTimer = null;
 let activeScenario = "normal";
@@ -474,6 +481,7 @@ function labelForScenario(scenario) {
     llm_failover: "LLM Failover",
     token_limit: "AI Token Limit",
     prompt_enhancement: "Prompt Decorator",
+    prompt_compression: "Prompt Compression",
     semantic_guard: "Semantic Guard",
     semantic_cache: "Semantic Cache",
     llm_as_judge: "LLM as Judge",
@@ -488,6 +496,12 @@ function currentPiiMode() {
   return document.querySelector('input[name="pii_mode_choice"]:checked')?.value ||
     playForm.elements.namedItem("pii_sanitizer_mode")?.value ||
     "placeholder";
+}
+
+function currentPromptCompressionMode() {
+  return document.querySelector('input[name="prompt_compression_mode_choice"]:checked')?.value ||
+    playForm.elements.namedItem("prompt_compression_mode")?.value ||
+    "rate";
 }
 
 function nodeInfoDetails(target, scenario = activeScenario || "normal") {
@@ -644,6 +658,20 @@ function nodeInfoDetails(target, scenario = activeScenario || "normal") {
         ["Role", "Prompt inspection and allow-or-block decision"],
       ],
     },
+    compressor: {
+      title: "AI Compress Service",
+      intro: "This service appears when Kong compresses a verbose prompt before the upstream model call.",
+      plainEnglish: [
+        "Kong sends the request prompt here before the model call when the scenario uses prompt compression.",
+        "The service returns a compressed prompt and token-savings metadata.",
+        "It only appears during the Prompt Compression scenario.",
+      ],
+      why: "It makes the external compression step visible as part of the governed LLM path.",
+      config: [
+        ["Scenario", "Prompt Compression"],
+        ["Modes", "rate, target_token"],
+      ],
+    },
     "pii-service": {
       title: "AI PII Service",
       intro: "This service appears when Kong sanitizes or blocks sensitive content in request or response paths.",
@@ -783,6 +811,22 @@ function policyDetailsForScenario(scenario) {
         ["Prepended message 2", "Executive escalation policy with sections: Situation, Risk, Actions, Next Checkpoint"],
         ["Additional requirements", "Enterprise-safe tone, regulatory mention when relevant, end with confidence score and owner"],
         ["Where applied", "Prompt-enhancement orchestrator route only"],
+      ],
+    },
+    prompt_compression: {
+      title: "Prompt Compression",
+      intro: "Kong compresses the verbose user prompt before it reaches the model, reducing the number of input tokens sent upstream.",
+      plainEnglish: [
+        "The application sends the full verbose prompt to Kong.",
+        "Kong forwards the prompt to the AI Prompt Compressor service and replaces it with the compressed version before the model call.",
+        "The model still returns a normal answer, while Kong logs the original tokens, compressed tokens, and saved tokens for Grafana.",
+      ],
+      why: "It shows prompt-size governance, lower token cost, and context-window control at the gateway layer.",
+      config: [
+        ["Policy", "AI Prompt Compressor"],
+        ["Compression service", "ai-compress-service:8080"],
+        ["Mode", currentPromptCompressionMode() === "token_count" ? "By Token Count (100 tokens)" : "By Ratio (50%)"],
+        ["Applied route", currentPromptCompressionMode() === "token_count" ? "Prompt-compress token-count orchestrator route" : "Prompt-compress ratio orchestrator route"],
       ],
     },
     semantic_guard: {
@@ -1151,6 +1195,14 @@ function applyScenarioChoice(scenario) {
   if (cacheField) {
     cacheField.value = "single";
   }
+  const promptCompressionModeField = playForm.elements.namedItem("prompt_compression_mode");
+  if (promptCompressionModeField) {
+    promptCompressionModeField.value = "rate";
+  }
+  const promptCompressionValueField = playForm.elements.namedItem("prompt_compression_value");
+  if (promptCompressionValueField) {
+    promptCompressionValueField.value = "50";
+  }
   const semanticGuardField = playForm.elements.namedItem("semantic_guard_mode");
   if (semanticGuardField) {
     semanticGuardField.value = "credentials";
@@ -1167,12 +1219,16 @@ function applyScenarioChoice(scenario) {
   if (lakeraField) {
     lakeraField.value = "content_moderation";
   }
+  const isPromptCompression = activeScenario === "prompt_compression";
   const isSemanticCache = activeScenario === "semantic_cache";
   const isSemanticGuard = activeScenario === "semantic_guard";
   const isLlmJudge = activeScenario === "llm_as_judge";
   const isPiiSanitizer = activeScenario === "pii_sanitizer";
   const isRag = activeScenario === "rag";
   const isLakera = activeScenario === "lakera_guard";
+  if (promptCompressionControls) {
+    promptCompressionControls.hidden = !isPromptCompression;
+  }
   if (semanticCacheControls) {
     semanticCacheControls.hidden = !isSemanticCache;
   }
@@ -1192,9 +1248,12 @@ function applyScenarioChoice(scenario) {
     lakeraControls.hidden = !isLakera;
   }
   if (playButton) {
-    playButton.hidden = isSemanticCache || isPiiSanitizer || isRag;
+    playButton.hidden = isPromptCompression || isSemanticCache || isPiiSanitizer || isRag;
   }
   updateScenarioInfraVisibility(activeScenario);
+  if (isPromptCompression) {
+    renderPromptCompressionPayload();
+  }
   if (isSemanticCache) {
     renderSemanticCachePayloads();
   }
@@ -1253,6 +1312,61 @@ function semanticCacheEditablePayload(step) {
     ...defaultPayload,
     user_prompt: editedPrompt || defaultPayload.user_prompt,
   };
+}
+
+function promptCompressionPayloadForMode(mode) {
+  const base = currentFormPayload();
+  const verbosePrompt = [
+    "Create an executive-ready escalation update for the account team.",
+    `Account: ${base.account_name}`,
+    `Customer ID: ${base.customer_id}`,
+    `Issue summary: ${base.issue_summary}`,
+    `Product issue: ${base.product_issue}`,
+    `Billing issue: ${base.billing_issue}`,
+    `Incident ID: ${base.incident_id}`,
+    "Context notes:",
+    "- The customer wants a same-day executive update.",
+    "- The customer wants a same-day executive update with explicit owners and next checkpoints.",
+    "- The customer wants a same-day executive update with explicit owners and next checkpoints, including a billing remediation status.",
+    "- The customer also wants the technical recovery posture explained in plain business language for leadership.",
+    "- Repeat and reconcile all account details, incident details, business risks, and next actions before writing the answer.",
+    "- Repeat and reconcile all account details, incident details, business risks, and next actions before writing the answer.",
+    "- Repeat and reconcile all account details, incident details, business risks, and next actions before writing the answer.",
+    "Requirements:",
+    "1) Write Situation, Risk, Actions, and Next Checkpoint.",
+    "2) Mention billing remediation, engineering mitigation, executive communication, and ownership.",
+    "3) Keep it concise and executive-safe.",
+  ].join("\n");
+  return {
+    governance_scenario: "prompt_compression",
+    prompt_compression_mode: mode,
+    prompt_compression_value: mode === "token_count" ? 100 : 50,
+    system_prompt:
+      "You are an executive escalation assistant. Return four short sections only: Situation, Risk, Actions, and Next Checkpoint.",
+    user_prompt: verbosePrompt,
+  };
+}
+
+function renderPromptCompressionPayload(forcePrompt = false, mode = currentPromptCompressionMode()) {
+  const modeField = playForm.elements.namedItem("prompt_compression_mode");
+  if (modeField) {
+    modeField.value = mode;
+  }
+  const valueField = playForm.elements.namedItem("prompt_compression_value");
+  if (valueField) {
+    valueField.value = String(mode === "token_count" ? 100 : 50);
+  }
+  if (!promptCompressionPayload) {
+    return;
+  }
+  const currentValue = promptCompressionPayload.value.trim();
+  const knownDefaults = new Set([
+    promptCompressionPayloadForMode("rate").user_prompt,
+    promptCompressionPayloadForMode("token_count").user_prompt,
+  ]);
+  if (forcePrompt || !currentValue || knownDefaults.has(currentValue)) {
+    promptCompressionPayload.value = promptCompressionPayloadForMode(mode).user_prompt;
+  }
 }
 
 function renderSemanticCachePayloads() {
@@ -1447,6 +1561,15 @@ function renderLakeraPayload(forcePrompt = false, mode = currentLakeraMode()) {
 
 function scenarioPromptOverrides(payload) {
   const scenario = payload.governance_scenario || activeScenario;
+  if (scenario === "prompt_compression") {
+    const mode = payload.prompt_compression_mode || currentPromptCompressionMode();
+    const defaultPayload = promptCompressionPayloadForMode(mode);
+    payload.prompt_compression_mode = mode;
+    payload.prompt_compression_value = defaultPayload.prompt_compression_value;
+    payload.system_prompt = defaultPayload.system_prompt;
+    payload.user_prompt = promptCompressionPayload?.value?.trim() || defaultPayload.user_prompt;
+    return payload;
+  }
   if (scenario === "semantic_cache") {
     const editable = semanticCacheEditablePayload(payload.semantic_cache_step || "seed");
     payload.system_prompt = editable.system_prompt;
@@ -1496,6 +1619,16 @@ function scenarioPromptOverrides(payload) {
 
 function scenarioRequestPayload(payload) {
   const scenario = payload.governance_scenario || activeScenario;
+  if (scenario === "prompt_compression") {
+    return {
+      governance_scenario: "prompt_compression",
+      prompt_compression_mode: payload.prompt_compression_mode,
+      prompt_compression_value: payload.prompt_compression_value,
+      user_prompt: payload.user_prompt,
+      run_id: payload.run_id,
+      context_id: payload.context_id,
+    };
+  }
   if (scenario === "semantic_guard") {
     return {
       governance_scenario: "semantic_guard",
@@ -2061,6 +2194,10 @@ function resetTopology() {
     clearTimeout(piiSanitizerHandoffTimer);
     piiSanitizerHandoffTimer = null;
   }
+  if (promptCompressionHandoffTimer) {
+    clearTimeout(promptCompressionHandoffTimer);
+    promptCompressionHandoffTimer = null;
+  }
   if (piiResponseCompleteTimer) {
     clearTimeout(piiResponseCompleteTimer);
     piiResponseCompleteTimer = null;
@@ -2164,6 +2301,10 @@ function applyComponentState(component, state) {
       activateRedisPath(state);
       return;
     }
+    if (component === "compressor") {
+      activateCompressionPath(state);
+      return;
+    }
     if (component === "pii-service") {
       activatePiiPath(state);
       return;
@@ -2242,8 +2383,9 @@ function updateScenarioInfraVisibility(scenario) {
   const showRedis = scenario === "semantic_guard" || scenario === "semantic_cache" || scenario === "rag";
   const showJudge = scenario === "llm_as_judge";
   const showPii = scenario === "pii_sanitizer";
+  const showCompression = scenario === "prompt_compression";
   const showLakera = scenario === "lakera_guard";
-  const focusedScenario = showRedis || showJudge || showPii || showLakera;
+  const focusedScenario = showRedis || showJudge || showPii || showCompression || showLakera;
 
   setScenarioVisibility("redis", showRedis);
   setLineVisibility("kong-redis", showRedis);
@@ -2253,6 +2395,9 @@ function updateScenarioInfraVisibility(scenario) {
 
   setScenarioVisibility("judge-model", showJudge);
   setLineVisibility("kong-judge", showJudge);
+
+  setScenarioVisibility("compressor", showCompression);
+  setLineVisibility("kong-compress", showCompression);
 
   setScenarioVisibility("pii-service", showPii);
   setLineVisibility("kong-pii", showPii);
@@ -2450,6 +2595,12 @@ function activatePiiPath(state = "active") {
   markLine("kong-pii", state);
 }
 
+function activateCompressionPath(state = "active") {
+  activateActorPath("orchestrator", state);
+  markNode("compressor", state);
+  markLine("kong-compress", state);
+}
+
 function activatePiiRequestPath(state = "active") {
   activatePiiPath(state);
 }
@@ -2625,15 +2776,18 @@ function renderFinalOutput(result) {
   const supportRunbook = unwrapStructuredValue(result.support_track?.runbook);
   const successReply = unwrapStructuredValue(result.success_track?.customer_reply);
   const successTask = unwrapStructuredValue(result.success_track?.followup_task);
+  const promptCompressionProbe = result.prompt_compression_probe;
   const piiProbe = result.pii_sanitizer_probe;
   const judgeProbe = result.llm_judge_probe;
   const ragProbe = result.rag_probe;
   const lakeraProbe = result.lakera_probe;
-  const isFocusedProbe = Boolean(result.semantic_cache_probe || piiProbe || judgeProbe || ragProbe || lakeraProbe);
+  const isFocusedProbe = Boolean(result.semantic_cache_probe || promptCompressionProbe || piiProbe || judgeProbe || ragProbe || lakeraProbe);
   const summaryCopy = lakeraProbe
     ? "This output comes from the Lakera policy guard probe and should show whether Kong blocked the prompt before the model call."
     : ragProbe
     ? "This answer comes from the orchestrator RAG probe using either the baseline route or the Kong RAG-injected route."
+    : promptCompressionProbe
+      ? "This output comes from the prompt-compression probe and should show how Kong reduced the prompt before the model call."
     : isFocusedProbe
       ? "This output comes from a focused governance probe rather than the full multi-agent workflow."
       : "Executive summary created by the orchestrator LLM after combining orchestrator context, support-agent output, and success-agent output.";
@@ -2665,6 +2819,38 @@ function renderFinalOutput(result) {
           </div>
         </div>
       </section>
+      ${
+        promptCompressionProbe
+          ? `
+      <section class="output-section output-section-wide">
+        <strong>Prompt Compression Probe</strong>
+        <p class="output-section-copy">Created by the orchestrator in the AI Prompt Compressor scenario. Kong compresses the verbose upstream prompt before it reaches the model and emits compression metrics to the audit logs.</p>
+        <div class="output-subgrid">
+          <div class="output-subsection">
+            <span>Compression Policy</span>
+            ${renderDefinitionList([
+              ["Mode", promptCompressionProbe.mode === "token_count" ? "By Token Count" : "By Ratio"],
+              ["Requested Value", promptCompressionProbe.mode === "token_count" ? `${promptCompressionProbe.requested_value} tokens` : `${promptCompressionProbe.requested_value}%`],
+              ["Original Tokens", promptCompressionProbe.metrics?.original_token_count],
+              ["Compressed Tokens", promptCompressionProbe.metrics?.compress_token_count],
+              ["Tokens Saved", promptCompressionProbe.metrics?.save_token_count],
+              ["Compression Value", promptCompressionProbe.metrics?.compress_value],
+              ["Compression Type", promptCompressionProbe.metrics?.compress_type],
+              ["Compressor Model", promptCompressionProbe.metrics?.compressor_model],
+            ])}
+            ${renderTextBlock(
+              promptCompressionProbe.metrics?.information ||
+                "Kong compressed the prompt before the model call and logged the token savings for observability."
+            )}
+          </div>
+          <div class="output-subsection output-subsection-wide">
+            <span>Original Request Prompt</span>
+            ${renderTextBlock(promptCompressionProbe.original_prompt?.user_prompt)}
+          </div>
+        </div>
+      </section>`
+          : ""
+      }
       ${
         lakeraProbe
           ? `
@@ -3096,6 +3282,15 @@ function handleTraceEvent(payload) {
         markLine("kong-pii", "complete");
         setOpenAiNodeState("complete");
         markLine("kong-openai", "complete");
+      } else if (traceState.scenario === "prompt_compression") {
+        setFlowStage("Prompt compression probe", payload.message);
+        hideTopologyActivity();
+        clearOrchestratorLlmPath();
+        markNode("kong", "active");
+        markNode("compressor", "complete");
+        markLine("kong-compress", "complete");
+        setOpenAiNodeState("complete");
+        markLine("kong-openai", "complete");
       } else if (traceState.scenario === "rag") {
         if (payload.rag_mode === "after") {
           upsertRagProbeNode(payload, "active", payload.message);
@@ -3229,6 +3424,29 @@ function handleTraceEvent(payload) {
         }
         break;
       }
+      if (traceState.scenario === "prompt_compression") {
+        if (promptCompressionHandoffTimer) {
+          clearTimeout(promptCompressionHandoffTimer);
+          promptCompressionHandoffTimer = null;
+        }
+        activateActorPath("orchestrator", "active");
+        markNode("kong", "active");
+        activateCompressionPath("active");
+        markLine("kong-openai", "complete");
+        setOpenAiNodeState("complete");
+        promptCompressionHandoffTimer = window.setTimeout(() => {
+          if (traceState.scenario === "prompt_compression") {
+            markNode("compressor", "complete");
+            markLine("kong-compress", "complete");
+            markNode("kong", "active");
+            markLine("kong-openai", "active");
+            setOpenAiNodeState("active");
+            setFlowStage("Prompt forwarded to model", "Kong finished prompt compression and is now calling the upstream model.");
+          }
+          promptCompressionHandoffTimer = null;
+        }, 450);
+        break;
+      }
       if (
         traceState.scenario === "llm_failover" &&
         payload.actor === "orchestrator" &&
@@ -3304,6 +3522,19 @@ function handleTraceEvent(payload) {
         markNode("ui", "active");
         break;
       }
+      if (traceState.scenario === "prompt_compression") {
+        if (promptCompressionHandoffTimer) {
+          clearTimeout(promptCompressionHandoffTimer);
+          promptCompressionHandoffTimer = null;
+        }
+        activateActorPath(payload.actor || "orchestrator", "active");
+        markNode("compressor", "complete");
+        markLine("kong-compress", "complete");
+        markNode("kong", "active");
+        setOpenAiNodeState("complete");
+        markLine("kong-openai", "complete");
+        break;
+      }
       if (
         traceState.scenario === "llm_failover" &&
         payload.actor === "orchestrator" &&
@@ -3344,6 +3575,8 @@ function handleTraceEvent(payload) {
           : null;
       const titleMap = {
         prompt_decoration: "Decorator policy applied",
+        prompt_compression: "Prompt compression policy applied",
+        prompt_compression_result: "Prompt compression result logged",
         token_limit: "Kong token policy blocked request",
         semantic_guard: "Kong semantic guard blocked request",
         semantic_cache_miss: "Semantic cache miss",
@@ -3408,6 +3641,15 @@ function handleTraceEvent(payload) {
       }
       if (payload.stage === "token_limit") {
         setFlowStage("Token policy blocked request", payload.summary || "Kong AI token governance blocked the OpenAI path.");
+      }
+      if (payload.stage === "prompt_compression") {
+        activateCompressionPath("active");
+        markNode("kong", "active");
+        setFlowStage("Prompt compression applied", payload.summary || "Kong is compressing the upstream prompt before the model call.");
+      }
+      if (payload.stage === "prompt_compression_result") {
+        activateCompressionPath("complete");
+        setFlowStage("Compression result logged", payload.summary || "Kong logged the prompt compression outcome for Grafana.");
       }
       if (payload.stage === "semantic_guard") {
         completeRedisPath();
@@ -4045,6 +4287,13 @@ playButton.addEventListener("click", (event) => {
   play();
 });
 
+promptCompressionSendButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  const selectedMode = currentPromptCompressionMode();
+  sceneModal.close();
+  play({ governance_scenario: "prompt_compression", prompt_compression_mode: selectedMode });
+});
+
 semanticCacheSeedButton?.addEventListener("click", (event) => {
   event.preventDefault();
   sceneModal.close();
@@ -4088,6 +4337,9 @@ presetOptions?.addEventListener("change", (event) => {
     return;
   }
   applyScenePreset(target.value);
+  if (activeScenario === "prompt_compression") {
+    renderPromptCompressionPayload(false, currentPromptCompressionMode());
+  }
   if (activeScenario === "semantic_cache") {
     renderSemanticCachePayloads();
   }
@@ -4112,6 +4364,17 @@ scenarioOptions?.addEventListener("change", (event) => {
   }
   applyScenarioChoice(target.value);
   if (policyModal?.open) {
+    renderPolicyModal();
+  }
+});
+
+promptCompressionModeOptions?.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement) || target.name !== "prompt_compression_mode_choice") {
+    return;
+  }
+  renderPromptCompressionPayload(true, target.value);
+  if (policyModal?.open && activeScenario === "prompt_compression") {
     renderPolicyModal();
   }
 });
@@ -4173,6 +4436,10 @@ resetObservabilityButton?.addEventListener("click", async () => {
 });
 
 playForm.addEventListener("input", () => {
+  if (activeScenario === "prompt_compression") {
+    renderPromptCompressionPayload(false, currentPromptCompressionMode());
+    return;
+  }
   if (activeScenario === "semantic_cache") {
     return;
   }

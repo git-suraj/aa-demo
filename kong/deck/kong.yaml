@@ -117,6 +117,9 @@ plugins:
           local meta = proxy['meta'] or {}
           local usage = proxy['usage'] or {}
           local cache = proxy['cache'] or {}
+          local compressor = ai['compressor'] or {}
+          local compressor_items = compressor['compress_items'] or {}
+          local compressor_entry = compressor_items[1] or compressor
           local rag = proxy['rag-inject'] or proxy['rag_inject'] or ai['rag-inject'] or ai['rag_inject'] or {}
           local lakera = proxy['lakera-guard'] or proxy['lakera_guard'] or ai['lakera-guard'] or ai['lakera_guard'] or {}
           local judge = ai['ai-llm-as-judge'] or {}
@@ -283,6 +286,13 @@ plugins:
           log_payload['ai_cache_embeddings_provider'] = tostring(cache['embeddings_provider'] or '')
           log_payload['ai_cache_embeddings_model'] = tostring(cache['embeddings_model'] or '')
           log_payload['ai_cache_embeddings_latency'] = tonumber(cache['embeddings_latency'] or 0) or 0
+          log_payload['compressor_original_tokens'] = tonumber(compressor_entry['original_token_count'] or 0) or 0
+          log_payload['compressor_compressed_tokens'] = tonumber(compressor_entry['compress_token_count'] or 0) or 0
+          log_payload['compressor_saved_tokens'] = tonumber(compressor_entry['save_token_count'] or 0) or 0
+          log_payload['compressor_value'] = tonumber(compressor_entry['compress_value'] or 0) or 0
+          log_payload['compressor_type'] = tostring(compressor_entry['compress_type'] or '')
+          log_payload['compressor_model'] = tostring(compressor_entry['compressor_model'] or '')
+          log_payload['compressor_information'] = tostring(compressor_entry['information'] or '')
           log_payload['ai_rag_vector_db'] = tostring(rag['vector_db'] or '')
           log_payload['ai_rag_injected'] = tostring(rag['injected'] == true)
           log_payload['ai_rag_fetch_latency'] = tonumber(rag['fetch_latency'] or 0) or 0
@@ -690,6 +700,92 @@ services:
                   2) State customer posture explicitly and keep the tone enterprise-safe.
                   3) Mention regulatory or data residency considerations when they are relevant.
                   4) End with a confidence score and a named owner.
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: openai
+                name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
+
+  - name: ai-orchestrator-prompt-compress-ratio-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-prompt-compress-ratio-demo-chat-route
+        paths:
+          - /ai/orchestrator-prompt-compress-ratio-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-prompt-compressor
+        config:
+          compressor_type: rate
+          compressor_url: http://ai-compress-service:8080
+          keepalive_timeout: 60000
+          log_text_data: false
+          stop_on_error: true
+          timeout: 10000
+          compression_ranges:
+            - min_tokens: 0
+              max_tokens: 1000000
+              value: 0.5
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: openai
+                name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
+
+  - name: ai-orchestrator-prompt-compress-token-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-prompt-compress-token-demo-chat-route
+        paths:
+          - /ai/orchestrator-prompt-compress-token-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-prompt-compressor
+        config:
+          compressor_type: target_token
+          compressor_url: http://ai-compress-service:8080
+          keepalive_timeout: 60000
+          log_text_data: false
+          stop_on_error: true
+          timeout: 10000
+          compression_ranges:
+            - min_tokens: 0
+              max_tokens: 1000000
+              value: 100
       - name: ai-proxy-advanced
         config:
           targets:

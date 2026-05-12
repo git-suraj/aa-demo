@@ -31,6 +31,28 @@ Before running the demo, make sure you have:
 - a valid Konnect personal access token with access to the target control plane
 - a populated `.env` file based on [.env.example](/Users/surajpillai/Documents/work/demos/learn/aa-demo/.env.example)
 
+Cloudsmith-hosted supporting images required for focused governance scenarios:
+
+- `docker.cloudsmith.io/kong/ai-pii/service:v0.1.4-en`
+- `docker.cloudsmith.io/kong/ai-compress/service:v0.0.2`
+
+If you do not already have those images locally:
+
+```bash
+docker login docker.cloudsmith.io
+docker pull docker.cloudsmith.io/kong/ai-pii/service:v0.1.4-en
+docker pull docker.cloudsmith.io/kong/ai-compress/service:v0.0.2
+```
+
+Notes:
+
+- the Cloudsmith images are used for the `PII Sanitization` and `Prompt Compression` scenarios
+- the registry credentials are separate from your Konnect PAT
+- for the AI PII image, AI compression image:
+  - username: `1Password from shared vault`
+  - password: `1Passwordfrom shared vault`
+- Prompt Compression requires memory. I have configured 16GB for docker
+
 Minimum environment values required for the main startup flow:
 
 - `KONNECT_TOKEN`
@@ -183,6 +205,8 @@ MCP discovery shape:
   - Kong checks Redis for semantically similar prompts and can return a cached response without calling the model again.
 - `AI Sanitizer / AI PII Service`
   - Kong sends request and response content through the AI PII Service to anonymize or block sensitive data in the PII scenario.
+- `AI Prompt Compressor`
+  - Kong sends verbose prompts through the AI Prompt Compressor service before the model call so the demo can show token savings and prompt-size governance.
 - `AI Lakera Guard`
   - Kong sends prompts to Lakera for policy inspection before allowing the request to reach the model.
 - `Workflow Graph`
@@ -862,6 +886,7 @@ The route path is selected by the `governance_scenario` field sent in the `Play`
 - `llm_failover` -> `/ai/orchestrator-failover-demo/chat/completions`
 - `token_limit` -> `/ai/orchestrator-token-demo/chat/completions`
 - `prompt_enhancement` -> `/ai/orchestrator-prompt-enhance-demo/chat/completions`
+- `prompt_compression` -> `/ai/orchestrator-prompt-compress-ratio-demo/chat/completions` or `/ai/orchestrator-prompt-compress-token-demo/chat/completions`
 - `semantic_guard` -> `/ai/orchestrator-semantic-guard-demo/chat/completions`
 - `semantic_cache` -> `/ai/orchestrator-semantic-cache-demo/chat/completions`
 - `rag` -> `/ai/orchestrator-rag-before-demo/chat/completions` or `/ai/orchestrator-rag-after-demo/chat/completions`
@@ -972,7 +997,66 @@ The prompt decorator scenario route uses this enhancement policy:
 - `Mention regulatory or data residency considerations when they are relevant.`
 - `End with a confidence score and a named owner.`
 
-### 5. Semantic Guard
+### 5. Prompt Compression
+
+This scenario demonstrates Kong shrinking a verbose orchestrator prompt before it reaches the upstream model.
+
+Behind the scenes:
+
+- the UI exposes one top-level `Prompt Compression` scenario with two explicit sub-modes:
+  - `By Ratio (50%)`
+  - `By Token Count (100)`
+- the orchestrator switches to one of two dedicated routes:
+  - `/ai/orchestrator-prompt-compress-ratio-demo/chat/completions`
+  - `/ai/orchestrator-prompt-compress-token-demo/chat/completions`
+- each route applies `ai-prompt-compressor` before `ai-proxy-advanced`
+- both routes call the external Kong AI Prompt Compressor service at:
+  - `docker.cloudsmith.io/kong/ai-compress/service:v0.0.2`
+- the ratio route uses:
+  - `compressor_type: rate`
+  - `compression_ranges: [{ min_tokens: 0, max_tokens: 1000000, value: 0.5 }]`
+- the token-count route uses:
+  - `compressor_type: target_token`
+  - `compression_ranges: [{ min_tokens: 0, max_tokens: 1000000, value: 100 }]`
+- the probe sends a deliberately verbose editable prompt so token savings are easy to see in both the UI and Grafana
+
+The demo intentionally uses the focused-probe pattern instead of the full MCP/sub-agent orchestration flow so the before-compression request shape and the logged token savings are easy to explain.
+
+When `Prompt Compression` is selected in `View Scene`, the scene popup changes from a single `Play` action to two explicit compression-mode controls:
+
+- `Send Prompt Compression Request` with `By Ratio (50%)`
+  - sends `governance_scenario: "prompt_compression"` with `prompt_compression_mode: "rate"`
+  - Kong compresses the verbose prompt to 50% of its original size before the model call
+
+- `Send Prompt Compression Request` with `By Token Count (100)`
+  - sends `governance_scenario: "prompt_compression"` with `prompt_compression_mode: "token_count"`
+  - Kong compresses the verbose prompt toward a 100-token target before the model call
+
+The final output shows:
+
+- the selected compression mode
+- the requested ratio or target token count
+- the original request prompt
+- original tokens
+- compressed tokens
+- saved tokens
+- compression type and compressor model when present in the Kong audit log
+
+Grafana now includes prompt-compression-specific panels in `Kong Governance Overview`, including:
+
+- total tokens saved
+- compression request count
+- average tokens saved per request
+- saved tokens by consumer
+- original vs compressed tokens
+- a prompt compression log stream
+
+Important setup note:
+
+- the AI Prompt Compressor service image is hosted in Kong's private Cloudsmith registry
+- you must authenticate with `docker login docker.cloudsmith.io`
+
+### 6. Semantic Guard
 
 This scenario demonstrates Kong rejecting semantically unsafe prompts using `ai-semantic-prompt-guard` backed by Redis.
 
@@ -1007,7 +1091,7 @@ The `+` policy panel in the UI now shows the exact denied prompt families and ex
 - `vectordb.threshold`
   - final similarity cutoff used for the block decision
 
-### 6. Semantic Cache
+### 7. Semantic Cache
 
 This scenario demonstrates Kong serving a repeated orchestrator prompt from semantic cache backed by Redis.
 
@@ -1070,7 +1154,7 @@ Important operational note:
 - because the cache is semantic, a later "first" request can still be a real cache hit if a sufficiently similar prompt already exists in Redis
 - if you want a deterministic miss-then-hit demo sequence, clear semantic cache first, then run the seed request, then run the reuse request
 
-### 7. RAG
+### 8. RAG
 
 This scenario demonstrates Kong improving a support answer by retrieving fictional AtlasFlow Cloud KB content through `ai-rag-injector`.
 
@@ -1115,7 +1199,7 @@ To ingest the KB for the local hybrid/Konnect demo stack, use:
 
 The helper uses `kong runner` inside `kong-dp` because the standard `ingest_chunk` Admin API path is not the right operational path for this hybrid/Konnect-style setup.
 
-### 8. PII Sanitization
+### 9. PII Sanitization
 
 This scenario demonstrates Kong anonymizing sensitive information in both the upstream request body and the downstream LLM response body.
 
@@ -1171,7 +1255,7 @@ Important setup note:
   - username: `kong/ai-pii`
   - password: your support-provided token
 
-### 8. LLM as Judge
+### 10. LLM as Judge
 
 This scenario demonstrates Kong generating a candidate response with one model and then scoring that response with a separate judge model.
 
@@ -1641,6 +1725,19 @@ docker exec orchestrator curl -s http://mock-api:8000/customers/cust_acme
 - Konnect hybrid data plane certificates
 - an OpenAI API key
 - a Gemini API key
+
+Cloudsmith-hosted supporting images required for focused governance scenarios:
+
+- `docker.cloudsmith.io/kong/ai-pii/service:v0.1.4-en`
+- `docker.cloudsmith.io/kong/ai-compress/service:v0.0.2`
+
+If you do not already have those images locally:
+
+```bash
+docker login docker.cloudsmith.io
+docker pull docker.cloudsmith.io/kong/ai-pii/service:v0.1.4-en
+docker pull docker.cloudsmith.io/kong/ai-compress/service:v0.0.2
+```
 
 ## Quick Start
 

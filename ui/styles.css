@@ -116,6 +116,24 @@ button:hover {
   min-width: 0;
 }
 
+.brand-hero {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.brand-copy {
+  min-width: 0;
+}
+
+.brand-mark {
+  width: 78px;
+  height: 78px;
+  flex: 0 0 78px;
+  object-fit: contain;
+  margin-top: 0;
+}
+
 .eyebrow,
 .panel-kicker,
 .node-label,
@@ -132,9 +150,9 @@ button:hover {
 }
 
 .topbar h1 {
-  margin: 8px 0 10px;
-  font-size: clamp(2rem, 3.3vw, 3.35rem);
-  line-height: 0.96;
+  margin: 6px 0 10px;
+  font-size: clamp(1.7rem, 2.5vw, 2.65rem);
+  line-height: 1;
   max-width: 11ch;
 }
 
@@ -808,6 +826,7 @@ button:hover {
 .redis-node,
 .judge-node,
 .lakera-node,
+.compress-node,
 .pii-node,
 .observability-node {
   top: 468px;
@@ -835,6 +854,14 @@ button:hover {
   border-color: rgba(255, 120, 120, 0.56);
   background:
     linear-gradient(180deg, rgba(255, 120, 120, 0.14), rgba(255, 120, 120, 0.04)),
+    rgba(11, 13, 18, 0.94);
+}
+
+.compress-node {
+  top: 528px;
+  border-color: rgba(150, 214, 255, 0.56);
+  background:
+    linear-gradient(180deg, rgba(150, 214, 255, 0.14), rgba(150, 214, 255, 0.04)),
     rgba(11, 13, 18, 0.94);
 }
 
@@ -2324,6 +2351,17 @@ button:hover {
 
   .topbar > :first-child {
     flex: 1 1 auto;
+  }
+
+  .brand-hero {
+    align-items: center;
+  }
+
+  .brand-mark {
+    width: 64px;
+    height: 64px;
+    flex-basis: 64px;
+    margin-top: 0;
   }
 
   .topbar-actions {

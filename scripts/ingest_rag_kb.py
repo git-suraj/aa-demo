@@ -8,11 +8,12 @@ import subprocess
 import tempfile
 
 
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_CONTAINER = "kong-dp"
-DEFAULT_SOURCE_DIR = pathlib.Path("rag/atlasflow-support-kb")
-DEFAULT_DECK_FILE = pathlib.Path("kong/deck/kong.yaml")
+DEFAULT_SOURCE_DIR = REPO_ROOT / "rag" / "atlasflow-support-kb"
+DEFAULT_DECK_FILE = REPO_ROOT / "kong" / "deck" / "kong.yaml"
 DEFAULT_RAG_SERVICE_NAME = "ai-orchestrator-rag-after-demo-service"
-RUNNER_SCRIPT = pathlib.Path("scripts/ingest_rag_kb.lua")
+RUNNER_SCRIPT = REPO_ROOT / "scripts" / "ingest_rag_kb.lua"
 
 
 def chunk_text(text: str, chunk_size: int = 1100, overlap: int = 150) -> list[str]:
@@ -173,6 +174,8 @@ def main() -> None:
     args = parser.parse_args()
 
     source_dir = pathlib.Path(args.source_dir)
+    if not source_dir.is_absolute():
+        source_dir = (REPO_ROOT / source_dir).resolve()
     if not source_dir.exists():
         raise SystemExit(f"Source directory not found: {source_dir}")
 
@@ -181,7 +184,7 @@ def main() -> None:
         raise SystemExit("No KB chunks generated")
 
     plugin_id = args.plugin_id or resolve_plugin_id_from_deck(
-        pathlib.Path(args.deck_file),
+        pathlib.Path(args.deck_file) if pathlib.Path(args.deck_file).is_absolute() else (REPO_ROOT / args.deck_file),
         service_name=args.service_name,
     )
     ingest_chunks(chunks, plugin_id=plugin_id, container=args.container, dry_run=args.dry_run)

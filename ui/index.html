@@ -4,24 +4,28 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Kong Agent + MCP Demo</title>
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="icon" type="image/png" href="/assets/logo.png?v=20260512-brand-1" />
+    <link rel="stylesheet" href="/styles.css?v=20260512-brand-1" />
   </head>
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <div>
-          <p class="eyebrow">Kong AI Gateway Demo</p>
-          <h1>Kong Unified Governance</h1>
-          <p class="hero-copy">
-            Kong governs the full data path: API traffic, events, agent orchestration, LLM
-            routing, and MCP tool access all pass through the gateway with live trace visibility.
-          </p>
-          <div class="hero-highlights" aria-label="Kong governance highlights">
-            <span class="hero-chip">AI routing and failover</span>
-            <span class="hero-chip">MCP tool exposure</span>
-            <span class="hero-chip">Agent AuthN/AuthZ</span>
-            <span class="hero-chip">Semantic and PII controls</span>
-            <span class="hero-chip">Live observability</span>
+        <div class="brand-hero">
+          <img class="brand-mark" src="/assets/logo.png?v=20260512-brand-1" alt="Kong logo" />
+          <div class="brand-copy">
+            <p class="eyebrow">Kong AI Gateway Demo</p>
+            <h1>Kong Unified Governance</h1>
+            <p class="hero-copy">
+              Kong governs the full data path: API traffic, events, agent orchestration, LLM
+              routing, and MCP tool access all pass through the gateway with live trace visibility.
+            </p>
+            <div class="hero-highlights" aria-label="Kong governance highlights">
+              <span class="hero-chip">AI routing and failover</span>
+              <span class="hero-chip">MCP tool exposure</span>
+              <span class="hero-chip">Agent AuthN/AuthZ</span>
+              <span class="hero-chip">Semantic and PII controls</span>
+              <span class="hero-chip">Live observability</span>
+            </div>
           </div>
         </div>
         <div class="topbar-actions">
@@ -107,6 +111,7 @@
                 <path id="line-kong-backend" d="M830 404 L1186 780" />
                 <path id="line-kong-redis" d="M830 396 L968 396 L968 520 L1090 520" />
                 <path id="line-kong-lakera" d="M830 410 L1004 410 L1004 560 L1090 560" />
+                <path id="line-kong-compress" d="M830 428 L980 428 L980 620 L1090 620" />
                 <path id="line-kong-pii" d="M830 420 L942 420 L942 560 L1090 560" />
                 <path id="line-kong-observability" class="telemetry-line" d="M700 456 L700 860" />
               </svg>
@@ -193,6 +198,13 @@
                 <span class="node-label">Sanitization</span>
                 <h3>AI PII Service</h3>
                 <p>Used by Kong AI Sanitizer to anonymize sensitive data in the request and response path.</p>
+              </article>
+
+              <article class="topology-node compress-node scenario-optional" data-node="compressor">
+                <button class="node-info-button" data-info-target="compressor" type="button" aria-label="View AI Prompt Compressor details">+</button>
+                <span class="node-label">Compression</span>
+                <h3>AI Compress Service</h3>
+                <p>Used by Kong AI Prompt Compressor to shrink verbose prompts before the model call.</p>
               </article>
 
               <article class="topology-node observability-node telemetry-node" data-node="observability">
@@ -296,6 +308,10 @@
                 <span>Prompt Decorator</span>
               </label>
               <label class="preset-option">
+                <input type="radio" name="scenario_choice" value="prompt_compression" />
+                <span>Prompt Compression</span>
+              </label>
+              <label class="preset-option">
                 <input type="radio" name="scenario_choice" value="semantic_guard" />
                 <span>Semantic Guard</span>
               </label>
@@ -348,11 +364,31 @@
             </label>
             <input type="hidden" name="governance_scenario" value="normal" />
             <input type="hidden" name="semantic_cache_step" value="single" />
+            <input type="hidden" name="prompt_compression_mode" value="rate" />
+            <input type="hidden" name="prompt_compression_value" value="50" />
             <input type="hidden" name="semantic_guard_mode" value="credentials" />
             <input type="hidden" name="pii_sanitizer_mode" value="placeholder" />
             <input type="hidden" name="rag_mode" value="before" />
             <input type="hidden" name="lakera_mode" value="content_moderation" />
           </form>
+          <section id="prompt-compression-controls" class="probe-controls" hidden>
+            <article class="probe-card">
+              <span class="probe-label">Compression Mode</span>
+              <p class="probe-copy">Choose how Kong AI Prompt Compressor should shrink the request before the model call. The payload below is the verbose prompt sent through Kong.</p>
+              <div class="preset-options" id="prompt-compression-mode-options">
+                <label class="preset-option">
+                  <input type="radio" name="prompt_compression_mode_choice" value="rate" checked />
+                  <span>By Ratio (50%)</span>
+                </label>
+                <label class="preset-option">
+                  <input type="radio" name="prompt_compression_mode_choice" value="token_count" />
+                  <span>By Token Count (100)</span>
+                </label>
+              </div>
+              <textarea id="prompt-compression-payload" class="probe-payload" rows="10"></textarea>
+              <button id="prompt-compression-send-button" class="primary" type="button">Send Prompt Compression Request</button>
+            </article>
+          </section>
           <section id="semantic-cache-controls" class="semantic-cache-controls" hidden>
             <div class="semantic-cache-grid">
               <article class="semantic-cache-card">
@@ -1190,6 +1226,6 @@
         apiKey: "ui-demo-key"
       };
     </script>
-    <script src="/app.js" defer></script>
+    <script src="/app.js?v=20260512-brand-1" defer></script>
   </body>
 </html>
