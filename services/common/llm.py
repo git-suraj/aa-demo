@@ -30,6 +30,7 @@ class OrchestratorLLM:
         user_prompt: str,
         base_url: str | None = None,
         model: str | None = None,
+        include_model: bool = True,
         run_id: str | None = None,
         context_id: str | None = None,
         task_id: str | None = None,
@@ -41,6 +42,15 @@ class OrchestratorLLM:
 
         resolved_base_url = (base_url or self.base_url or "").rstrip("/")
         resolved_model = model or self.model
+        payload = {
+            "temperature": 0.2,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        }
+        if include_model:
+            payload["model"] = resolved_model
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
                 f"{resolved_base_url}/chat/completions",
@@ -54,21 +64,14 @@ class OrchestratorLLM:
                     **({"x-demo-message-id": message_id} if message_id else {}),
                     **({"x-demo-scenario-mode": scenario_mode} if scenario_mode else {}),
                 },
-                json={
-                    "model": resolved_model,
-                    "temperature": 0.2,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                },
+                json=payload,
             )
             response.raise_for_status()
             payload = response.json()
         text = payload.get("choices", [{}])[0].get("message", {}).get("content") or ""
         return {
             "llm_used": True,
-            "model": resolved_model,
+            "model": payload.get("model") or resolved_model,
             "summary": text.strip(),
         }
 
@@ -79,6 +82,7 @@ class OrchestratorLLM:
         user_prompt: str,
         base_url: str | None = None,
         model: str | None = None,
+        include_model: bool = True,
         run_id: str | None = None,
         context_id: str | None = None,
         task_id: str | None = None,
@@ -90,6 +94,15 @@ class OrchestratorLLM:
 
         resolved_base_url = (base_url or self.base_url or "").rstrip("/")
         resolved_model = model or self.model
+        payload = {
+            "temperature": 0.2,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        }
+        if include_model:
+            payload["model"] = resolved_model
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
                 f"{resolved_base_url}/chat/completions",
@@ -103,14 +116,7 @@ class OrchestratorLLM:
                     **({"x-demo-message-id": message_id} if message_id else {}),
                     **({"x-demo-scenario-mode": scenario_mode} if scenario_mode else {}),
                 },
-                json={
-                    "model": resolved_model,
-                    "temperature": 0.2,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                },
+                json=payload,
             )
             response.raise_for_status()
             payload = response.json()
@@ -123,7 +129,7 @@ class OrchestratorLLM:
         }
         return {
             "llm_used": True,
-            "model": resolved_model,
+            "model": payload.get("model") or resolved_model,
             "summary": text.strip(),
             "cache_headers": cache_headers,
         }

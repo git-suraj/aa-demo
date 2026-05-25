@@ -42,6 +42,18 @@ const semanticCacheHitPayload = document.getElementById("semantic-cache-hit-payl
 const semanticCacheSeedButton = document.getElementById("semantic-cache-seed-button");
 const semanticCacheHitButton = document.getElementById("semantic-cache-hit-button");
 const semanticCacheClearButton = document.getElementById("semantic-cache-clear-button");
+const loadBalancingControls = document.getElementById("load-balancing-controls");
+const loadBalancingModeOptions = document.getElementById("load-balancing-mode-options");
+const loadBalancingPresetOptions = document.getElementById("load-balancing-preset-options");
+const loadBalancingPayload = document.getElementById("load-balancing-payload");
+const loadBalancingSendButton = document.getElementById("load-balancing-send-button");
+const tokenLimitControls = document.getElementById("token-limit-controls");
+const tokenLimitPayload = document.getElementById("token-limit-payload");
+const tokenLimitSendButton = document.getElementById("token-limit-send-button");
+const promptEnhancementControls = document.getElementById("prompt-enhancement-controls");
+const promptEnhancementModeOptions = document.getElementById("prompt-enhancement-mode-options");
+const promptEnhancementPayload = document.getElementById("prompt-enhancement-payload");
+const promptEnhancementSendButton = document.getElementById("prompt-enhancement-send-button");
 const promptCompressionControls = document.getElementById("prompt-compression-controls");
 const promptCompressionModeOptions = document.getElementById("prompt-compression-mode-options");
 const promptCompressionPayload = document.getElementById("prompt-compression-payload");
@@ -191,6 +203,40 @@ const scenePresets = {
   },
 };
 
+const loadBalancingPromptDefaults = {
+  failover: [
+    "Create an executive-ready escalation update for the account team.",
+    "Requirements:",
+    "1) Summarize the situation.",
+    "2) Identify the current risk.",
+    "3) Recommend the next action and owner.",
+  ].join("\n"),
+  semantic_support_operational: [
+    "Prepare an enterprise support operations update for the account team.",
+    "Requirements:",
+    "1) Summarize the customer situation and operational impact.",
+    "2) Identify the escalation risk and current owner.",
+    "3) Recommend the next action and checkpoint.",
+    "4) Keep the answer concise and executive-ready.",
+  ].join("\n"),
+  semantic_creative_marketing: [
+    "Draft creative launch messaging for a new Kong AI governance experience.",
+    "Deliverables:",
+    "1) One campaign concept title.",
+    "2) Three launch taglines.",
+    "3) A short event teaser for a customer summit.",
+    "4) Keep the tone polished, vivid, and marketing-forward.",
+  ].join("\n"),
+};
+
+const tokenLimitPromptDefault = [
+  "Create an executive-ready escalation update for the account team.",
+  "Requirements:",
+  "1) Summarize the situation.",
+  "2) Recommend next actions.",
+  "3) Keep the response under 120 words.",
+].join("\n");
+
 document.querySelectorAll("[data-close-modal]").forEach((button) => {
   button.addEventListener("click", () => {
     const modal = document.getElementById(button.dataset.closeModal);
@@ -260,6 +306,8 @@ function createInitialTraceState() {
     runId: null,
     contextId: null,
     scenario: "normal",
+    loadBalancingMode: "failover",
+    loadBalancingPromptPreset: "support_operational",
     rootIds: [],
     nodes: {},
     actorRoots: {},
@@ -478,8 +526,9 @@ async function loadTraceExplorer() {
 function labelForScenario(scenario) {
   const labels = {
     normal: "Normal",
+    load_balancing: "Load Balancing",
     llm_failover: "LLM Failover",
-    token_limit: "AI Token Limit",
+    token_limit: "AI Token Rate Limit",
     prompt_enhancement: "Prompt Decorator",
     prompt_compression: "Prompt Compression",
     semantic_guard: "Semantic Guard",
@@ -502,6 +551,24 @@ function currentPromptCompressionMode() {
   return document.querySelector('input[name="prompt_compression_mode_choice"]:checked')?.value ||
     playForm.elements.namedItem("prompt_compression_mode")?.value ||
     "rate";
+}
+
+function currentPromptEnhancementMode() {
+  return document.querySelector('input[name="prompt_enhancement_mode_choice"]:checked')?.value ||
+    playForm.elements.namedItem("prompt_enhancement_mode")?.value ||
+    "decorated";
+}
+
+function currentLoadBalancingMode() {
+  return document.querySelector('input[name="load_balancing_mode_choice"]:checked')?.value ||
+    playForm.elements.namedItem("load_balancing_mode")?.value ||
+    "failover";
+}
+
+function currentLoadBalancingPromptPreset() {
+  return document.querySelector('input[name="load_balancing_prompt_preset_choice"]:checked')?.value ||
+    playForm.elements.namedItem("load_balancing_prompt_preset")?.value ||
+    "support_operational";
 }
 
 function nodeInfoDetails(target, scenario = activeScenario || "normal") {
@@ -760,11 +827,51 @@ function policyDetailsForScenario(scenario) {
         ["Sub-agent LLM route", "AI Proxy Advanced to Gemini 2.5 Flash"],
       ],
     },
+    load_balancing: {
+      title: "Load Balancing",
+      intro: currentLoadBalancingMode() === "semantic"
+        ? "Kong semantically routes the prompt to the most relevant model target before any provider call is made."
+        : "Kong tries the primary OpenAI path first, then fails over to Gemini when that path is configured to fail.",
+      plainEnglish: currentLoadBalancingMode() === "semantic"
+        ? [
+            "The orchestrator makes one focused probe request through Kong.",
+            "Kong embeds the prompt and compares it with the target descriptions stored for the semantic balancer.",
+            "Kong then sends the request to the best-fit model target and returns that result directly.",
+          ]
+        : [
+            "The orchestrator makes one focused probe request through Kong.",
+            "Kong sends that request to the primary OpenAI target first.",
+            "When the primary path fails, Kong retries using the Gemini fallback target and returns the fallback result.",
+          ],
+      why: currentLoadBalancingMode() === "semantic"
+        ? "It shows prompt-aware model routing at the gateway layer instead of hard-coding model choice in application logic."
+        : "It shows model resilience at the gateway layer instead of in application code.",
+      config: currentLoadBalancingMode() === "semantic"
+        ? [
+            ["Mode", "Semantic Load Balancing"],
+            ["Prompt Preset", currentLoadBalancingPromptPreset() === "creative_marketing" ? "Creative / Marketing" : "Support / Operational"],
+            ["Support target", "OpenAI 4o mini"],
+            ["Creative target", "Gemini 2.5 Flash"],
+            ["Plugin", "AI Proxy Advanced"],
+            ["Balancer algorithm", "semantic"],
+            ["Embedding model", "text-embedding-3-small"],
+            ["Vector store", "Redis"],
+          ]
+        : [
+            ["Mode", "LLM Failover"],
+            ["Primary model", "OpenAI 4o mini"],
+            ["Fallback model", "Gemini 2.5 Flash"],
+            ["Plugin", "AI Proxy Advanced"],
+            ["Balancer algorithm", "priority"],
+            ["Retries", "3"],
+            ["Configured triggers", "error, timeout, invalid_header, http_403, http_404, http_429, http_500, http_502, http_503, http_504, non_idempotent"],
+          ],
+    },
     llm_failover: {
       title: "LLM Failover",
       intro: "Kong tries the primary OpenAI path first, then fails over to Gemini when that path is configured to fail.",
       plainEnglish: [
-        "The orchestrator still makes one normal model request through Kong.",
+        "The orchestrator makes one focused probe request through Kong.",
         "Kong sends that request to the primary OpenAI target first.",
         "When the primary path fails, Kong retries using the Gemini fallback target and returns the fallback result.",
       ],
@@ -773,21 +880,20 @@ function policyDetailsForScenario(scenario) {
         ["Primary model", "OpenAI 4o mini"],
         ["Fallback model", "Gemini 2.5 Flash"],
         ["Plugin", "AI Proxy Advanced"],
-        ["Balancer algorithm", "priority"],
-        ["Retries", "3"],
-        ["Configured triggers", "error, timeout, invalid_header, http_403, http_404, http_429, http_500, http_502, http_503, http_504, non_idempotent"],
       ],
     },
     token_limit: {
-      title: "AI Token Limit",
-      intro: "Kong applies a gateway-side limit and blocks the orchestrator once the route has exceeded the configured budget.",
+      title: "AI Token Rate Limit",
+      intro: "Kong applies a gateway-side rate limit on a focused probe route and blocks the request once the configured consumer budget is exhausted.",
       plainEnglish: [
         "The route is protected by AI Rate Limiting Advanced.",
-        "The first model call is allowed through.",
-        "A later orchestrator model call is rejected at Kong with HTTP 429 instead of reaching the provider.",
+        "This subscene demonstrates a consumer-scoped token rate limit.",
+        "The first probe request is expected to be allowed through.",
+        "The second probe request is expected to be rejected at Kong with HTTP 429 instead of reaching the provider.",
       ],
       why: "It demonstrates usage control and budget enforcement at the gateway.",
       config: [
+        ["Subscene", "Consumer Token Rate Limit"],
         ["Protected route", "Orchestrator AI route"],
         ["Policy", "AI Rate Limiting Advanced"],
         ["Provider key", "openai"],
@@ -800,17 +906,18 @@ function policyDetailsForScenario(scenario) {
       title: "Prompt Decorator",
       intro: "Kong adds extra governance instructions to the orchestrator prompt before the model sees it.",
       plainEnglish: [
-        "The application sends its normal prompt to Kong.",
-        "Kong prepends extra system instructions on the route.",
+        "The plain route forwards the prompt unchanged.",
+        "The decorated route prepends extra system instructions on the Kong route.",
         "Those injected instructions force a more structured, executive-safe response without changing the application code.",
       ],
       why: "It shows how response style and prompt standards can be enforced centrally.",
       config: [
+        ["Mode", currentPromptEnhancementMode() === "plain" ? "Without Decorator" : "With Decorator"],
         ["Policy", "AI Prompt Decorator"],
         ["Prepended message 1", "You are responding under AI governance enforced by Kong Gateway."],
         ["Prepended message 2", "Executive escalation policy with sections: Situation, Risk, Actions, Next Checkpoint"],
         ["Additional requirements", "Enterprise-safe tone, regulatory mention when relevant, end with confidence score and owner"],
-        ["Where applied", "Prompt-enhancement orchestrator route only"],
+        ["Where applied", currentPromptEnhancementMode() === "plain" ? "Plain prompt-enhancement probe route" : "Decorated prompt-enhancement probe route"],
       ],
     },
     prompt_compression: {
@@ -1191,9 +1298,21 @@ function applyScenarioChoice(scenario) {
   if (hiddenField) {
     hiddenField.value = activeScenario;
   }
+  const loadBalancingModeField = playForm.elements.namedItem("load_balancing_mode");
+  if (loadBalancingModeField) {
+    loadBalancingModeField.value = "failover";
+  }
+  const loadBalancingPromptPresetField = playForm.elements.namedItem("load_balancing_prompt_preset");
+  if (loadBalancingPromptPresetField) {
+    loadBalancingPromptPresetField.value = "support_operational";
+  }
   const cacheField = playForm.elements.namedItem("semantic_cache_step");
   if (cacheField) {
     cacheField.value = "single";
+  }
+  const promptEnhancementModeField = playForm.elements.namedItem("prompt_enhancement_mode");
+  if (promptEnhancementModeField) {
+    promptEnhancementModeField.value = "decorated";
   }
   const promptCompressionModeField = playForm.elements.namedItem("prompt_compression_mode");
   if (promptCompressionModeField) {
@@ -1219,6 +1338,9 @@ function applyScenarioChoice(scenario) {
   if (lakeraField) {
     lakeraField.value = "content_moderation";
   }
+  const isLoadBalancing = activeScenario === "load_balancing";
+  const isTokenLimit = activeScenario === "token_limit";
+  const isPromptEnhancement = activeScenario === "prompt_enhancement";
   const isPromptCompression = activeScenario === "prompt_compression";
   const isSemanticCache = activeScenario === "semantic_cache";
   const isSemanticGuard = activeScenario === "semantic_guard";
@@ -1226,6 +1348,18 @@ function applyScenarioChoice(scenario) {
   const isPiiSanitizer = activeScenario === "pii_sanitizer";
   const isRag = activeScenario === "rag";
   const isLakera = activeScenario === "lakera_guard";
+  if (loadBalancingControls) {
+    loadBalancingControls.hidden = !isLoadBalancing;
+  }
+  if (loadBalancingPresetOptions) {
+    loadBalancingPresetOptions.hidden = !isLoadBalancing || currentLoadBalancingMode() !== "semantic";
+  }
+  if (tokenLimitControls) {
+    tokenLimitControls.hidden = !isTokenLimit;
+  }
+  if (promptEnhancementControls) {
+    promptEnhancementControls.hidden = !isPromptEnhancement;
+  }
   if (promptCompressionControls) {
     promptCompressionControls.hidden = !isPromptCompression;
   }
@@ -1248,9 +1382,18 @@ function applyScenarioChoice(scenario) {
     lakeraControls.hidden = !isLakera;
   }
   if (playButton) {
-    playButton.hidden = isPromptCompression || isSemanticCache || isPiiSanitizer || isRag;
+    playButton.hidden = isLoadBalancing || isTokenLimit || isPromptEnhancement || isPromptCompression || isSemanticCache || isPiiSanitizer || isRag;
   }
   updateScenarioInfraVisibility(activeScenario);
+  if (isLoadBalancing) {
+    renderLoadBalancingPayload();
+  }
+  if (isTokenLimit) {
+    renderTokenLimitPayload();
+  }
+  if (isPromptEnhancement) {
+    renderPromptEnhancementPayload();
+  }
   if (isPromptCompression) {
     renderPromptCompressionPayload();
   }
@@ -1312,6 +1455,133 @@ function semanticCacheEditablePayload(step) {
     ...defaultPayload,
     user_prompt: editedPrompt || defaultPayload.user_prompt,
   };
+}
+
+function loadBalancingPayloadForMode(mode, presetOverride = currentLoadBalancingPromptPreset()) {
+  const base = currentFormPayload();
+  const preset = presetOverride;
+  const promptKey =
+    mode === "semantic"
+      ? (preset === "creative_marketing" ? "semantic_creative_marketing" : "semantic_support_operational")
+      : "failover";
+  return {
+    governance_scenario: "load_balancing",
+    load_balancing_mode: mode,
+    load_balancing_prompt_preset: preset,
+    system_prompt:
+      mode === "semantic"
+        ? "You are a helpful assistant. Respond directly to the request and match the requested format."
+        : "You are an executive escalation assistant. Return three short sections only: Situation, Risk, Next Action.",
+    user_prompt: [
+      loadBalancingPromptDefaults[promptKey] || loadBalancingPromptDefaults.failover,
+      ...(mode === "semantic" && preset === "creative_marketing"
+        ? []
+        : [
+            `Account: ${base.account_name}`,
+            `Customer ID: ${base.customer_id}`,
+            `Issue summary: ${base.issue_summary}`,
+            `Product issue: ${base.product_issue}`,
+            `Billing issue: ${base.billing_issue}`,
+            `Incident ID: ${base.incident_id}`,
+          ]),
+    ].join("\n"),
+  };
+}
+
+function renderLoadBalancingPayload(forcePrompt = false, mode = currentLoadBalancingMode()) {
+  const modeField = playForm.elements.namedItem("load_balancing_mode");
+  if (modeField) {
+    modeField.value = mode;
+  }
+  const presetField = playForm.elements.namedItem("load_balancing_prompt_preset");
+  if (presetField) {
+    presetField.value = currentLoadBalancingPromptPreset();
+  }
+  if (loadBalancingPresetOptions) {
+    loadBalancingPresetOptions.hidden = mode !== "semantic";
+  }
+  if (!loadBalancingPayload) {
+    return;
+  }
+  const currentValue = loadBalancingPayload.value.trim();
+  const knownDefaults = new Set([
+    loadBalancingPayloadForMode("failover").user_prompt,
+    loadBalancingPayloadForMode("semantic", "support_operational").user_prompt,
+    loadBalancingPayloadForMode("semantic", "creative_marketing").user_prompt,
+  ]);
+  if (forcePrompt || !currentValue || knownDefaults.has(currentValue)) {
+    loadBalancingPayload.value = loadBalancingPayloadForMode(mode).user_prompt;
+  }
+}
+
+function tokenLimitPayloadValue() {
+  const base = currentFormPayload();
+  return {
+    governance_scenario: "token_limit",
+    system_prompt:
+      "You are an executive escalation assistant. Return one concise paragraph plus a short next-action line.",
+    user_prompt: [
+      tokenLimitPromptDefault,
+      `Account: ${base.account_name}`,
+      `Customer ID: ${base.customer_id}`,
+      `Issue summary: ${base.issue_summary}`,
+      `Product issue: ${base.product_issue}`,
+      `Billing issue: ${base.billing_issue}`,
+      `Incident ID: ${base.incident_id}`,
+    ].join("\n"),
+  };
+}
+
+function renderTokenLimitPayload(forcePrompt = false) {
+  if (!tokenLimitPayload) {
+    return;
+  }
+  const currentValue = tokenLimitPayload.value.trim();
+  const defaultPrompt = tokenLimitPayloadValue().user_prompt;
+  if (forcePrompt || !currentValue || currentValue === defaultPrompt) {
+    tokenLimitPayload.value = defaultPrompt;
+  }
+}
+
+function promptEnhancementPayloadForMode(mode) {
+  const base = currentFormPayload();
+  return {
+    governance_scenario: "prompt_enhancement",
+    prompt_enhancement_mode: mode,
+    system_prompt:
+      "You are an escalation assistant. Respond to the request directly and keep the answer concise.",
+    user_prompt: [
+      "Create an executive-ready escalation update for the account team.",
+      `Account: ${base.account_name}`,
+      `Customer ID: ${base.customer_id}`,
+      `Issue summary: ${base.issue_summary}`,
+      `Product issue: ${base.product_issue}`,
+      `Billing issue: ${base.billing_issue}`,
+      `Incident ID: ${base.incident_id}`,
+      "Requirements:",
+      "1) Explain the situation and business impact.",
+      "2) Recommend next actions.",
+      "3) Keep the response concise.",
+    ].join("\n"),
+  };
+}
+
+function renderPromptEnhancementPayload(forcePrompt = false, mode = currentPromptEnhancementMode()) {
+  const modeField = playForm.elements.namedItem("prompt_enhancement_mode");
+  if (modeField) {
+    modeField.value = mode;
+  }
+  if (!promptEnhancementPayload) {
+    return;
+  }
+  const currentValue = promptEnhancementPayload.value.trim();
+  const knownDefaults = new Set([
+    promptEnhancementPayloadForMode("plain").user_prompt,
+    promptEnhancementPayloadForMode("decorated").user_prompt,
+  ]);
+  if (forcePrompt || !currentValue || knownDefaults.has(currentValue)) {
+    promptEnhancementPayload.value = promptEnhancementPayloadForMode(mode).user_prompt;
+  }
 }
 
 function promptCompressionPayloadForMode(mode) {
@@ -1561,6 +1831,29 @@ function renderLakeraPayload(forcePrompt = false, mode = currentLakeraMode()) {
 
 function scenarioPromptOverrides(payload) {
   const scenario = payload.governance_scenario || activeScenario;
+  if (scenario === "load_balancing") {
+    const mode = payload.load_balancing_mode || currentLoadBalancingMode();
+    const defaultPayload = loadBalancingPayloadForMode(mode);
+    payload.load_balancing_mode = mode;
+    payload.load_balancing_prompt_preset = defaultPayload.load_balancing_prompt_preset;
+    payload.system_prompt = defaultPayload.system_prompt;
+    payload.user_prompt = loadBalancingPayload?.value?.trim() || defaultPayload.user_prompt;
+    return payload;
+  }
+  if (scenario === "token_limit") {
+    const defaultPayload = tokenLimitPayloadValue();
+    payload.system_prompt = defaultPayload.system_prompt;
+    payload.user_prompt = tokenLimitPayload?.value?.trim() || defaultPayload.user_prompt;
+    return payload;
+  }
+  if (scenario === "prompt_enhancement") {
+    const mode = payload.prompt_enhancement_mode || currentPromptEnhancementMode();
+    const defaultPayload = promptEnhancementPayloadForMode(mode);
+    payload.prompt_enhancement_mode = mode;
+    payload.system_prompt = defaultPayload.system_prompt;
+    payload.user_prompt = promptEnhancementPayload?.value?.trim() || defaultPayload.user_prompt;
+    return payload;
+  }
   if (scenario === "prompt_compression") {
     const mode = payload.prompt_compression_mode || currentPromptCompressionMode();
     const defaultPayload = promptCompressionPayloadForMode(mode);
@@ -1619,6 +1912,33 @@ function scenarioPromptOverrides(payload) {
 
 function scenarioRequestPayload(payload) {
   const scenario = payload.governance_scenario || activeScenario;
+  if (scenario === "load_balancing") {
+    return {
+      governance_scenario: "load_balancing",
+      load_balancing_mode: payload.load_balancing_mode,
+      load_balancing_prompt_preset: payload.load_balancing_prompt_preset,
+      user_prompt: payload.user_prompt,
+      run_id: payload.run_id,
+      context_id: payload.context_id,
+    };
+  }
+  if (scenario === "token_limit") {
+    return {
+      governance_scenario: "token_limit",
+      user_prompt: payload.user_prompt,
+      run_id: payload.run_id,
+      context_id: payload.context_id,
+    };
+  }
+  if (scenario === "prompt_enhancement") {
+    return {
+      governance_scenario: "prompt_enhancement",
+      prompt_enhancement_mode: payload.prompt_enhancement_mode,
+      user_prompt: payload.user_prompt,
+      run_id: payload.run_id,
+      context_id: payload.context_id,
+    };
+  }
   if (scenario === "prompt_compression") {
     return {
       governance_scenario: "prompt_compression",
@@ -2380,12 +2700,15 @@ function setLineVisibility(name, visible) {
 }
 
 function updateScenarioInfraVisibility(scenario) {
+  const showLoadBalancing = scenario === "load_balancing";
+  const showTokenLimit = scenario === "token_limit";
+  const showPromptEnhancement = scenario === "prompt_enhancement";
   const showRedis = scenario === "semantic_guard" || scenario === "semantic_cache" || scenario === "rag";
   const showJudge = scenario === "llm_as_judge";
   const showPii = scenario === "pii_sanitizer";
   const showCompression = scenario === "prompt_compression";
   const showLakera = scenario === "lakera_guard";
-  const focusedScenario = showRedis || showJudge || showPii || showCompression || showLakera;
+  const focusedScenario = showLoadBalancing || showTokenLimit || showPromptEnhancement || showRedis || showJudge || showPii || showCompression || showLakera;
 
   setScenarioVisibility("redis", showRedis);
   setLineVisibility("kong-redis", showRedis);
@@ -2404,8 +2727,8 @@ function updateScenarioInfraVisibility(scenario) {
   setScenarioVisibility("openai", true);
   setLineVisibility("kong-openai", true);
 
-  setScenarioVisibility("gemini", scenario === "llm_failover" || (!focusedScenario));
-  setLineVisibility("kong-gemini", scenario === "llm_failover" || (!focusedScenario));
+  setScenarioVisibility("gemini", scenario === "load_balancing" || scenario === "llm_failover" || (!focusedScenario));
+  setLineVisibility("kong-gemini", scenario === "load_balancing" || scenario === "llm_failover" || (!focusedScenario));
 
   setScenarioVisibility("support-agent", !focusedScenario);
   setScenarioVisibility("success-agent", !focusedScenario);
@@ -2723,6 +3046,19 @@ function setOrchestratorModelStates({ openai = "complete", gemini = "complete" }
   markLine("kong-gemini", gemini);
 }
 
+function inferSemanticLoadBalancingProvider(preset = traceState.loadBalancingPromptPreset) {
+  return preset === "creative_marketing" ? "gemini" : "openai";
+}
+
+function applyTokenLimitBlockedPath() {
+  activateActorPath("orchestrator", "active");
+  markNode("kong", "active");
+  markNode("openai", "complete");
+  markLine("kong-openai", "complete");
+  markNode("ui", "active");
+  markLine("ui-kong", "active");
+}
+
 function markLlmPath(payload, state = "active") {
   activateActorPath(payload.actor || "orchestrator", state);
   const model = String(payload.model || "").toLowerCase();
@@ -2776,16 +3112,27 @@ function renderFinalOutput(result) {
   const supportRunbook = unwrapStructuredValue(result.support_track?.runbook);
   const successReply = unwrapStructuredValue(result.success_track?.customer_reply);
   const successTask = unwrapStructuredValue(result.success_track?.followup_task);
+  const loadBalancingProbe = result.load_balancing_probe;
+  const tokenLimitProbe = result.token_limit_probe;
+  const promptEnhancementProbe = result.prompt_enhancement_probe;
   const promptCompressionProbe = result.prompt_compression_probe;
   const piiProbe = result.pii_sanitizer_probe;
   const judgeProbe = result.llm_judge_probe;
   const ragProbe = result.rag_probe;
   const lakeraProbe = result.lakera_probe;
-  const isFocusedProbe = Boolean(result.semantic_cache_probe || promptCompressionProbe || piiProbe || judgeProbe || ragProbe || lakeraProbe);
+  const isFocusedProbe = Boolean(loadBalancingProbe || tokenLimitProbe || promptEnhancementProbe || result.semantic_cache_probe || promptCompressionProbe || piiProbe || judgeProbe || ragProbe || lakeraProbe);
   const summaryCopy = lakeraProbe
     ? "This output comes from the Lakera policy guard probe and should show whether Kong blocked the prompt before the model call."
     : ragProbe
     ? "This answer comes from the orchestrator RAG probe using either the baseline route or the Kong RAG-injected route."
+    : loadBalancingProbe
+      ? loadBalancingProbe.mode === "semantic"
+        ? "This output comes from the semantic load-balancing probe and should show Kong choosing the most relevant model target for the prompt."
+        : "This output comes from the load-balancing probe and should show Kong failing over from the primary model path to the fallback path."
+    : tokenLimitProbe
+      ? "This output comes from the consumer token rate limit probe and should show the route allowing one request and then blocking the next request."
+    : promptEnhancementProbe
+      ? "This output comes from the prompt-decorator probe and should make the difference between the plain and decorated routes obvious."
     : promptCompressionProbe
       ? "This output comes from the prompt-compression probe and should show how Kong reduced the prompt before the model call."
     : isFocusedProbe
@@ -2819,6 +3166,98 @@ function renderFinalOutput(result) {
           </div>
         </div>
       </section>
+      ${
+        loadBalancingProbe
+          ? `
+      <section class="output-section output-section-wide">
+        <strong>Load Balancing Probe</strong>
+        <p class="output-section-copy">${
+          loadBalancingProbe.mode === "semantic"
+            ? "Created by the orchestrator in the semantic load-balancing subscene. Kong compares the prompt against target descriptions and routes it to the most relevant provider."
+            : "Created by the orchestrator in the load-balancing scenario. Kong first tries the primary model route and then fails over to the fallback route."
+        }</p>
+        <div class="output-subgrid">
+          <div class="output-subsection">
+            <span>${loadBalancingProbe.mode === "semantic" ? "Semantic Routing Policy" : "Failover Policy"}</span>
+            ${renderDefinitionList([
+              ["Mode", loadBalancingProbe.mode === "semantic" ? "Semantic Load Balancing" : "LLM Failover"],
+              ...(loadBalancingProbe.mode === "semantic"
+                ? [
+                    ["Prompt Preset", loadBalancingProbe.prompt_preset === "creative_marketing" ? "Creative / Marketing" : "Support / Operational"],
+                    ["Selected Provider", loadBalancingProbe.selected_provider],
+                    ["Selected Model", loadBalancingProbe.selected_model],
+                  ]
+                : [
+                    ["Primary Model", loadBalancingProbe.primary_model],
+                    ["Fallback Model", loadBalancingProbe.fallback_model],
+                    ["Selected Model", loadBalancingProbe.selected_model],
+                  ]),
+              ["Policy Outcome", loadBalancingProbe.policy_outcome],
+            ])}
+          </div>
+          <div class="output-subsection output-subsection-wide">
+            <span>Original Request Prompt</span>
+            ${renderTextBlock(loadBalancingProbe.original_prompt?.user_prompt)}
+          </div>
+        </div>
+      </section>`
+          : ""
+      }
+      ${
+        tokenLimitProbe
+          ? `
+      <section class="output-section output-section-wide">
+        <strong>AI Token Rate Limit Probe</strong>
+        <p class="output-section-copy">Created by the orchestrator in the consumer token rate limit subscene. Kong sends the same prompt twice on the governed route to show the allow-then-block behavior.</p>
+        <div class="output-subgrid">
+          <div class="output-subsection">
+            <span>Policy Outcome</span>
+            ${renderDefinitionList([
+              ["Subscene", "Consumer Token Rate Limit"],
+              ["First Attempt", tokenLimitProbe.first_attempt ? "Allowed" : (tokenLimitProbe.blocked_error?.attempt === "first" ? "Blocked" : "Not returned")],
+              ["Second Attempt", tokenLimitProbe.second_attempt ? "Allowed" : (tokenLimitProbe.blocked_error?.attempt === "second" ? "Blocked" : "Not returned")],
+              ["Blocked Attempt", tokenLimitProbe.blocked_error?.attempt],
+              ["Blocked Status", tokenLimitProbe.blocked_error?.status_code],
+            ])}
+            ${renderTextBlock(
+              tokenLimitProbe.blocked_error?.message ||
+                "No block was returned. This usually means the route budget was not exhausted the way the probe expected."
+            )}
+          </div>
+          <div class="output-subsection output-subsection-wide">
+            <span>Original Request Prompt</span>
+            ${renderTextBlock(tokenLimitProbe.original_prompt?.user_prompt)}
+          </div>
+        </div>
+      </section>`
+          : ""
+      }
+      ${
+        promptEnhancementProbe
+          ? `
+      <section class="output-section output-section-wide">
+        <strong>Prompt Decorator Probe</strong>
+        <p class="output-section-copy">Created by the orchestrator in the prompt-decorator scenario. The same input prompt is sent through either a plain route or a Kong-decorated route.</p>
+        <div class="output-subgrid">
+          <div class="output-subsection">
+            <span>Decorator Policy</span>
+            ${renderDefinitionList([
+              ["Mode", promptEnhancementProbe.mode === "plain" ? "Without Decorator" : "With Decorator"],
+              ["Applied Route", promptEnhancementProbe.mode === "plain" ? "Plain prompt-enhancement probe route" : "Decorated prompt-enhancement probe route"],
+            ])}
+            ${renderTextBlock(
+              promptEnhancementProbe.decorator?.decorator_prompt ||
+                "No decorator was applied. Kong forwarded the prompt to the model unchanged."
+            )}
+          </div>
+          <div class="output-subsection output-subsection-wide">
+            <span>Original Request Prompt</span>
+            ${renderTextBlock(promptEnhancementProbe.original_prompt?.user_prompt)}
+          </div>
+        </div>
+      </section>`
+          : ""
+      }
       ${
         promptCompressionProbe
           ? `
@@ -3161,6 +3600,8 @@ function initializeRun(payload) {
   traceState.runId = payload.run_id;
   traceState.contextId = payload.context_id || null;
   traceState.scenario = payload.governance_scenario || "normal";
+  traceState.loadBalancingMode = payload.input?.load_balancing_mode || "failover";
+  traceState.loadBalancingPromptPreset = payload.input?.load_balancing_prompt_preset || "support_operational";
   semanticCacheProbeResolved = false;
   activeScenario = traceState.scenario;
   updateScenarioInfraVisibility(traceState.scenario);
@@ -3223,6 +3664,11 @@ function handleTraceEvent(payload) {
       break;
 
     case "scenario_selected": {
+      if (payload.scenario === "load_balancing") {
+        traceState.loadBalancingMode = payload.output?.load_balancing_mode || traceState.loadBalancingMode || "failover";
+        traceState.loadBalancingPromptPreset =
+          payload.output?.load_balancing_prompt_preset || traceState.loadBalancingPromptPreset || "support_operational";
+      }
       const parentId = ensureActorRoot(payload.actor || "orchestrator");
       const node = upsertSystemNode(
         `scenario:${payload.scenario}`,
@@ -3291,6 +3737,27 @@ function handleTraceEvent(payload) {
         markLine("kong-compress", "complete");
         setOpenAiNodeState("complete");
         markLine("kong-openai", "complete");
+      } else if (traceState.scenario === "load_balancing") {
+        setFlowStage(
+          traceState.loadBalancingMode === "semantic" ? "Semantic load-balancing probe" : "Failover probe",
+          payload.message,
+        );
+        hideTopologyActivity();
+        clearOrchestratorLlmPath();
+        activateActorPath("orchestrator", "active");
+        markNode("kong", "active");
+        if (traceState.loadBalancingMode === "semantic") {
+          setOrchestratorModelStates(
+            inferSemanticLoadBalancingProvider() === "gemini"
+              ? { openai: "complete", gemini: "active" }
+              : { openai: "active", gemini: "complete" },
+          );
+        } else {
+          markNode("openai", "complete");
+          markLine("kong-openai", "complete");
+          markNode("gemini", "complete");
+          markLine("kong-gemini", "complete");
+        }
       } else if (traceState.scenario === "rag") {
         if (payload.rag_mode === "after") {
           upsertRagProbeNode(payload, "active", payload.message);
@@ -3308,6 +3775,14 @@ function handleTraceEvent(payload) {
       break;
 
     case "component_status":
+      if (
+        traceState.scenario === "token_limit" &&
+        payload.component === "openai" &&
+        payload.status === "error"
+      ) {
+        applyTokenLimitBlockedPath();
+        break;
+      }
       applyComponentState(payload.component, payload.status);
       break;
 
@@ -3448,12 +3923,24 @@ function handleTraceEvent(payload) {
         break;
       }
       if (
-        traceState.scenario === "llm_failover" &&
+        ["llm_failover", "load_balancing"].includes(traceState.scenario) &&
+        traceState.loadBalancingMode !== "semantic" &&
         payload.actor === "orchestrator" &&
         !String(payload.model || "").toLowerCase().includes("gemini")
       ) {
         activateActorPath("orchestrator", "active");
         setOrchestratorModelStates({ openai: "active", gemini: "complete" });
+        break;
+      }
+      if (traceState.scenario === "load_balancing" && traceState.loadBalancingMode === "semantic") {
+        activateActorPath("orchestrator", "active");
+        markNode("kong", "active");
+        setOrchestratorModelStates(
+          inferSemanticLoadBalancingProvider() === "gemini"
+            ? { openai: "complete", gemini: "active" }
+            : { openai: "active", gemini: "complete" },
+        );
+        setFlowStage("Semantic match in progress", "Kong is comparing the prompt with semantic target descriptions before selecting a model.");
         break;
       }
       markLlmPath(payload, "active");
@@ -3536,10 +4023,13 @@ function handleTraceEvent(payload) {
         break;
       }
       if (
-        traceState.scenario === "llm_failover" &&
+        ["llm_failover", "load_balancing"].includes(traceState.scenario) &&
+        traceState.loadBalancingMode !== "semantic" &&
         payload.actor === "orchestrator" &&
         String(payload.model || "").toLowerCase().includes("gemini")
       ) {
+        lingerLlmSuccessPath(payload, 1700);
+      } else if (traceState.scenario === "load_balancing" && traceState.loadBalancingMode === "semantic") {
         lingerLlmSuccessPath(payload, 1700);
       } else {
         markLlmPath(payload, "complete");
@@ -3591,6 +4081,7 @@ function handleTraceEvent(payload) {
         lakera_blocked: "Kong Lakera Guard blocked request",
         failover_primary_failed: "Primary model path failed",
         failover: "Kong selected fallback model",
+        semantic_load_balancing: "Kong selected the semantic route target",
       };
       const node = upsertSystemNode(
         `policy:${payload.stage}:${payload.llm_stage || "actor"}:${payload.timestamp}`,
@@ -3640,7 +4131,24 @@ function handleTraceEvent(payload) {
         }
       }
       if (payload.stage === "token_limit") {
+        applyTokenLimitBlockedPath();
         setFlowStage("Token policy blocked request", payload.summary || "Kong AI token governance blocked the OpenAI path.");
+      }
+      if (payload.stage === "semantic_load_balancing") {
+        activateActorPath("orchestrator", "active");
+        markNode("kong", "active");
+        if (payload.output?.selected_provider === "gemini") {
+          markNode("openai", "complete");
+          markLine("kong-openai", "complete");
+          markNode("gemini", "active");
+          markLine("kong-gemini", "active");
+        } else {
+          markNode("gemini", "complete");
+          markLine("kong-gemini", "complete");
+          markNode("openai", "active");
+          markLine("kong-openai", "active");
+        }
+        setFlowStage("Semantic route selected", payload.summary || "Kong selected the best-fit model target for the prompt.");
       }
       if (payload.stage === "prompt_compression") {
         activateCompressionPath("active");
@@ -4193,8 +4701,38 @@ async function play(overrides = {}) {
     if (data.context_id) {
       contextIdLabel.textContent = data.context_id;
     }
-    renderFinalOutput(data.result);
+    try {
+      renderFinalOutput(data.result);
+    } catch (renderError) {
+      console.error("Failed to render final output", renderError, data.result);
+      setFlowStage(
+        "Run complete",
+        "The run completed, but the output renderer hit an error. Falling back to the raw result payload.",
+      );
+      finalOutput.innerHTML = `
+        <section class="output-hero">
+          <p class="output-kicker">Final Output</p>
+          <h3>Renderer fallback</h3>
+          <p class="output-section-copy">The topology state was preserved because the run completed successfully.</p>
+        </section>
+        <section class="output-section output-section-wide">
+          <strong>Raw Result</strong>
+          ${renderTextBlock(JSON.stringify(data.result, null, 2))}
+        </section>
+      `;
+    }
   } catch (error) {
+    const runAlreadyCompleted =
+      Boolean(traceState.nodes["final-response"]) ||
+      traceState.nodes.run?.status === "complete";
+    if (runAlreadyCompleted) {
+      console.error("Ignoring late play() error after successful run", error);
+      setFlowStage(
+        "Run complete",
+        "The run finished successfully, but the client hit a late UI sync error after completion.",
+      );
+      return;
+    }
     setRunState("error");
     setFlowStage("Run failed", error.message);
     showFailurePath("orchestrator");
@@ -4287,6 +4825,31 @@ playButton.addEventListener("click", (event) => {
   play();
 });
 
+loadBalancingSendButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  const selectedMode = currentLoadBalancingMode();
+  const selectedPreset = currentLoadBalancingPromptPreset();
+  sceneModal.close();
+  play({
+    governance_scenario: "load_balancing",
+    load_balancing_mode: selectedMode,
+    load_balancing_prompt_preset: selectedPreset,
+  });
+});
+
+tokenLimitSendButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  sceneModal.close();
+  play({ governance_scenario: "token_limit" });
+});
+
+promptEnhancementSendButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  const selectedMode = currentPromptEnhancementMode();
+  sceneModal.close();
+  play({ governance_scenario: "prompt_enhancement", prompt_enhancement_mode: selectedMode });
+});
+
 promptCompressionSendButton?.addEventListener("click", (event) => {
   event.preventDefault();
   const selectedMode = currentPromptCompressionMode();
@@ -4337,6 +4900,15 @@ presetOptions?.addEventListener("change", (event) => {
     return;
   }
   applyScenePreset(target.value);
+  if (activeScenario === "load_balancing") {
+    renderLoadBalancingPayload(false, currentLoadBalancingMode());
+  }
+  if (activeScenario === "token_limit") {
+    renderTokenLimitPayload(false);
+  }
+  if (activeScenario === "prompt_enhancement") {
+    renderPromptEnhancementPayload(false, currentPromptEnhancementMode());
+  }
   if (activeScenario === "prompt_compression") {
     renderPromptCompressionPayload(false, currentPromptCompressionMode());
   }
@@ -4375,6 +4947,39 @@ promptCompressionModeOptions?.addEventListener("change", (event) => {
   }
   renderPromptCompressionPayload(true, target.value);
   if (policyModal?.open && activeScenario === "prompt_compression") {
+    renderPolicyModal();
+  }
+});
+
+promptEnhancementModeOptions?.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement) || target.name !== "prompt_enhancement_mode_choice") {
+    return;
+  }
+  renderPromptEnhancementPayload(true, target.value);
+  if (policyModal?.open && activeScenario === "prompt_enhancement") {
+    renderPolicyModal();
+  }
+});
+
+loadBalancingModeOptions?.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement) || target.name !== "load_balancing_mode_choice") {
+    return;
+  }
+  renderLoadBalancingPayload(true, target.value);
+  if (policyModal?.open && activeScenario === "load_balancing") {
+    renderPolicyModal();
+  }
+});
+
+loadBalancingPresetOptions?.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement) || target.name !== "load_balancing_prompt_preset_choice") {
+    return;
+  }
+  renderLoadBalancingPayload(true, currentLoadBalancingMode());
+  if (policyModal?.open && activeScenario === "load_balancing") {
     renderPolicyModal();
   }
 });
@@ -4436,6 +5041,9 @@ resetObservabilityButton?.addEventListener("click", async () => {
 });
 
 playForm.addEventListener("input", () => {
+  if (activeScenario === "load_balancing") {
+    return;
+  }
   if (activeScenario === "prompt_compression") {
     renderPromptCompressionPayload(false, currentPromptCompressionMode());
     return;

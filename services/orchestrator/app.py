@@ -71,7 +71,10 @@ class PlayRequest(BaseModel):
     billing_issue: str = "billing overcharge on enterprise add-ons"
     incident_id: str = "INC-1007"
     governance_scenario: str = "normal"
+    load_balancing_mode: str = "failover"
+    load_balancing_prompt_preset: str = "support_operational"
     semantic_cache_step: str = "single"
+    prompt_enhancement_mode: str = "decorated"
     prompt_compression_mode: str = "rate"
     prompt_compression_value: int = 50
     pii_sanitizer_mode: str = "placeholder"
@@ -94,7 +97,10 @@ class OrchestratorState(TypedDict, total=False):
     run_id: str
     context_id: str
     governance_scenario: str
+    load_balancing_mode: str
+    load_balancing_prompt_preset: str
     semantic_cache_step: str
+    prompt_enhancement_mode: str
     prompt_compression_mode: str
     prompt_compression_value: int
     pii_sanitizer_mode: str
@@ -108,7 +114,10 @@ class OrchestratorState(TypedDict, total=False):
     account_context: Any
     renewal_risk: Any
     open_tickets: Any
+    load_balancing_probe: dict[str, Any]
+    token_limit_probe: dict[str, Any]
     semantic_cache_probe: dict[str, Any]
+    prompt_enhancement_probe: dict[str, Any]
     prompt_compression_probe: dict[str, Any]
     pii_sanitizer_probe: dict[str, Any]
     llm_judge_probe: dict[str, Any]
@@ -142,6 +151,8 @@ def timed_ms(started_at: float) -> int:
 
 def ai_route_for_scenario(
     scenario: str,
+    load_balancing_mode: str = "failover",
+    prompt_enhancement_mode: str = "decorated",
     pii_mode: str = "placeholder",
     prompt_compression_mode: str = "rate",
     rag_mode: str = "before",
@@ -150,8 +161,17 @@ def ai_route_for_scenario(
     route_map = {
         "normal": f"{KONG_PROXY_URL}/ai/orchestrator",
         "llm_failover": f"{KONG_PROXY_URL}/ai/orchestrator-failover-demo",
+        "load_balancing": (
+            f"{KONG_PROXY_URL}/ai/orchestrator-failover-demo"
+            if load_balancing_mode == "failover"
+            else f"{KONG_PROXY_URL}/ai/orchestrator-semantic-load-balance-demo"
+        ),
         "token_limit": f"{KONG_PROXY_URL}/ai/orchestrator-token-demo",
-        "prompt_enhancement": f"{KONG_PROXY_URL}/ai/orchestrator-prompt-enhance-demo",
+        "prompt_enhancement": (
+            f"{KONG_PROXY_URL}/ai/orchestrator-prompt-enhance-demo"
+            if prompt_enhancement_mode == "decorated"
+            else f"{KONG_PROXY_URL}/ai/orchestrator-prompt-enhance-plain-demo"
+        ),
         "prompt_compression": (
             f"{KONG_PROXY_URL}/ai/orchestrator-prompt-compress-token-demo"
             if prompt_compression_mode == "token_count"
@@ -179,10 +199,15 @@ def ai_route_for_scenario(
     return route_map.get(scenario, route_map["normal"])
 
 
-def scenario_summary(scenario: str) -> str:
+def scenario_summary(scenario: str, load_balancing_mode: str = "failover") -> str:
     summaries = {
         "normal": "Standard Kong-governed orchestration flow.",
         "llm_failover": "OpenAI primary is expected to fail and Kong should fail over to Gemini.",
+        "load_balancing": (
+            "Kong is expected to semantically route the prompt to the most relevant model target inside one focused load-balancing probe."
+            if load_balancing_mode == "semantic"
+            else "Kong is expected to retry from the primary OpenAI path to the Gemini fallback path inside one focused load-balancing probe."
+        ),
         "token_limit": "Kong AI token governance is expected to block a later orchestrator LLM call.",
         "prompt_enhancement": "Kong prompt decoration applies stronger executive-governance instructions so the orchestrator output becomes more structured and enterprise-safe.",
         "prompt_compression": "Kong AI Prompt Compressor is expected to shrink the verbose prompt before the model call so the run saves input tokens.",
@@ -209,6 +234,107 @@ def build_prompt_decoration(scenario: str, system_prompt: str, user_prompt: str)
         "decorator_prompt": decorator,
         "decorated_system_prompt": f"{system_prompt}\n\n{decorator}",
         "decorated_user_prompt": user_prompt,
+    }
+
+
+def build_prompt_enhancement_probe_prompts(request: PlayRequest) -> dict[str, str]:
+    default_prompt = (
+        "Create an executive-ready escalation update for the account team.\n"
+        f"Account: {request.account_name}\n"
+        f"Customer ID: {request.customer_id}\n"
+        f"Issue summary: {request.issue_summary}\n"
+        f"Product issue: {request.product_issue}\n"
+        f"Billing issue: {request.billing_issue}\n"
+        f"Incident ID: {request.incident_id}\n"
+        "Requirements:\n"
+        "1) Explain the situation and business impact.\n"
+        "2) Recommend next actions.\n"
+        "3) Keep the response concise.\n"
+    )
+    return {
+        "system_prompt": (
+            "You are an escalation assistant. "
+            "Respond to the request directly and keep the answer concise."
+        ),
+        "user_prompt": (request.user_prompt or "").strip() or default_prompt,
+    }
+
+
+def build_load_balancing_probe_prompts(request: PlayRequest) -> dict[str, str]:
+    semantic_support_prompt = (
+        "Prepare an enterprise support operations update for the account team.\n"
+        f"Account: {request.account_name}\n"
+        f"Customer ID: {request.customer_id}\n"
+        f"Issue summary: {request.issue_summary}\n"
+        f"Product issue: {request.product_issue}\n"
+        f"Billing issue: {request.billing_issue}\n"
+        f"Incident ID: {request.incident_id}\n"
+        "Requirements:\n"
+        "1) Summarize the customer situation and operational impact.\n"
+        "2) Identify the current delivery or escalation risk.\n"
+        "3) Recommend the next action, owner, and checkpoint.\n"
+        "4) Keep the answer concise and executive-ready.\n"
+    )
+    semantic_creative_prompt = (
+        "Draft creative launch messaging for a new Kong AI governance experience.\n"
+        "Audience: enterprise platform leaders evaluating secure AI connectivity.\n"
+        "Deliverables:\n"
+        "1) One campaign concept title.\n"
+        "2) Three launch taglines.\n"
+        "3) A short event teaser for a customer summit.\n"
+        "4) Keep the tone polished, vivid, and marketing-forward.\n"
+    )
+    failover_prompt = (
+        "Create an executive-ready escalation update for the account team.\n"
+        f"Account: {request.account_name}\n"
+        f"Customer ID: {request.customer_id}\n"
+        f"Issue summary: {request.issue_summary}\n"
+        f"Product issue: {request.product_issue}\n"
+        f"Billing issue: {request.billing_issue}\n"
+        f"Incident ID: {request.incident_id}\n"
+        "Requirements:\n"
+        "1) Summarize the situation.\n"
+        "2) Identify the current risk.\n"
+        "3) Recommend the next action and owner.\n"
+    )
+    default_prompt = (
+        semantic_creative_prompt
+        if request.load_balancing_mode == "semantic" and request.load_balancing_prompt_preset == "creative_marketing"
+        else semantic_support_prompt
+        if request.load_balancing_mode == "semantic"
+        else failover_prompt
+    )
+    return {
+        "system_prompt": (
+            "You are a helpful assistant. "
+            "Respond directly to the request and match the requested format."
+            if request.load_balancing_mode == "semantic"
+            else "You are an executive escalation assistant. Return three short sections only: Situation, Risk, Next Action."
+        ),
+        "user_prompt": (request.user_prompt or "").strip() or default_prompt,
+    }
+
+
+def build_token_limit_probe_prompts(request: PlayRequest) -> dict[str, str]:
+    default_prompt = (
+        "Create an executive-ready escalation update for the account team.\n"
+        f"Account: {request.account_name}\n"
+        f"Customer ID: {request.customer_id}\n"
+        f"Issue summary: {request.issue_summary}\n"
+        f"Product issue: {request.product_issue}\n"
+        f"Billing issue: {request.billing_issue}\n"
+        f"Incident ID: {request.incident_id}\n"
+        "Requirements:\n"
+        "1) Summarize the situation.\n"
+        "2) Recommend next actions.\n"
+        "3) Keep the response under 120 words.\n"
+    )
+    return {
+        "system_prompt": (
+            "You are an executive escalation assistant. "
+            "Return one concise paragraph plus a short next-action line."
+        ),
+        "user_prompt": (request.user_prompt or "").strip() or default_prompt,
     }
 
 
@@ -507,9 +633,16 @@ async def generate_for_scenario(
     scenario: str,
     prompts: dict[str, str],
     base_url: str,
+    include_model: bool = True,
 ) -> dict[str, Any]:
     try:
-        return await llm.generate(base_url=base_url, run_id=run_id, context_id=context_id, **prompts)
+        return await llm.generate(
+            base_url=base_url,
+            run_id=run_id,
+            context_id=context_id,
+            include_model=include_model,
+            **prompts,
+        )
     except httpx.HTTPStatusError as exc:
         if scenario == "token_limit" and exc.response.status_code == 429:
             await emit_component(run_id, "openai", "error", actor="orchestrator", stage=stage)
@@ -1281,7 +1414,10 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
     context_token = CURRENT_CONTEXT_ID.set(context_id)
     started = time.perf_counter()
     scenario = request.governance_scenario
+    load_balancing_mode = request.load_balancing_mode
+    load_balancing_prompt_preset = request.load_balancing_prompt_preset
     semantic_cache_step = request.semantic_cache_step
+    prompt_enhancement_mode = request.prompt_enhancement_mode
     prompt_compression_mode = request.prompt_compression_mode
     prompt_compression_value = request.prompt_compression_value
     pii_sanitizer_mode = request.pii_sanitizer_mode
@@ -1289,6 +1425,8 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
     lakera_mode = request.lakera_mode
     ai_route_base_url = ai_route_for_scenario(
         scenario,
+        load_balancing_mode,
+        prompt_enhancement_mode,
         pii_sanitizer_mode,
         prompt_compression_mode,
         rag_mode,
@@ -1308,10 +1446,213 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         "scenario_selected",
         actor="orchestrator",
         scenario=scenario,
-        summary=scenario_summary(scenario),
-        output={"ai_route_base_url": ai_route_base_url},
+        summary=scenario_summary(scenario, load_balancing_mode),
+        output={
+            "ai_route_base_url": ai_route_base_url,
+            "load_balancing_mode": load_balancing_mode,
+            "load_balancing_prompt_preset": load_balancing_prompt_preset,
+        },
         context_id=context_id,
     )
+    if scenario == "load_balancing":
+        prompts = build_load_balancing_probe_prompts(request)
+        stage = f"load_balancing_{load_balancing_mode}"
+        selected_model = None
+        selected_provider = None
+        await emit(
+            run_id,
+            "planning",
+            message=(
+                "Kong AI Proxy Advanced is semantically matching the prompt against model descriptions and will route to the best-fit target."
+                if load_balancing_mode == "semantic"
+                else "Kong AI Proxy Advanced is running a focused load-balancing probe that should fail over from OpenAI to Gemini."
+            ),
+        )
+        await emit(
+            run_id,
+            "llm_started",
+            actor="orchestrator",
+            stage=stage,
+            component=None if load_balancing_mode == "semantic" else "openai",
+            input=prompts,
+        )
+        llm_started = time.perf_counter()
+        load_balancing_result = await generate_for_scenario(
+            run_id=run_id,
+            context_id=context_id,
+            stage=stage,
+            scenario="llm_failover" if load_balancing_mode == "failover" else "load_balancing",
+            prompts=prompts,
+            base_url=ai_route_base_url,
+            include_model=load_balancing_mode != "semantic",
+        )
+        selected_model = load_balancing_result.get("model")
+        selected_provider = (
+            "gemini"
+            if "gemini" in str(selected_model or "").lower()
+            else "openai"
+        )
+        if load_balancing_mode == "semantic":
+            await emit(
+                run_id,
+                "policy_event",
+                actor="orchestrator",
+                stage="semantic_load_balancing",
+                llm_stage=stage,
+                summary=f"Kong semantically routed the prompt to {selected_model or 'the selected model target'}.",
+                output={
+                    "selected_model": selected_model,
+                    "selected_provider": selected_provider,
+                    "prompt_preset": load_balancing_prompt_preset,
+                },
+            )
+        await emit(
+            run_id,
+            "llm_completed",
+            actor="orchestrator",
+            stage=stage,
+            component=selected_provider or "openai",
+            llm_used=load_balancing_result["llm_used"],
+            model=selected_model,
+            output=load_balancing_result,
+            duration_ms=timed_ms(llm_started),
+        )
+        final_response = {
+            "headline": "Load balancing probe completed",
+            "governance_scenario": scenario,
+            "load_balancing_probe": {
+                "mode": load_balancing_mode,
+                "prompt_preset": load_balancing_prompt_preset if load_balancing_mode == "semantic" else None,
+                "request_payload": request.model_dump(),
+                "original_prompt": prompts,
+                "primary_model": llm.model,
+                "fallback_model": GEMINI_FALLBACK_MODEL if load_balancing_mode == "failover" else None,
+                "selected_model": selected_model,
+                "selected_provider": selected_provider,
+                "policy_outcome": "semantic_route_selected" if load_balancing_mode == "semantic" else "failover",
+            },
+            "executive_brief": load_balancing_result,
+            "recommended_summary": load_balancing_result["summary"],
+            "available_tools": [],
+            "called_mcp_tools": [],
+            "tool_plan_steps": [],
+            "mcp_tools_by_agent": {
+                "orchestrator": [],
+                "support-agent": [],
+                "success-agent": [],
+            },
+        }
+        await emit(run_id, "final_response", headline=final_response["headline"], output=final_response)
+        await emit_component(run_id, "dashboard", "complete")
+        await emit_component(run_id, "kong", "complete")
+        await emit_component(run_id, "orchestrator", "complete")
+        await emit_component(run_id, "observability", "complete")
+        await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=final_response)
+        return {"run_id": run_id, "context_id": context_id, "result": final_response}
+    if scenario == "token_limit":
+        prompts = build_token_limit_probe_prompts(request)
+        allowed_stage = "token_limit_allowed_probe"
+        blocked_stage = "token_limit_blocked_probe"
+        await emit(
+            run_id,
+            "planning",
+            message="Kong AI Rate Limiting Advanced is running a focused token-governance probe with one allowed request followed by one blocked request.",
+        )
+        first_result: dict[str, Any] | None = None
+        second_result: dict[str, Any] | None = None
+        blocked_error: dict[str, Any] | None = None
+        await emit(run_id, "llm_started", actor="orchestrator", stage=allowed_stage, component="openai", input=prompts)
+        first_started = time.perf_counter()
+        try:
+            first_result = await generate_for_scenario(
+                run_id=run_id,
+                context_id=context_id,
+                stage=allowed_stage,
+                scenario="token_limit",
+                prompts=prompts,
+                base_url=ai_route_base_url,
+            )
+            await emit(
+                run_id,
+                "llm_completed",
+                actor="orchestrator",
+                stage=allowed_stage,
+                component=first_result["model"] if first_result.get("model") else "openai",
+                llm_used=first_result["llm_used"],
+                model=first_result["model"],
+                output=first_result,
+                duration_ms=timed_ms(first_started),
+            )
+        except (RateLimitError, APIStatusError, httpx.HTTPStatusError) as exc:
+            status_code = getattr(exc, "status_code", None)
+            if status_code is None and isinstance(exc, httpx.HTTPStatusError):
+                status_code = exc.response.status_code
+            blocked_error = {"attempt": "first", "status_code": status_code, "message": str(exc)}
+        if blocked_error is None:
+            await emit(run_id, "llm_started", actor="orchestrator", stage=blocked_stage, component="openai", input=prompts)
+            second_started = time.perf_counter()
+            try:
+                second_result = await generate_for_scenario(
+                    run_id=run_id,
+                    context_id=context_id,
+                    stage=blocked_stage,
+                    scenario="token_limit",
+                    prompts=prompts,
+                    base_url=ai_route_base_url,
+                )
+                await emit(
+                    run_id,
+                    "llm_completed",
+                    actor="orchestrator",
+                    stage=blocked_stage,
+                    component=second_result["model"] if second_result.get("model") else "openai",
+                    llm_used=second_result["llm_used"],
+                    model=second_result["model"],
+                    output=second_result,
+                    duration_ms=timed_ms(second_started),
+                )
+            except (RateLimitError, APIStatusError, httpx.HTTPStatusError) as exc:
+                status_code = getattr(exc, "status_code", None)
+                if status_code is None and isinstance(exc, httpx.HTTPStatusError):
+                    status_code = exc.response.status_code
+                blocked_error = {"attempt": "second", "status_code": status_code, "message": str(exc)}
+        final_response = {
+            "headline": "AI token limit probe completed",
+            "governance_scenario": scenario,
+            "token_limit_probe": {
+                "request_payload": request.model_dump(),
+                "original_prompt": prompts,
+                "first_attempt": first_result,
+                "second_attempt": second_result,
+                "blocked_error": blocked_error,
+                "policy_outcome": "blocked" if blocked_error else "not_blocked",
+            },
+            "executive_brief": second_result or first_result or {
+                "llm_used": False,
+                "model": None,
+                "summary": blocked_error["message"] if blocked_error else "No result returned.",
+            },
+            "recommended_summary": (
+                blocked_error["message"]
+                if blocked_error
+                else (second_result or first_result or {"summary": "No result returned."})["summary"]
+            ),
+            "available_tools": [],
+            "called_mcp_tools": [],
+            "tool_plan_steps": [],
+            "mcp_tools_by_agent": {
+                "orchestrator": [],
+                "support-agent": [],
+                "success-agent": [],
+            },
+        }
+        await emit(run_id, "final_response", headline=final_response["headline"], output=final_response)
+        await emit_component(run_id, "dashboard", "complete")
+        await emit_component(run_id, "kong", "complete")
+        await emit_component(run_id, "orchestrator", "complete")
+        await emit_component(run_id, "observability", "complete")
+        await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=final_response)
+        return {"run_id": run_id, "context_id": context_id, "result": final_response}
     if scenario == "prompt_compression":
         prompts = build_prompt_compression_prompts(request)
         stage = f"prompt_compression_{prompt_compression_mode}"
@@ -1396,6 +1737,75 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             },
             "executive_brief": compression_result,
             "recommended_summary": compression_result["summary"],
+            "available_tools": [],
+            "called_mcp_tools": [],
+            "tool_plan_steps": [],
+            "mcp_tools_by_agent": {
+                "orchestrator": [],
+                "support-agent": [],
+                "success-agent": [],
+            },
+        }
+        await emit(run_id, "final_response", headline=final_response["headline"], output=final_response)
+        await emit_component(run_id, "dashboard", "complete")
+        await emit_component(run_id, "kong", "complete")
+        await emit_component(run_id, "orchestrator", "complete")
+        await emit_component(run_id, "observability", "complete")
+        await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=final_response)
+        return {"run_id": run_id, "context_id": context_id, "result": final_response}
+    if scenario == "prompt_enhancement":
+        prompts = build_prompt_enhancement_probe_prompts(request)
+        stage = f"prompt_enhancement_{prompt_enhancement_mode}"
+        decorated = build_prompt_decoration("prompt_enhancement", prompts["system_prompt"], prompts["user_prompt"])
+        await emit(
+            run_id,
+            "planning",
+            message=(
+                "Kong Prompt Decorator is running as a focused probe using the same input prompt "
+                f"with the {prompt_enhancement_mode} route."
+            ),
+        )
+        if prompt_enhancement_mode == "decorated" and decorated:
+            await emit(
+                run_id,
+                "policy_event",
+                actor="orchestrator",
+                stage="prompt_decoration",
+                llm_stage=stage,
+                summary="Kong prompt decoration applied enhanced executive-governance instructions before the probe model call.",
+                input={"original_prompt": prompts},
+                output=decorated,
+            )
+        await emit(run_id, "llm_started", actor="orchestrator", stage=stage, component="openai", input=prompts)
+        llm_started = time.perf_counter()
+        enhancement_result = await llm.generate(
+            base_url=ai_route_base_url,
+            run_id=run_id,
+            context_id=context_id,
+            **prompts,
+        )
+        await emit(
+            run_id,
+            "llm_completed",
+            actor="orchestrator",
+            stage=stage,
+            component=enhancement_result["model"] if enhancement_result.get("model") else "openai",
+            llm_used=enhancement_result["llm_used"],
+            model=enhancement_result["model"],
+            output=enhancement_result,
+            duration_ms=timed_ms(llm_started),
+        )
+        final_response = {
+            "headline": "Prompt decorator probe completed",
+            "governance_scenario": scenario,
+            "prompt_enhancement_probe": {
+                "mode": prompt_enhancement_mode,
+                "request_payload": request.model_dump(),
+                "original_prompt": prompts,
+                "decorator": decorated if prompt_enhancement_mode == "decorated" else None,
+            },
+            "executive_brief": enhancement_result,
+            "recommended_summary": enhancement_result["summary"],
             "available_tools": [],
             "called_mcp_tools": [],
             "tool_plan_steps": [],
