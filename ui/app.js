@@ -3122,46 +3122,46 @@ function renderFinalOutput(result) {
   const lakeraProbe = result.lakera_probe;
   const isFocusedProbe = Boolean(loadBalancingProbe || tokenLimitProbe || promptEnhancementProbe || result.semantic_cache_probe || promptCompressionProbe || piiProbe || judgeProbe || ragProbe || lakeraProbe);
   const summaryCopy = lakeraProbe
-    ? "This output comes from the Lakera policy guard probe and should show whether Kong blocked the prompt before the model call."
+    ? t("outputModal.summary.lakera", null, "This output comes from the Lakera policy guard probe and should show whether Kong blocked the prompt before the model call.")
     : ragProbe
-    ? "This answer comes from the orchestrator RAG probe using either the baseline route or the Kong RAG-injected route."
+    ? t("outputModal.summary.rag", null, "This answer comes from the orchestrator RAG probe using either the baseline route or the Kong RAG-injected route.")
     : loadBalancingProbe
       ? loadBalancingProbe.mode === "semantic"
-        ? "This output comes from the semantic load-balancing probe and should show Kong choosing the most relevant model target for the prompt."
-        : "This output comes from the load-balancing probe and should show Kong failing over from the primary model path to the fallback path."
+        ? t("outputModal.summary.loadBalancingSemantic", null, "This output comes from the semantic load-balancing probe and should show Kong choosing the most relevant model target for the prompt.")
+        : t("outputModal.summary.loadBalancing", null, "This output comes from the load-balancing probe and should show Kong failing over from the primary model path to the fallback path.")
     : tokenLimitProbe
-      ? "This output comes from the consumer token rate limit probe and should show the route allowing one request and then blocking the next request."
+      ? t("outputModal.summary.tokenLimit", null, "This output comes from the consumer token rate limit probe and should show the route allowing one request and then blocking the next request.")
     : promptEnhancementProbe
-      ? "This output comes from the prompt-decorator probe and should make the difference between the plain and decorated routes obvious."
+      ? t("outputModal.summary.promptEnhancement", null, "This output comes from the prompt-decorator probe and should make the difference between the plain and decorated routes obvious.")
     : promptCompressionProbe
-      ? "This output comes from the prompt-compression probe and should show how Kong reduced the prompt before the model call."
+      ? t("outputModal.summary.promptCompression", null, "This output comes from the prompt-compression probe and should show how Kong reduced the prompt before the model call.")
     : isFocusedProbe
-      ? "This output comes from a focused governance probe rather than the full multi-agent workflow."
-      : "Executive summary created by the orchestrator LLM after combining orchestrator context, support-agent output, and success-agent output.";
+      ? t("outputModal.summary.focusedProbe", null, "This output comes from a focused governance probe rather than the full multi-agent workflow.")
+      : t("outputModal.summary.default", null, "Executive summary created by the orchestrator LLM after combining orchestrator context, support-agent output, and success-agent output.");
 
   finalOutput.innerHTML = `
     <section class="output-hero">
-      <p class="output-kicker">Final Output</p>
+      <p class="output-kicker">${t("outputModal.finalOutputKicker", null, "Final Output")}</p>
       <h3>${escapeHtml(result.headline)}</h3>
-      <p class="output-section-copy">Governance scenario: <strong>${escapeHtml(labelForScenario(result.governance_scenario || activeScenario))}</strong></p>
+      <p class="output-section-copy">${t("outputModal.governanceScenarioLabel", null, "Governance scenario:")} <strong>${escapeHtml(labelForScenario(result.governance_scenario || activeScenario))}</strong></p>
       <p class="output-section-copy">${escapeHtml(summaryCopy)}</p>
       <div class="output-summary">${escapeHtml(executiveSummary)}</div>
     </section>
     <div class="output-grid">
       <section class="output-section output-section-wide">
-        <strong>MCP Tool Usage</strong>
-        <p class="output-section-copy">These are the MCP tools that were actually called during this run, grouped by agent.</p>
+        <strong>${t("outputModal.mcpUsage.title", null, "MCP Tool Usage")}</strong>
+        <p class="output-section-copy">${t("outputModal.mcpUsage.copy", null, "These are the MCP tools that were actually called during this run, grouped by agent.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>Orchestrator</span>
+            <span>${t("outputModal.label.orchestrator", null, "Orchestrator")}</span>
             ${renderBulletList(result.mcp_tools_by_agent?.["orchestrator"] || result.called_mcp_tools)}
           </div>
           <div class="output-subsection">
-            <span>Support Agent</span>
+            <span>${t("outputModal.label.supportAgent", null, "Support Agent")}</span>
             ${renderBulletList(result.mcp_tools_by_agent?.["support-agent"])}
           </div>
           <div class="output-subsection">
-            <span>Success Agent</span>
+            <span>${t("outputModal.label.successAgent", null, "Success Agent")}</span>
             ${renderBulletList(result.mcp_tools_by_agent?.["success-agent"])}
           </div>
         </div>
@@ -3170,15 +3170,15 @@ function renderFinalOutput(result) {
         loadBalancingProbe
           ? `
       <section class="output-section output-section-wide">
-        <strong>Load Balancing Probe</strong>
+        <strong>${t("outputModal.loadBalancing.title", null, "Load Balancing Probe")}</strong>
         <p class="output-section-copy">${
           loadBalancingProbe.mode === "semantic"
-            ? "Created by the orchestrator in the semantic load-balancing subscene. Kong compares the prompt against target descriptions and routes it to the most relevant provider."
-            : "Created by the orchestrator in the load-balancing scenario. Kong first tries the primary model route and then fails over to the fallback route."
+            ? t("outputModal.loadBalancing.copySemantic", null, "Created by the orchestrator in the semantic load-balancing subscene. Kong compares the prompt against target descriptions and routes it to the most relevant provider.")
+            : t("outputModal.loadBalancing.copy", null, "Created by the orchestrator in the load-balancing scenario. Kong first tries the primary model route and then fails over to the fallback route.")
         }</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>${loadBalancingProbe.mode === "semantic" ? "Semantic Routing Policy" : "Failover Policy"}</span>
+            <span>${loadBalancingProbe.mode === "semantic" ? t("outputModal.loadBalancing.semanticPolicyLabel", null, "Semantic Routing Policy") : t("outputModal.loadBalancing.failoverPolicyLabel", null, "Failover Policy")}</span>
             ${renderDefinitionList([
               ["Mode", loadBalancingProbe.mode === "semantic" ? "Semantic Load Balancing" : "LLM Failover"],
               ...(loadBalancingProbe.mode === "semantic"
@@ -3196,7 +3196,7 @@ function renderFinalOutput(result) {
             ])}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Original Request Prompt</span>
+            <span>${t("outputModal.label.originalPrompt", null, "Original Request Prompt")}</span>
             ${renderTextBlock(loadBalancingProbe.original_prompt?.user_prompt)}
           </div>
         </div>
@@ -3207,11 +3207,11 @@ function renderFinalOutput(result) {
         tokenLimitProbe
           ? `
       <section class="output-section output-section-wide">
-        <strong>AI Token Rate Limit Probe</strong>
-        <p class="output-section-copy">Created by the orchestrator in the consumer token rate limit subscene. Kong sends the same prompt twice on the governed route to show the allow-then-block behavior.</p>
+        <strong>${t("outputModal.tokenLimit.title", null, "AI Token Rate Limit Probe")}</strong>
+        <p class="output-section-copy">${t("outputModal.tokenLimit.copy", null, "Created by the orchestrator in the consumer token rate limit subscene. Kong sends the same prompt twice on the governed route to show the allow-then-block behavior.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>Policy Outcome</span>
+            <span>${t("outputModal.label.policyOutcome", null, "Policy Outcome")}</span>
             ${renderDefinitionList([
               ["Subscene", "Consumer Token Rate Limit"],
               ["First Attempt", tokenLimitProbe.first_attempt ? "Allowed" : (tokenLimitProbe.blocked_error?.attempt === "first" ? "Blocked" : "Not returned")],
@@ -3221,11 +3221,11 @@ function renderFinalOutput(result) {
             ])}
             ${renderTextBlock(
               tokenLimitProbe.blocked_error?.message ||
-                "No block was returned. This usually means the route budget was not exhausted the way the probe expected."
+                t("outputModal.tokenLimit.noBlock", null, "No block was returned. This usually means the route budget was not exhausted the way the probe expected.")
             )}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Original Request Prompt</span>
+            <span>${t("outputModal.label.originalPrompt", null, "Original Request Prompt")}</span>
             ${renderTextBlock(tokenLimitProbe.original_prompt?.user_prompt)}
           </div>
         </div>
@@ -3236,22 +3236,22 @@ function renderFinalOutput(result) {
         promptEnhancementProbe
           ? `
       <section class="output-section output-section-wide">
-        <strong>Prompt Decorator Probe</strong>
-        <p class="output-section-copy">Created by the orchestrator in the prompt-decorator scenario. The same input prompt is sent through either a plain route or a Kong-decorated route.</p>
+        <strong>${t("outputModal.promptDecorator.title", null, "Prompt Decorator Probe")}</strong>
+        <p class="output-section-copy">${t("outputModal.promptDecorator.copy", null, "Created by the orchestrator in the prompt-decorator scenario. The same input prompt is sent through either a plain route or a Kong-decorated route.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>Decorator Policy</span>
+            <span>${t("outputModal.promptDecorator.policyLabel", null, "Decorator Policy")}</span>
             ${renderDefinitionList([
               ["Mode", promptEnhancementProbe.mode === "plain" ? "Without Decorator" : "With Decorator"],
               ["Applied Route", promptEnhancementProbe.mode === "plain" ? "Plain prompt-enhancement probe route" : "Decorated prompt-enhancement probe route"],
             ])}
             ${renderTextBlock(
               promptEnhancementProbe.decorator?.decorator_prompt ||
-                "No decorator was applied. Kong forwarded the prompt to the model unchanged."
+                t("outputModal.promptDecorator.noDecorator", null, "No decorator was applied. Kong forwarded the prompt to the model unchanged.")
             )}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Original Request Prompt</span>
+            <span>${t("outputModal.label.originalPrompt", null, "Original Request Prompt")}</span>
             ${renderTextBlock(promptEnhancementProbe.original_prompt?.user_prompt)}
           </div>
         </div>
@@ -3262,11 +3262,11 @@ function renderFinalOutput(result) {
         promptCompressionProbe
           ? `
       <section class="output-section output-section-wide">
-        <strong>Prompt Compression Probe</strong>
-        <p class="output-section-copy">Created by the orchestrator in the AI Prompt Compressor scenario. Kong compresses the verbose upstream prompt before it reaches the model and emits compression metrics to the audit logs.</p>
+        <strong>${t("outputModal.promptCompression.title", null, "Prompt Compression Probe")}</strong>
+        <p class="output-section-copy">${t("outputModal.promptCompression.copy", null, "Created by the orchestrator in the AI Prompt Compressor scenario. Kong compresses the verbose upstream prompt before it reaches the model and emits compression metrics to the audit logs.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>Compression Policy</span>
+            <span>${t("outputModal.promptCompression.policyLabel", null, "Compression Policy")}</span>
             ${renderDefinitionList([
               ["Mode", promptCompressionProbe.mode === "token_count" ? "By Token Count" : "By Ratio"],
               ["Requested Value", promptCompressionProbe.mode === "token_count" ? `${promptCompressionProbe.requested_value} tokens` : `${promptCompressionProbe.requested_value}%`],
@@ -3279,11 +3279,11 @@ function renderFinalOutput(result) {
             ])}
             ${renderTextBlock(
               promptCompressionProbe.metrics?.information ||
-                "Kong compressed the prompt before the model call and logged the token savings for observability."
+                t("outputModal.promptCompression.note", null, "Kong compressed the prompt before the model call and logged the token savings for observability.")
             )}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Original Request Prompt</span>
+            <span>${t("outputModal.label.originalPrompt", null, "Original Request Prompt")}</span>
             ${renderTextBlock(promptCompressionProbe.original_prompt?.user_prompt)}
           </div>
         </div>
@@ -3294,21 +3294,21 @@ function renderFinalOutput(result) {
         lakeraProbe
           ? `
       <section class="output-section output-section-wide">
-        <strong>Lakera Policy Guard Probe</strong>
-        <p class="output-section-copy">Created by the orchestrator in the Lakera scenario. Kong sends the prompt through AI Lakera Guard before any model response is allowed back to the UI.</p>
+        <strong>${t("outputModal.lakera.title", null, "Lakera Policy Guard Probe")}</strong>
+        <p class="output-section-copy">${t("outputModal.lakera.copy", null, "Created by the orchestrator in the Lakera scenario. Kong sends the prompt through AI Lakera Guard before any model response is allowed back to the UI.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>Policy Outcome</span>
+            <span>${t("outputModal.label.policyOutcome", null, "Policy Outcome")}</span>
             ${renderDefinitionList([
               ["Mode", lakeraProbe.mode],
               ["Block Reason", lakeraProbe.block_reason || "Allowed"],
               ["Detector Types", (lakeraProbe.detector_types || []).join(", ") || "None"],
               ["Lakera Request UUID", lakeraProbe.request_uuid || "Not returned"],
             ])}
-            ${renderTextBlock(lakeraProbe.blocked_message || "Lakera allowed the request to pass to the model.")}
+            ${renderTextBlock(lakeraProbe.blocked_message || t("outputModal.lakera.allowed", null, "Lakera allowed the request to pass to the model."))}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Original Request Prompt</span>
+            <span>${t("outputModal.label.originalPrompt", null, "Original Request Prompt")}</span>
             ${renderTextBlock(lakeraProbe.original_prompt?.user_prompt)}
           </div>
         </div>
@@ -3319,11 +3319,11 @@ function renderFinalOutput(result) {
         ragProbe
           ? `
       <section class="output-section output-section-wide">
-        <strong>RAG Probe</strong>
-        <p class="output-section-copy">Uses the same AtlasFlow support KB question in two modes so the answer quality difference comes only from Kong retrieval.</p>
+        <strong>${t("outputModal.rag.title", null, "RAG Probe")}</strong>
+        <p class="output-section-copy">${t("outputModal.rag.copy", null, "Uses the same AtlasFlow support KB question in two modes so the answer quality difference comes only from Kong retrieval.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>Probe Mode</span>
+            <span>${t("outputModal.rag.modeLabel", null, "Probe Mode")}</span>
             ${renderDefinitionList([
               ["Mode", ragProbe.mode === "after" ? "After (with RAG)" : "Before (baseline)"],
               ["Vector Backend", ragProbe.vector_backend],
@@ -3331,7 +3331,7 @@ function renderFinalOutput(result) {
             ${renderTextBlock(ragProbe.comparison_note)}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Original Request Prompt</span>
+            <span>${t("outputModal.label.originalPrompt", null, "Original Request Prompt")}</span>
             ${renderTextBlock(ragProbe.original_prompt?.user_prompt)}
           </div>
         </div>
@@ -3342,11 +3342,11 @@ function renderFinalOutput(result) {
         result.semantic_cache_probe
           ? `
       <section class="output-section output-section-wide">
-        <strong>Semantic Cache Probe</strong>
-        <p class="output-section-copy">Created by the orchestrator in the semantic-cache scenario. This run sends either the first cache-seed request or the second cache-reuse request through Kong.</p>
+        <strong>${t("outputModal.semanticCache.title", null, "Semantic Cache Probe")}</strong>
+        <p class="output-section-copy">${t("outputModal.semanticCache.copy", null, "Created by the orchestrator in the semantic-cache scenario. This run sends either the first cache-seed request or the second cache-reuse request through Kong.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>${result.semantic_cache_probe?.step === "seed" ? "First Request" : "Second Request"}</span>
+            <span>${result.semantic_cache_probe?.step === "seed" ? t("outputModal.semanticCache.firstRequest", null, "First Request") : t("outputModal.semanticCache.secondRequest", null, "Second Request")}</span>
             ${renderDefinitionList([
               ["Step", result.semantic_cache_probe?.step],
               ["X-Cache-Status", result.semantic_cache_probe?.headers?.["x-cache-status"]],
@@ -3363,11 +3363,11 @@ function renderFinalOutput(result) {
         judgeProbe
           ? `
       <section class="output-section output-section-wide">
-        <strong>LLM as Judge Probe</strong>
-        <p class="output-section-copy">Created by the orchestrator in the LLM as Judge scenario. Kong evaluates the returned answer with a separate judge model and emits the score into the audit logs for Grafana.</p>
+        <strong>${t("outputModal.judge.title", null, "LLM as Judge Probe")}</strong>
+        <p class="output-section-copy">${t("outputModal.judge.copy", null, "Created by the orchestrator in the LLM as Judge scenario. Kong evaluates the returned answer with a separate judge model and emits the score into the audit logs for Grafana.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>Evaluation Route</span>
+            <span>${t("outputModal.judge.routeLabel", null, "Evaluation Route")}</span>
             ${renderDefinitionList([
               ["Scenario", "LLM as Judge"],
               ["Candidate Models", "OpenAI 4o mini, Gemini 2.5 Flash"],
@@ -3376,7 +3376,7 @@ function renderFinalOutput(result) {
             ${renderTextBlock(judgeProbe.scoring_note)}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Original Request Prompt</span>
+            <span>${t("outputModal.label.originalPrompt", null, "Original Request Prompt")}</span>
             ${renderTextBlock(judgeProbe.original_prompt?.user_prompt)}
           </div>
         </div>
@@ -3387,11 +3387,11 @@ function renderFinalOutput(result) {
         piiProbe
           ? `
       <section class="output-section output-section-wide">
-        <strong>PII Sanitizer Probe</strong>
-        <p class="output-section-copy">Created by the orchestrator in the AI PII Sanitizer scenario. Kong sanitizes or blocks the upstream request before the model call, and sanitizes the downstream response when the request is allowed.</p>
+        <strong>${t("outputModal.pii.title", null, "PII Sanitizer Probe")}</strong>
+        <p class="output-section-copy">${t("outputModal.pii.copy", null, "Created by the orchestrator in the AI PII Sanitizer scenario. Kong sanitizes or blocks the upstream request before the model call, and sanitizes the downstream response when the request is allowed.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>Sanitization Policy</span>
+            <span>${t("outputModal.pii.policyLabel", null, "Sanitization Policy")}</span>
             ${renderDefinitionList([
               ["Mode", piiProbe.mode],
               ["Sanitization Direction", piiProbe.sanitization_mode],
@@ -3400,19 +3400,19 @@ function renderFinalOutput(result) {
             ])}
             ${renderTextBlock(
               piiProbe.mode === "synthetic"
-                ? "Synthetic mode replaces supported detected values with category-matched synthetic values. Some credential-like secrets may still appear masked rather than replaced with natural-looking values."
+                ? t("outputModal.pii.synthetic", null, "Synthetic mode replaces supported detected values with category-matched synthetic values. Some credential-like secrets may still appear masked rather than replaced with natural-looking values.")
                 : piiProbe.mode === "placeholder"
-                  ? "Placeholder mode replaces supported detected values with placeholder tokens."
-                  : "Block mode stops the request before it reaches the model when supported PII or credentials are detected."
+                  ? t("outputModal.pii.placeholder", null, "Placeholder mode replaces supported detected values with placeholder tokens.")
+                  : t("outputModal.pii.block", null, "Block mode stops the request before it reaches the model when supported PII or credentials are detected.")
             )}
             ${renderBulletList(piiProbe.anonymized_categories)}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Original Request Prompt</span>
+            <span>${t("outputModal.label.originalPrompt", null, "Original Request Prompt")}</span>
             ${renderTextBlock(piiProbe.original_prompt?.user_prompt)}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Sanitized Response Returned Through Kong</span>
+            <span>${t("outputModal.pii.sanitizedResponseLabel", null, "Sanitized Response Returned Through Kong")}</span>
             ${renderTextBlock(piiProbe.sanitized_response)}
           </div>
         </div>
@@ -3424,8 +3424,8 @@ function renderFinalOutput(result) {
           ? ""
           : `
       <section class="output-section">
-        <strong>Account Context</strong>
-        <p class="output-section-copy">Created by the orchestrator using the MCP tool <code>get_customer_account</code> before any sub-agent work starts.</p>
+        <strong>${t("outputModal.accountContext.title", null, "Account Context")}</strong>
+        <p class="output-section-copy">${t("outputModal.accountContext.copy", null, "Created by the orchestrator using the MCP tool <code>get_customer_account</code> before any sub-agent work starts.")}</p>
         ${renderDefinitionList([
           ["Customer ID", accountContext?.customer_id],
           ["Account Name", accountContext?.account_name],
@@ -3437,8 +3437,8 @@ function renderFinalOutput(result) {
         ])}
       </section>
       <section class="output-section">
-        <strong>Renewal Risk</strong>
-        <p class="output-section-copy">Created by the orchestrator using the MCP tool <code>get_renewal_risk</code> to show the current renewal score and its drivers.</p>
+        <strong>${t("outputModal.renewalRisk.title", null, "Renewal Risk")}</strong>
+        <p class="output-section-copy">${t("outputModal.renewalRisk.copy", null, "Created by the orchestrator using the MCP tool <code>get_renewal_risk</code> to show the current renewal score and its drivers.")}</p>
         ${renderDefinitionList([
           ["Score", renewalRisk?.score],
           ["Level", renewalRisk?.level],
@@ -3446,22 +3446,22 @@ function renderFinalOutput(result) {
         ${renderBulletList(renewalRisk?.drivers)}
       </section>
       <section class="output-section">
-        <strong>Support Track</strong>
-        <p class="output-section-copy">Created by the support agent using <code>get_incident_status</code>, <code>search_runbook</code>, and its Gemini summary step.</p>
+        <strong>${t("outputModal.supportTrack.title", null, "Support Track")}</strong>
+        <p class="output-section-copy">${t("outputModal.supportTrack.copy", null, "Created by the support agent using <code>get_incident_status</code>, <code>search_runbook</code>, and its Gemini summary step.")}</p>
         ${renderTextBlock(result.support_track?.technical_response)}
         ${renderBulletList(result.support_track?.recommended_actions)}
       </section>
       <section class="output-section">
-        <strong>Success Plan</strong>
-        <p class="output-section-copy">Created by the success agent using <code>draft_customer_reply</code>, <code>create_followup_task</code>, and its Gemini summary step.</p>
+        <strong>${t("outputModal.successPlan.title", null, "Success Plan")}</strong>
+        <p class="output-section-copy">${t("outputModal.successPlan.copy", null, "Created by the success agent using <code>draft_customer_reply</code>, <code>create_followup_task</code>, and its Gemini summary step.")}</p>
         ${renderBulletList(result.success_track?.success_plan)}
       </section>
       <section class="output-section output-section-wide">
-        <strong>Full Support Payload</strong>
-        <p class="output-section-copy">Full support-agent output, built from <code>get_incident_status</code>, <code>search_runbook</code>, and the support-agent LLM summary.</p>
+        <strong>${t("outputModal.fullSupport.title", null, "Full Support Payload")}</strong>
+        <p class="output-section-copy">${t("outputModal.fullSupport.copy", null, "Full support-agent output, built from <code>get_incident_status</code>, <code>search_runbook</code>, and the support-agent LLM summary.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>Incident</span>
+            <span>${t("outputModal.fullSupport.incidentLabel", null, "Incident")}</span>
             ${renderDefinitionList([
               ["Incident ID", supportIncident?.incident_id],
               ["Status", supportIncident?.status],
@@ -3471,27 +3471,27 @@ function renderFinalOutput(result) {
             ])}
           </div>
           <div class="output-subsection">
-            <span>Runbook Matches</span>
+            <span>${t("outputModal.fullSupport.runbookLabel", null, "Runbook Matches")}</span>
             ${renderBulletList((supportRunbook?.results || []).map((item) => `${item.id}: ${item.title} - ${item.summary}`))}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Support LLM Summary</span>
+            <span>${t("outputModal.fullSupport.summaryLabel", null, "Support LLM Summary")}</span>
             ${renderTextBlock(result.support_track?.llm_summary?.summary)}
           </div>
         </div>
       </section>
       <section class="output-section output-section-wide">
-        <strong>Full Success Payload</strong>
-        <p class="output-section-copy">Full success-agent output, built from <code>draft_customer_reply</code>, <code>create_followup_task</code>, and the success-agent LLM summary.</p>
+        <strong>${t("outputModal.fullSuccess.title", null, "Full Success Payload")}</strong>
+        <p class="output-section-copy">${t("outputModal.fullSuccess.copy", null, "Full success-agent output, built from <code>draft_customer_reply</code>, <code>create_followup_task</code>, and the success-agent LLM summary.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection output-subsection-wide">
-            <span>Draft Customer Reply</span>
-            <p class="output-section-copy">Created by the success agent using the MCP tool <code>draft_customer_reply</code>. This is the customer-facing message draft.</p>
+            <span>${t("outputModal.fullSuccess.draftLabel", null, "Draft Customer Reply")}</span>
+            <p class="output-section-copy">${t("outputModal.fullSuccess.draftCopy", null, "Created by the success agent using the MCP tool <code>draft_customer_reply</code>. This is the customer-facing message draft.")}</p>
             ${renderTextBlock(successReply?.draft)}
           </div>
           <div class="output-subsection">
-            <span>Follow-up Task</span>
-            <p class="output-section-copy">Created by the success agent using the MCP tool <code>create_followup_task</code>. This is the internal account-team follow-up record.</p>
+            <span>${t("outputModal.fullSuccess.taskLabel", null, "Follow-up Task")}</span>
+            <p class="output-section-copy">${t("outputModal.fullSuccess.taskCopy", null, "Created by the success agent using the MCP tool <code>create_followup_task</code>. This is the internal account-team follow-up record.")}</p>
             ${renderDefinitionList([
               ["Task ID", successTask?.task_id],
               ["Status", successTask?.status],
@@ -3501,8 +3501,8 @@ function renderFinalOutput(result) {
             ${renderBulletList(successTask?.action_items)}
           </div>
           <div class="output-subsection">
-            <span>Success LLM Summary</span>
-            <p class="output-section-copy">Created by the success-agent Gemini step after reviewing the reply draft and follow-up task. This is the concise business summary of customer posture and next actions.</p>
+            <span>${t("outputModal.fullSuccess.summaryLabel", null, "Success LLM Summary")}</span>
+            <p class="output-section-copy">${t("outputModal.fullSuccess.summaryCopy", null, "Created by the success-agent Gemini step after reviewing the reply draft and follow-up task. This is the concise business summary of customer posture and next actions.")}</p>
             ${renderTextBlock(result.success_track?.llm_summary?.summary)}
           </div>
         </div>
@@ -4711,12 +4711,12 @@ async function play(overrides = {}) {
       );
       finalOutput.innerHTML = `
         <section class="output-hero">
-          <p class="output-kicker">Final Output</p>
-          <h3>Renderer fallback</h3>
-          <p class="output-section-copy">The topology state was preserved because the run completed successfully.</p>
+          <p class="output-kicker">${t("outputModal.finalOutputKicker", null, "Final Output")}</p>
+          <h3>${t("outputModal.fallback.title", null, "Renderer fallback")}</h3>
+          <p class="output-section-copy">${t("outputModal.fallback.copy", null, "The topology state was preserved because the run completed successfully.")}</p>
         </section>
         <section class="output-section output-section-wide">
-          <strong>Raw Result</strong>
+          <strong>${t("outputModal.fallback.rawResult", null, "Raw Result")}</strong>
           ${renderTextBlock(JSON.stringify(data.result, null, 2))}
         </section>
       `;

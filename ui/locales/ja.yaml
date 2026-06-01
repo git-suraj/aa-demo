@@ -1,0 +1,683 @@
+detail.clickRow: "トレース行をクリック"
+detail.input: "入力"
+detail.kicker: "選択中のステップ"
+detail.noStep: "ステップが選択されていません"
+detail.output: "出力"
+detail.summary: "概要"
+detail.summaryCopy: "選択したトレースステップの所要時間、リクエスト入力、出力ペイロードがここに表示されます。"
+form.accountName: "アカウント名"
+form.billingIssue: "請求に関する問題"
+form.customerId: "顧客ID"
+form.incidentId: "インシデントID"
+form.issueSummary: "問題の概要"
+form.productIssue: "製品に関する問題"
+graph.copy: "これらの図は、デモで使用する LangGraph ワークフローと、シナリオ固有の Kong アーキテクチャ経路の両方を示します。"
+graph.eyebrow: "ダイアグラム"
+graph.mainGraph: "メイングラフ"
+graph.normalEyebrow: "通常シナリオ"
+graph.openFullWidth: "全幅で開く"
+graph.orchestrator: "オーケストレーター"
+graph.orchestratorCopy: "これは <code>services/orchestrator/app.py</code> でコンパイルされるオーケストレーターグラフに対応します。コンテキストの取得、トリアージブリーフの生成、サポートエージェントの実行、サクセスエージェントの実行、そしてレスポンスの確定という流れです。"
+graph.sequenceCopy: "このシーケンスは標準的なハッピーパスをたどります。UI が Kong 経由で実行を開始し、オーケストレーターが MCP コンテキストを取得し、各サブエージェントを A2A エージェントカードで検出し、Kong 経由の JSON-RPC で `agent.run` を呼び出し、ライブトレースを UI にストリーミングしながらエグゼクティブサマリーで完了します。"
+graph.sequenceTitle: "エンドツーエンドのシーケンス"
+graph.subAgentGraph: "サブエージェントグラフ"
+graph.successAgent: "サクセスエージェント"
+graph.successCopy: "これは <code>services/success_agent/app.py</code> でコンパイルされるサクセスグラフに対応します。ツールインベントリの取得、顧客対応アクションの準備、サクセスサマリーの生成、そしてレスポンスペイロードの構築という流れです。"
+graph.supportAgent: "サポートエージェント"
+graph.supportCopy: "これは <code>services/support_agent/app.py</code> でコンパイルされるサポートグラフに対応します。ツールインベントリの取得、問題の調査、技術サマリーの生成、そしてレスポンスペイロードの構築という流れです。"
+graph.title: "ワークフローとシナリオのビュー"
+graph.workflowEyebrow: "ワークフローグラフ"
+graph.workflowTitle: "LangGraph 状態遷移図"
+help.businessCopy: "顧客エスカレーションがダッシュボードから入ってきます。システムはアカウントのコンテキストを収集し、技術的な問題を調査し、顧客向けのフォローアップを準備し、エグゼクティブブリーフを迅速に作成する必要があります。"
+help.businessLabel: "ビジネスシナリオ"
+help.copy: "このデモは、請求に関する係争とワークフローエージェントの同期遅延を報告するエンタープライズアカウントの顧客エスカレーションをモデル化しています。Kong は UI、MCP ツール、サブエージェント、LLM 経路、オブザーバビリティ経路の中心に位置し、各ホップをガバナンスのもとで追跡可能にします。"
+help.eyebrow: "このデモについて"
+help.orchestratorCopy: "オーケストレーターはメインの LangGraph ワークフローです。MCP ツールを検出して呼び出し、トリアージブリーフを作成し、サポートおよびサクセスのサブエージェントを呼び出し、最終的なエグゼクティブレスポンスを組み立てます。"
+help.orchestratorLabel: "オーケストレーター"
+help.successCopy: "サクセスエージェントは顧客とのコミュニケーションとフォローアップを担当します。ツールを使って顧客への返信を下書きし、次のタスクを作成し、アカウントチームのアクションプランを形にします。"
+help.successLabel: "サクセスエージェント"
+help.supportCopy: "サポートエージェントは技術調査を担当します。インシデントツールとランブックツールを使い、現在のエンジニアリング状況を要約し、即時の修復経路を提案します。"
+help.supportLabel: "サポートエージェント"
+help.title: "シナリオとエージェントの役割"
+js.detailPane.clickTraceRow: "トレース行をクリック"
+js.detailPane.noStepSelected: "ステップが選択されていません"
+js.detailPane.noSummary: "概要はありません。"
+js.detailPane.summary: "選択したトレースステップの所要時間、リクエスト入力、出力ペイロードがここに表示されます。"
+js.eventDetails.selectEvent: "イベントを選択"
+js.eventDetails.summary: "選択したイベントのライフサイクルフィールドとペイロードの詳細がここに表示されます。"
+js.eventDetails.title: "イベント詳細"
+js.runHistory.noSavedRuns: "保存された実行はありません"
+js.runHistory.unavailable: "実行履歴を利用できません"
+modal.close: "閉じる"
+nodeDetails.backendApi.config:
+  - ["提供内容", "デモで使用されるビジネスデータとサポートデータ"]
+  - ["アクセス経路", "Kong によるガバナンス対象のルーティング"]
+nodeDetails.backendApi.intro: "これらは、ツールやエージェントが使用するデータを保持するモックのアップストリームシステムです。"
+nodeDetails.backendApi.plainEnglish:
+  - "アカウント、インシデント、ランブック、返信、タスクのデータを提供します。"
+  - "トポロジー上では、MCP の直下ではなく Kong の背後に表示されるようになりました。"
+  - "デモにおける生のアップストリームデータプレーンとして機能します。"
+nodeDetails.backendApi.title: "バックエンド API"
+nodeDetails.backendApi.why: "バックエンドへの直接アクセスと、Kong によるガバナンス対象アクセスの違いを可視化します。"
+nodeDetails.compressor.config:
+  - ["シナリオ", "プロンプト圧縮"]
+  - ["モード", "rate, target_token"]
+nodeDetails.compressor.intro: "このサービスは、Kong がアップストリームのモデル呼び出し前に冗長なプロンプトを圧縮するときに表示されます。"
+nodeDetails.compressor.plainEnglish:
+  - "シナリオがプロンプト圧縮を使用する場合、Kong はモデル呼び出し前にリクエストプロンプトをここへ送ります。"
+  - "このサービスは圧縮済みプロンプトとトークン削減量のメタデータを返します。"
+  - "プロンプト圧縮シナリオの間のみ表示されます。"
+nodeDetails.compressor.title: "AI 圧縮サービス"
+nodeDetails.compressor.why: "外部の圧縮ステップを、ガバナンス対象の LLM 経路の一部として可視化します。"
+nodeDetails.gemini.config:
+  - ["使用元", "サブエージェントおよび選択されたシナリオ経路"]
+  - ["ガバナンス", "Kong の AI ルーティング"]
+nodeDetails.gemini.intro: "このモデル経路は、サブエージェントと一部のオーケストレーターシナリオで共有されます。"
+nodeDetails.gemini.plainEnglish:
+  - "ベースフローでは、Kong がサポートエージェントとサクセスエージェントをここにルーティングします。"
+  - "フェイルオーバーやジャッジ関連のシナリオ経路でも表示されます。"
+  - "このノードは、単なるプロバイダーのロゴではなく、ガバナンス対象のルート選択を表します。"
+nodeDetails.gemini.title: "Gemini 2.5 Flash"
+nodeDetails.gemini.why: "Kong が役割やシナリオに応じてモデルトラフィックを分割・転送できることを示します。"
+nodeDetails.judgeModel.config:
+  - ["シナリオ", "LLM as Judge"]
+  - ["目的", "品質スコアリングと評価"]
+nodeDetails.judgeModel.intro: "このノードは LLM as Judge シナリオで、Kong が別のモデルを使って候補レスポンスを採点するときに表示されます。"
+nodeDetails.judgeModel.plainEnglish:
+  - "候補レスポンスが生成された後、Kong がジャッジを呼び出します。"
+  - "ジャッジはスコアと評価コンテキストを返します。"
+  - "その出力はオブザーバビリティと最終結果の経路で公開されます。"
+nodeDetails.judgeModel.title: "ジャッジモデル"
+nodeDetails.judgeModel.why: "ゲートウェイ層での評価を可視化します。"
+nodeDetails.lakera.config:
+  - ["使用元", "Lakera ポリシーガード"]
+  - ["役割", "プロンプト検査と許可・ブロックの判定"]
+nodeDetails.lakera.intro: "Lakera は、アップストリームのモデル呼び出しが許可される前に、Kong ルート上でプロンプトを検査します。"
+nodeDetails.lakera.plainEnglish:
+  - "Kong はモデル呼び出し前に、ポリシー検査のためプロンプトを Lakera へ送ります。"
+  - "Lakera はリクエストを許可するか、検出カテゴリとともにブロックできます。"
+  - "Lakera ポリシーガードシナリオの間のみ表示されます。"
+nodeDetails.lakera.title: "Lakera"
+nodeDetails.lakera.why: "外部のポリシーガードを、ガバナンス対象のデータ経路の一部として可視化します。"
+nodeDetails.mcp.config:
+  - ["プロトコル", "Kong 経由の MCP"]
+  - ["レジストリ", "AA Demo MCP Registry"]
+  - ["公開サーバー", "com.aa-demo/mock-mcp"]
+  - ["レジストリリモート", "http://localhost:8000/mock-mcp"]
+  - ["ガバナンス", "エージェントごとの認証・認可"]
+  - ["オーケストレーターのツール", "get_customer_account, get_renewal_risk, get_open_tickets"]
+  - ["サポートのツール", "get_incident_status, search_runbook"]
+  - ["サクセスのツール", "draft_customer_reply, create_followup_task"]
+nodeDetails.mcp.intro: "Kong はバックエンド API を MCP ツールとして公開し、サーバーを Konnect MCP Registry に登録し、エージェントごとに許可されるツールセットをフィルタリングします。"
+nodeDetails.mcp.plainEnglish:
+  - "エージェントは生の API を直接検出するのではなく、Kong にツール一覧を問い合わせます。"
+  - "同じ MCP サーバーが、内部検出用に AA Demo MCP Registry として Konnect に公開されています。"
+  - "Kong はツールを返す前に認証とアクセス制御を適用します。"
+  - "ツールの呼び出しも、バックエンドサービスに到達する前に Kong を経由します。"
+nodeDetails.mcp.title: "MCP ツール"
+nodeDetails.mcp.why: "ここで API ガバナンスがエージェントツールのガバナンスへと発展します。検出メタデータは Konnect Registry が、ランタイム制御は Kong が担います。"
+nodeDetails.observability.config:
+  - ["受信", "構造化された Kong のログ"]
+  - ["相関キー", "run_id とゲートウェイのメタデータ"]
+nodeDetails.observability.intro: "オブザーバビリティは Kong ゲートウェイのログを受信し、実行やシナリオ単位でクエリできるようにします。"
+nodeDetails.observability.plainEnglish:
+  - "Kong は構造化ログを Loki に送信します。"
+  - "Grafana はそのログを読み取り、件数、失敗、ポリシーイベントを表示します。"
+  - "同じ run_id によって、トポロジー、トレース、メトリクスが結び付けられます。"
+nodeDetails.observability.title: "Grafana / Loki"
+nodeDetails.observability.why: "トポロジーが可視化しているガバナンス対象の経路の証跡を提供します。"
+nodeDetails.openai.config:
+  - ["使用元", "オーケストレーター"]
+  - ["役割", "プランナー、トリアージ、最終エグゼクティブサマリー"]
+nodeDetails.openai.intro: "これは標準実行における主要なオーケストレーターモデルの経路です。"
+nodeDetails.openai.plainEnglish:
+  - "通常フローでは、Kong がオーケストレーターのプランニングとサマリーの呼び出しをここにルーティングします。"
+  - "一部のシナリオでは、Kong がこのルートをガバナンスする方法が変わります。"
+  - "共有のサブエージェントルートとは分離されています。"
+nodeDetails.openai.title: "OpenAI 4o mini"
+nodeDetails.openai.why: "ゲートウェイ層での呼び出し元別のモデルルーティングを示します。"
+nodeDetails.orchestrator.config:
+  - ["フレームワーク", "LangGraph"]
+  - ["Kong 経由の呼び出し", "MCP、A2A サブエージェント、オーケストレーターの AI ルート"]
+nodeDetails.orchestrator.intro: "オーケストレーターはエスカレーションのメインとなるワークフロー調整役です。"
+nodeDetails.orchestrator.plainEnglish:
+  - "Kong が公開するツールを通じてアカウントのコンテキストを収集します。"
+  - "Kong の A2A ルート経由で、サポートおよびサクセスのエージェントを検出して呼び出します。"
+  - "結果を返す前に、最終的な統合処理を行います。"
+nodeDetails.orchestrator.title: "オーケストレーター"
+nodeDetails.orchestrator.why: "ガバナンス対象の複数のツールおよびエージェントのホップを、ひとつのビジネス成果へと変換します。"
+nodeDetails.piiService.config:
+  - ["シナリオ", "PII サニタイズ"]
+  - ["モード", "placeholder, synthetic, block"]
+nodeDetails.piiService.intro: "このサービスは、Kong がリクエストまたはレスポンスの経路で機密コンテンツをサニタイズまたはブロックするときに表示されます。"
+nodeDetails.piiService.plainEnglish:
+  - "シナリオがサニタイズを使用する場合、Kong はモデル呼び出し前にリクエストコンテンツをここへ送ります。"
+  - "レスポンスを Kong が返す前にサニタイズすることもできます。"
+  - "実際の挙動は placeholder、synthetic、block のいずれのモードかによって決まります。"
+nodeDetails.piiService.title: "AI PII サービス"
+nodeDetails.piiService.why: "プライバシーの強制をアプリケーションコードの外側で実施できることを示します。"
+nodeDetails.redis.config:
+  - ["使用元", "セマンティックガード、セマンティックキャッシュ、RAG"]
+  - ["役割", "埋め込みベースの類似度ストア"]
+nodeDetails.redis.intro: "Redis は埋め込みの保存や比較を行い、セマンティックガバナンスのシナリオを支えます。"
+nodeDetails.redis.plainEnglish:
+  - "Kong はセマンティックガードの比較に Redis を使用します。"
+  - "Kong はセマンティックキャッシュの検索と再利用にも使用します。"
+  - "Kong は RAG シナリオの検索ストアとしても使用します。"
+  - "セマンティックシナリオが関係する場合のみ表示されます。"
+nodeDetails.redis.title: "Redis Vector DB"
+nodeDetails.redis.why: "セマンティックポリシーの挙動を支える基盤インフラを示します。"
+nodeDetails.successAgent.config:
+  - ["許可されたツール", "draft_customer_reply, create_followup_task"]
+  - ["LLM 経路", "Kong 経由のサブエージェント Gemini ルート"]
+nodeDetails.successAgent.intro: "サクセスエージェントはフォローアップの計画と顧客とのコミュニケーションを担当します。"
+nodeDetails.successAgent.plainEnglish:
+  - "Kong を通じて、許可されたツールのみを解決します。"
+  - "返信を下書きし、フォローアップタスクを作成します。"
+  - "それらの出力を、顧客に提示できるプランへと変換します。"
+nodeDetails.successAgent.title: "サクセスエージェント"
+nodeDetails.successAgent.why: "顧客およびアカウントチームのアクションを、ガバナンス対象のフローの中で明確にします。"
+nodeDetails.supportAgent.config:
+  - ["許可されたツール", "get_incident_status, search_runbook"]
+  - ["LLM 経路", "Kong 経由のサブエージェント Gemini ルート"]
+nodeDetails.supportAgent.intro: "サポートエージェントはエスカレーションの技術調査側を担当します。"
+nodeDetails.supportAgent.plainEnglish:
+  - "Kong を通じて、許可されたツールを解決します。"
+  - "インシデントの状況とランブックのガイダンスを確認します。"
+  - "サブエージェントの AI ルートを通じて技術的な状況を要約します。"
+nodeDetails.supportAgent.title: "サポートエージェント"
+nodeDetails.supportAgent.why: "インシデントデータを、オーケストレーター向けの技術的ガイダンスへと変換します。"
+nodeDetails.ui.config:
+  - ["提供経路", "Kong"]
+  - ["役割", "実行の開始とガバナンス対象フローの可視化"]
+nodeDetails.ui.intro: "ダッシュボードは実行を開始し、ライブトポロジーを描画し、トレースの更新をストリーミングします。"
+nodeDetails.ui.plainEnglish:
+  - "UI はサービスを直接呼び出すのではなく、Kong を経由します。"
+  - "経路の有効化、トレースツリー、実行出力を表示します。"
+  - "デモで使用するシナリオ、ダイアグラム、詳細モーダルも公開します。"
+nodeDetails.ui.title: "ダッシュボード"
+nodeDetails.ui.why: "ガバナンス対象のトラフィックとビジネスワークフローを、ひとつの画面で可視化します。"
+nodeDetails.user.config:
+  - ["入力", "顧客エスカレーションのリクエスト"]
+  - ["保持データ", "シナリオデータ、governance_scenario、run_id"]
+nodeDetails.user.intro: "デモはここから始まり、ガイド付きのリクエストが 1 件、ホストされた UI に入ってきます。"
+nodeDetails.user.plainEnglish:
+  - "これはワークフローを開始するビジネスリクエストです。"
+  - "リクエストには、選択されたガバナンスシナリオと共有の run_id が含まれます。"
+  - "下流のすべての処理が、このエントリーポイントに相関付けられます。"
+nodeDetails.user.title: "ユーザーリクエスト"
+nodeDetails.user.why: "Kong がガバナンスするビジネスコンテキストを確立します。"
+nodes.backend.desc: "Kong 経由でアクセスされる、モックのアカウント、インシデント、ランブック、下書き、タスクの各エンドポイントです。"
+nodes.backend.infoAria: "バックエンド API の詳細を表示"
+nodes.backend.label: "アップストリーム"
+nodes.backend.title: "バックエンド API"
+nodes.compress.desc: "Kong AI Prompt Compressor が、モデル呼び出し前に冗長なプロンプトを短縮するために使用します。"
+nodes.compress.infoAria: "AI Prompt Compressor の詳細を表示"
+nodes.compress.label: "圧縮"
+nodes.compress.title: "AI 圧縮サービス"
+nodes.gemini.desc: "オーケストレーターのフェイルオーバーと、サブエージェントの LLM ルートです。"
+nodes.gemini.infoAria: "Gemini モデルの詳細を表示"
+nodes.gemini.label: "フェイルオーバー / 共有"
+nodes.gemini.title: "Gemini 2.5 Flash"
+nodes.judge.desc: "Kong が判定結果をオーケストレーターへ返す前に、候補レスポンスの正確性を採点します。"
+nodes.judge.infoAria: "ジャッジモデルの詳細を表示"
+nodes.judge.label: "ジャッジ"
+nodes.judge.title: "Gemini 2.5 Flash"
+nodes.kong.desc: "エージェントルーティング（A2A）、LLM ルーティング、認証、ACL、MCP ツールの公開を担います。"
+nodes.kong.infoAria: "Kong Gateway の詳細を表示"
+nodes.kong.label: "ゲートウェイコア"
+nodes.kong.title: "Kong Gateway"
+nodes.lakera.desc: "Kong AI Lakera Guard が、プロンプトがモデルに到達する前に検査するために使用します。"
+nodes.lakera.infoAria: "Lakera の詳細を表示"
+nodes.lakera.label: "ポリシーガード"
+nodes.lakera.title: "Lakera"
+nodes.mcp.desc: "Kong はバックエンドの REST API をツールとして公開し、サーバーを Konnect MCP Registry に登録し、コンシューマーグループごとにアクセスをフィルタリングします。"
+nodes.mcp.infoAria: "MCP ツールの詳細を表示"
+nodes.mcp.label: "ツールプレーン"
+nodes.mcp.title: "MCP ツール"
+nodes.observability.desc: "ライブメトリクス、クエリ、ダッシュボードパネルのために Kong ゲートウェイのログを受信します。"
+nodes.observability.infoAria: "オブザーバビリティの詳細を表示"
+nodes.observability.label: "オブザーバビリティ"
+nodes.observability.title: "Grafana / Loki"
+nodes.openai.desc: "AI Proxy Advanced を介した主要なオーケストレーターモデルです。"
+nodes.openai.infoAria: "OpenAI モデルの詳細を表示"
+nodes.openai.label: "プライマリ"
+nodes.openai.title: "OpenAI 4o mini"
+nodes.orchestrator.desc: "コンテキストを取得し、LLM を呼び出し、サポート、続いてサクセスを呼び出し、最終ブリーフを組み立てます。"
+nodes.orchestrator.infoAria: "オーケストレーターの詳細を表示"
+nodes.orchestrator.label: "LangGraph"
+nodes.orchestrator.title: "オーケストレーター"
+nodes.pii.desc: "Kong AI Sanitizer が、リクエストおよびレスポンス経路の機密データを匿名化するために使用します。"
+nodes.pii.infoAria: "AI PII サービスの詳細を表示"
+nodes.pii.label: "サニタイズ"
+nodes.pii.title: "AI PII サービス"
+nodes.redis.desc: "Kong のセマンティックガードおよびセマンティックキャッシュのポリシーが、埋め込みを比較するために使用します。"
+nodes.redis.infoAria: "Redis の詳細を表示"
+nodes.redis.label: "ベクターストア"
+nodes.redis.title: "Redis Vector DB"
+nodes.success.desc: "返信ツールとタスクツールを使い、顧客向けアクションプランを作成します。"
+nodes.success.infoAria: "サクセスエージェントの詳細を表示"
+nodes.success.label: "サブエージェント"
+nodes.success.title: "サクセスエージェント"
+nodes.support.desc: "インシデントツールとランブックツールを使い、技術的な状況を要約します。"
+nodes.support.infoAria: "サポートエージェントの詳細を表示"
+nodes.support.label: "サブエージェント"
+nodes.support.title: "サポートエージェント"
+nodes.ui.desc: "Kong 経由で提供されます。ライブの経路有効化とトレース状態を表示します。"
+nodes.ui.infoAria: "ダッシュボードの詳細を表示"
+nodes.ui.label: "ホストされた UI"
+nodes.ui.title: "ダッシュボード"
+nodes.user.desc: "Play は固定されたエスカレーションワークフローを 1 件開始します。"
+nodes.user.infoAria: "ユーザーリクエストの詳細を表示"
+nodes.user.label: "エントリー"
+nodes.user.title: "ユーザーリクエスト"
+notice.observability.kicker: "オブザーバビリティ"
+notice.observability.resetCompleteMessage: "Loki を再作成し、Grafana を再起動しました。パネルに古いデータが表示される場合は、数秒後に Grafana を更新してください。"
+notice.observability.resetCompleteTitle: "オブザーバビリティのリセットが完了しました"
+notice.observability.resetFailedTitle: "オブザーバビリティのリセットに失敗しました"
+notice.runHistory.kicker: "実行履歴"
+notice.runHistory.loadFailedTitle: "実行を読み込めませんでした"
+notice.semanticCache.deleteFailedTitle: "キャッシュの削除に失敗しました"
+notice.semanticCache.deletedTitle: "キャッシュを削除しました"
+notice.semanticCache.kicker: "セマンティックキャッシュ"
+noticeModal.message: "操作が正常に完了しました。"
+noticeModal.title: "操作が完了しました"
+outputModal.awaitingCopy: "「シナリオを表示」を開き、シナリオのポップアップからオーケストレーションされたデモフローを開始してください。"
+outputModal.awaitingTitle: "実行を待機中"
+outputModal.eyebrow: "実行出力"
+outputModal.title: "詳細なレスポンス"
+outputModal.finalOutputKicker: "最終出力"
+outputModal.governanceScenarioLabel: "ガバナンスシナリオ:"
+outputModal.summary.lakera: "この出力は Lakera ポリシーガードのプローブによるもので、Kong がモデル呼び出し前にプロンプトをブロックしたかどうかを示します。"
+outputModal.summary.rag: "この回答は、ベースライン経路または Kong の RAG 注入経路のいずれかを使用した、オーケストレーターの RAG プローブによるものです。"
+outputModal.summary.loadBalancingSemantic: "この出力はセマンティックロードバランシングのプローブによるもので、Kong がプロンプトに最も関連性の高いモデルターゲットを選択する様子を示します。"
+outputModal.summary.loadBalancing: "この出力はロードバランシングのプローブによるもので、Kong がプライマリのモデル経路からフォールバック経路へフェイルオーバーする様子を示します。"
+outputModal.summary.tokenLimit: "この出力はコンシューマートークンレート制限のプローブによるもので、経路が1回目のリクエストを許可し、次のリクエストをブロックする様子を示します。"
+outputModal.summary.promptEnhancement: "この出力はプロンプトデコレーターのプローブによるもので、プレーン経路とデコレート経路の違いを明確にします。"
+outputModal.summary.promptCompression: "この出力はプロンプト圧縮のプローブによるもので、Kong がモデル呼び出し前にどのようにプロンプトを削減したかを示します。"
+outputModal.summary.focusedProbe: "この出力は、マルチエージェントワークフロー全体ではなく、特定のガバナンスプローブによるものです。"
+outputModal.summary.default: "オーケストレーターのコンテキスト、サポートエージェントの出力、サクセスエージェントの出力を統合した後に、オーケストレーター LLM が作成したエグゼクティブサマリーです。"
+outputModal.label.orchestrator: "オーケストレーター"
+outputModal.label.supportAgent: "サポートエージェント"
+outputModal.label.successAgent: "サクセスエージェント"
+outputModal.label.originalPrompt: "元のリクエストプロンプト"
+outputModal.label.policyOutcome: "ポリシーの結果"
+outputModal.mcpUsage.title: "MCP ツールの使用状況"
+outputModal.mcpUsage.copy: "この実行中に実際に呼び出された MCP ツールを、エージェント単位でまとめたものです。"
+outputModal.loadBalancing.title: "ロードバランシングプローブ"
+outputModal.loadBalancing.copySemantic: "セマンティックロードバランシングのサブシナリオでオーケストレーターが作成しました。Kong はプロンプトをターゲットの説明と比較し、最も関連性の高いプロバイダーへルーティングします。"
+outputModal.loadBalancing.copy: "ロードバランシングのシナリオでオーケストレーターが作成しました。Kong はまずプライマリのモデル経路を試し、続いてフォールバック経路へフェイルオーバーします。"
+outputModal.loadBalancing.semanticPolicyLabel: "セマンティックルーティングポリシー"
+outputModal.loadBalancing.failoverPolicyLabel: "フェイルオーバーポリシー"
+outputModal.tokenLimit.title: "AI トークンレート制限プローブ"
+outputModal.tokenLimit.copy: "コンシューマートークンレート制限のサブシナリオでオーケストレーターが作成しました。Kong は同じプロンプトをガバナンス対象の経路で2回送信し、許可してからブロックする挙動を示します。"
+outputModal.tokenLimit.noBlock: "ブロックは返されませんでした。通常これは、プローブが想定したようには経路のバジェットが使い切られなかったことを意味します。"
+outputModal.promptDecorator.title: "プロンプトデコレータープローブ"
+outputModal.promptDecorator.copy: "プロンプトデコレーターのシナリオでオーケストレーターが作成しました。同じ入力プロンプトを、プレーン経路または Kong によるデコレート経路のいずれかで送信します。"
+outputModal.promptDecorator.policyLabel: "デコレーターポリシー"
+outputModal.promptDecorator.noDecorator: "デコレーターは適用されませんでした。Kong はプロンプトを変更せずにモデルへ転送しました。"
+outputModal.promptCompression.title: "プロンプト圧縮プローブ"
+outputModal.promptCompression.copy: "AI Prompt Compressor のシナリオでオーケストレーターが作成しました。Kong は冗長なアップストリームのプロンプトをモデルに届く前に圧縮し、圧縮メトリクスを監査ログへ出力します。"
+outputModal.promptCompression.policyLabel: "圧縮ポリシー"
+outputModal.promptCompression.note: "Kong はモデル呼び出し前にプロンプトを圧縮し、削減できたトークン数をオブザーバビリティ向けに記録しました。"
+outputModal.lakera.title: "Lakera ポリシーガードプローブ"
+outputModal.lakera.copy: "Lakera のシナリオでオーケストレーターが作成しました。Kong はモデルのレスポンスが UI に返される前に、プロンプトを AI Lakera Guard に通します。"
+outputModal.lakera.allowed: "Lakera はリクエストがモデルへ渡されることを許可しました。"
+outputModal.rag.title: "RAG プローブ"
+outputModal.rag.copy: "同じ AtlasFlow サポート KB の質問を2つのモードで使用し、回答品質の違いが Kong の検索のみに起因するようにします。"
+outputModal.rag.modeLabel: "プローブモード"
+outputModal.semanticCache.title: "セマンティックキャッシュプローブ"
+outputModal.semanticCache.copy: "セマンティックキャッシュのシナリオでオーケストレーターが作成しました。この実行では、1回目のキャッシュシード用リクエストまたは2回目のキャッシュ再利用用リクエストのいずれかを Kong 経由で送信します。"
+outputModal.semanticCache.firstRequest: "1回目のリクエスト"
+outputModal.semanticCache.secondRequest: "2回目のリクエスト"
+outputModal.judge.title: "LLM as Judge プローブ"
+outputModal.judge.copy: "LLM as Judge のシナリオでオーケストレーターが作成しました。Kong は返された回答を別のジャッジモデルで評価し、そのスコアを Grafana 向けの監査ログへ出力します。"
+outputModal.judge.routeLabel: "評価経路"
+outputModal.pii.title: "PII サニタイザープローブ"
+outputModal.pii.copy: "AI PII Sanitizer のシナリオでオーケストレーターが作成しました。Kong はモデル呼び出し前にアップストリームのリクエストをサニタイズまたはブロックし、リクエストが許可された場合はダウンストリームのレスポンスをサニタイズします。"
+outputModal.pii.policyLabel: "サニタイズポリシー"
+outputModal.pii.synthetic: "合成モードは、サポートされる検出値をカテゴリーに合致した合成値に置き換えます。資格情報のようなシークレットの一部は、自然な見た目の値に置き換えられず、マスクされたまま表示される場合があります。"
+outputModal.pii.placeholder: "プレースホルダーモードは、サポートされる検出値をプレースホルダートークンに置き換えます。"
+outputModal.pii.block: "ブロックモードは、サポートされる PII または資格情報が検出された場合、リクエストがモデルに到達する前に停止します。"
+outputModal.pii.sanitizedResponseLabel: "Kong 経由で返されたサニタイズ済みレスポンス"
+outputModal.accountContext.title: "アカウントコンテキスト"
+outputModal.accountContext.copy: "サブエージェントの作業が始まる前に、オーケストレーターが MCP ツール <code>get_customer_account</code> を使用して作成しました。"
+outputModal.renewalRisk.title: "更新リスク"
+outputModal.renewalRisk.copy: "現在の更新スコアとその要因を示すために、オーケストレーターが MCP ツール <code>get_renewal_risk</code> を使用して作成しました。"
+outputModal.supportTrack.title: "サポートトラック"
+outputModal.supportTrack.copy: "サポートエージェントが <code>get_incident_status</code>、<code>search_runbook</code>、および Gemini による要約ステップを使用して作成しました。"
+outputModal.successPlan.title: "サクセスプラン"
+outputModal.successPlan.copy: "サクセスエージェントが <code>draft_customer_reply</code>、<code>create_followup_task</code>、および Gemini による要約ステップを使用して作成しました。"
+outputModal.fullSupport.title: "サポートペイロード全体"
+outputModal.fullSupport.copy: "<code>get_incident_status</code>、<code>search_runbook</code>、およびサポートエージェントの LLM 要約から構築された、サポートエージェントの出力全体です。"
+outputModal.fullSupport.incidentLabel: "インシデント"
+outputModal.fullSupport.runbookLabel: "ランブックの一致"
+outputModal.fullSupport.summaryLabel: "サポート LLM 要約"
+outputModal.fullSuccess.title: "サクセスペイロード全体"
+outputModal.fullSuccess.copy: "<code>draft_customer_reply</code>、<code>create_followup_task</code>、およびサクセスエージェントの LLM 要約から構築された、サクセスエージェントの出力全体です。"
+outputModal.fullSuccess.draftLabel: "顧客返信ドラフト"
+outputModal.fullSuccess.draftCopy: "サクセスエージェントが MCP ツール <code>draft_customer_reply</code> を使用して作成しました。これは顧客向けメッセージのドラフトです。"
+outputModal.fullSuccess.taskLabel: "フォローアップタスク"
+outputModal.fullSuccess.taskCopy: "サクセスエージェントが MCP ツール <code>create_followup_task</code> を使用して作成しました。これは社内アカウントチーム向けのフォローアップ記録です。"
+outputModal.fullSuccess.summaryLabel: "サクセス LLM 要約"
+outputModal.fullSuccess.summaryCopy: "返信ドラフトとフォローアップタスクを確認した後、サクセスエージェントの Gemini ステップが作成しました。これは顧客の状況と次のアクションを簡潔にまとめたビジネスサマリーです。"
+outputModal.fallback.title: "レンダラーのフォールバック"
+outputModal.fallback.copy: "実行は正常に完了したため、トポロジーの状態は保持されました。"
+outputModal.fallback.rawResult: "生の結果"
+policies.lakeraGuard.config:
+  - ["ポリシー", "AI Lakera Guard"]
+  - ["失敗カテゴリの開示", "true"]
+  - ["ブロックされたコンテンツのログ記録", "true"]
+  - ["デモの形態", "単一プロンプト、許可またはブロック"]
+policies.lakeraGuard.intro: "Kong はこれをワンショットの Lakera プローブとして扱います。プロンプトを 1 件投入すると、Lakera はモデル呼び出し前にそれをブロックするか許可します。"
+policies.lakeraGuard.plainEnglish:
+  - "Lakera はモデル呼び出しが発生する前にリクエストボディを検査します。"
+  - "このデモでは、安全なプロンプトモードとブロックされるプロンプトモードを持つ 1 つの Lakera ルートを使用します。"
+  - "Lakera がリクエストをブロックすると、Kong は検出カテゴリを返し、ブロックされたプロンプト全体をオブザーバビリティ用にログ記録します。"
+policies.lakeraGuard.title: "Lakera ポリシーガード"
+policies.lakeraGuard.why: "アプリ側のモデレーションコードなしに、ゲートウェイで外部ポリシーを強制できることを示します。"
+policies.llmAsJudge.config:
+  - ["ポリシー", "AI LLM as Judge"]
+  - ["候補モデル", "OpenAI 4o mini"]
+  - ["ジャッジモデル", "Gemini 2.5 Flash"]
+  - ["ジャッジのルーブリック", "正確で、リクエストに関連し、ユーザーが提示したタスクに有用であること"]
+  - ["プロンプトプリセット", "エスカレーショントリアージ、KongHQ 概要、または Kong vs Apigee/AWS"]
+  - ["想定される結果", "レスポンスが 1 件返され、Kong がジャッジのレイテンシと正確性スコアをログ記録"]
+policies.llmAsJudge.intro: "Kong はリクエストを候補モデルへ送り、続いて別のジャッジモデルを呼び出してレスポンスを採点します。"
+policies.llmAsJudge.plainEnglish:
+  - "ユーザープロンプトはまず候補モデルへ送られます。"
+  - "次に Kong は候補レスポンスを別のジャッジモデルへ送ります。"
+  - "判定結果は通常どおり返され、スコアリングのメタデータは Grafana 用にログへ書き込まれます。"
+policies.llmAsJudge.title: "LLM as Judge"
+policies.llmAsJudge.why: "アプリ側のスコアリングコードを追加せずに、ゲートウェイ側での評価を実現できることを示します。"
+policies.llmFailover.config:
+  - ["プライマリモデル", "OpenAI 4o mini"]
+  - ["フォールバックモデル", "Gemini 2.5 Flash"]
+  - ["プラグイン", "AI Proxy Advanced"]
+policies.llmFailover.intro: "Kong はまずプライマリの OpenAI 経路を試し、その経路が失敗するよう構成されている場合は Gemini にフェイルオーバーします。"
+policies.llmFailover.plainEnglish:
+  - "オーケストレーターは Kong 経由で 1 件の焦点を絞ったプローブリクエストを送ります。"
+  - "Kong はそのリクエストをまずプライマリの OpenAI ターゲットへ送ります。"
+  - "プライマリ経路が失敗すると、Kong は Gemini のフォールバックターゲットで再試行し、フォールバック結果を返します。"
+policies.llmFailover.title: "LLM フェイルオーバー"
+policies.llmFailover.why: "アプリケーションコードではなくゲートウェイ層でのモデルの回復性を示します。"
+policies.loadBalancing.config.failover:
+  - ["モード", "LLM フェイルオーバー"]
+  - ["プライマリモデル", "OpenAI 4o mini"]
+  - ["フォールバックモデル", "Gemini 2.5 Flash"]
+  - ["プラグイン", "AI Proxy Advanced"]
+  - ["バランサーアルゴリズム", "priority"]
+  - ["リトライ回数", "3"]
+  - ["構成済みトリガー", "error, timeout, invalid_header, http_403, http_404, http_429, http_500, http_502, http_503, http_504, non_idempotent"]
+policies.loadBalancing.config.semantic:
+  - ["モード", "セマンティックロードバランシング"]
+  - ["サポートターゲット", "OpenAI 4o mini"]
+  - ["クリエイティブターゲット", "Gemini 2.5 Flash"]
+  - ["プラグイン", "AI Proxy Advanced"]
+  - ["バランサーアルゴリズム", "semantic"]
+  - ["埋め込みモデル", "text-embedding-3-small"]
+  - ["ベクターストア", "Redis"]
+policies.loadBalancing.intro.failover: "Kong はまずプライマリの OpenAI 経路を試し、その経路が失敗するよう構成されている場合は Gemini にフェイルオーバーします。"
+policies.loadBalancing.intro.semantic: "Kong はプロバイダー呼び出しを行う前に、プロンプトを意味的に最も関連性の高いモデルターゲットへルーティングします。"
+policies.loadBalancing.plainEnglish.failover:
+  - "オーケストレーターは Kong 経由で 1 件の焦点を絞ったプローブリクエストを送ります。"
+  - "Kong はそのリクエストをまずプライマリの OpenAI ターゲットへ送ります。"
+  - "プライマリ経路が失敗すると、Kong は Gemini のフォールバックターゲットで再試行し、フォールバック結果を返します。"
+policies.loadBalancing.plainEnglish.semantic:
+  - "オーケストレーターは Kong 経由で 1 件の焦点を絞ったプローブリクエストを送ります。"
+  - "Kong はプロンプトを埋め込み、セマンティックバランサー用に保存されたターゲットの説明と比較します。"
+  - "次に Kong は最適なモデルターゲットへリクエストを送り、その結果を直接返します。"
+policies.loadBalancing.promptPreset.creative: "クリエイティブ / マーケティング"
+policies.loadBalancing.promptPreset.support: "サポート / オペレーション"
+policies.loadBalancing.title: "ロードバランシング"
+policies.loadBalancing.why.failover: "アプリケーションコードではなくゲートウェイ層でのモデルの回復性を示します。"
+policies.loadBalancing.why.semantic: "モデルの選択をアプリケーションロジックにハードコーディングするのではなく、ゲートウェイ層でプロンプトに応じたモデルルーティングを行えることを示します。"
+policies.normal.config:
+  - ["UI アクセス", "UI コンシューマーキーを使った Key-auth"]
+  - ["エージェント間連携", "AI A2A Proxy が検出とメッセージ/ストリームの実行を処理"]
+  - ["ツールの公開", "AI MCP Proxy がコンシューマーグループごとに許可されたツールのみを公開"]
+  - ["オーケストレーター LLM ルート", "AI Proxy Advanced から OpenAI 4o mini へ"]
+  - ["サブエージェント LLM ルート", "AI Proxy Advanced から Gemini 2.5 Flash へ"]
+policies.normal.intro: "これはベースラインとなるマルチエージェントフローです。Kong は MCP ツールアクセス、A2A の検出と実行、モデルルーティングを含むオーケストレーション経路全体の前面に立ちます。"
+policies.normal.plainEnglish:
+  - "UI は 1 件のエスカレーションリクエストを Kong 経由でオーケストレーターへ送ります。"
+  - "Kong が A2A を通じてサブエージェントの検出と引き継ぎを処理するため、オーケストレーターがエージェントと直接やり取りすることはありません。"
+  - "Kong はモックの REST API を MCP ツールとして公開するため、オーケストレーターとサブエージェントは生のエンドポイントではなくガバナンス対象のツールを呼び出します。"
+  - "Kong はオーケストレーターの LLM トラフィックを OpenAI へ、サブエージェントの LLM トラフィックを Gemini へルーティングし、最終的なエスカレーションブリーフを 1 件返します。"
+policies.normal.title: "通常"
+policies.normal.why: "他のすべてのガバナンスシナリオの基準となる経路です。"
+policies.piiSanitizer.intro: "Kong は機密データがゲートウェイを出る前にサニタイズし、モデルのレスポンスが UI に戻る前にもサニタイズします。"
+policies.piiSanitizer.plainEnglish:
+  - "Kong はモデル呼び出し前のプロンプトと、UI に戻る前のレスポンスを検査します。"
+  - "ルートは双方向に構成されているため、リクエストとレスポンスの両方が保護されます。"
+  - "選択したモードによって、機密値を置換するか、合成するか、完全にブロックするかが決まります。"
+policies.piiSanitizer.title: "PII サニタイズ"
+policies.piiSanitizer.why: "すべてのアプリケーションやプロンプト経路ではなく、ゲートウェイでプライバシー制御を行えることを示します。"
+policies.promptCompression.appliedRoute.ratio: "プロンプト圧縮（比率）オーケストレータールート"
+policies.promptCompression.appliedRoute.tokenCount: "プロンプト圧縮（トークン数）オーケストレータールート"
+policies.promptCompression.intro: "Kong は冗長なユーザープロンプトがモデルに到達する前に圧縮し、アップストリームへ送る入力トークン数を削減します。"
+policies.promptCompression.mode.ratio: "比率指定（50%）"
+policies.promptCompression.mode.tokenCount: "トークン数指定（100 トークン）"
+policies.promptCompression.plainEnglish:
+  - "アプリケーションは冗長なプロンプト全体を Kong に送ります。"
+  - "Kong はプロンプトを AI Prompt Compressor サービスへ転送し、モデル呼び出し前に圧縮版に置き換えます。"
+  - "モデルは通常どおり回答を返し、Kong は元のトークン数、圧縮後のトークン数、削減トークン数を Grafana 用にログ記録します。"
+policies.promptCompression.title: "プロンプト圧縮"
+policies.promptCompression.why: "ゲートウェイ層でのプロンプトサイズのガバナンス、トークンコストの削減、コンテキストウィンドウの制御を示します。"
+policies.promptEnhancement.additionalRequirements: "エンタープライズに適したトーン、必要に応じた規制への言及、最後に信頼度スコアと担当者を記載"
+policies.promptEnhancement.intro: "Kong はモデルがプロンプトを見る前に、オーケストレーターのプロンプトへ追加のガバナンス指示を加えます。"
+policies.promptEnhancement.mode.decorated: "デコレーターあり"
+policies.promptEnhancement.mode.plain: "デコレーターなし"
+policies.promptEnhancement.plainEnglish:
+  - "プレーンルートはプロンプトを変更せずに転送します。"
+  - "デコレーテッドルートは Kong ルート上で追加のシステム指示を先頭に付加します。"
+  - "注入されたこれらの指示は、アプリケーションコードを変更することなく、より構造化されエグゼクティブに適したレスポンスを強制します。"
+policies.promptEnhancement.prependedMessage1: "あなたは Kong Gateway によって強制される AI ガバナンスのもとで応答しています。"
+policies.promptEnhancement.prependedMessage2: "エグゼクティブエスカレーションポリシー。セクション構成: 状況、リスク、アクション、次のチェックポイント"
+policies.promptEnhancement.title: "プロンプトデコレーター"
+policies.promptEnhancement.whereApplied.decorated: "デコレーテッドプロンプト拡張プローブルート"
+policies.promptEnhancement.whereApplied.plain: "プレーンプロンプト拡張プローブルート"
+policies.promptEnhancement.why: "レスポンスのスタイルとプロンプトの基準を、一元的に強制できることを示します。"
+policies.rag.config:
+  - ["ポリシー", "AI RAG Injector"]
+  - ["ベクターストア", "Redis"]
+  - ["埋め込みモデル", "text-embedding-3-large"]
+  - ["回答モデル", "OpenAI 4o mini"]
+  - ["デモの形態", "前後比較"]
+policies.rag.intro: "Kong は AI RAG Injector を使い、架空の AtlasFlow サポート KB のコンテンツを Redis から取得し、リクエストをアップストリームへ転送する前にプロンプトへ注入します。"
+policies.rag.plainEnglish:
+  - "ベースライン実行は、サポートに関する質問をモデルへ直接送ります。"
+  - "RAG 実行は質問を埋め込み、最も近い AtlasFlow KB のチャンクを Redis から取得してプロンプトへ注入します。"
+  - "グラウンディングされたルートは、ベースラインルートよりも具体的なサポートガイダンスで回答するはずです。"
+policies.rag.title: "RAG"
+policies.rag.why: "検索とグラウンディングを、アプリケーションコードではなくゲートウェイ層で行えることを示します。"
+policies.semanticCache.config:
+  - ["ポリシー", "AI Semantic Cache"]
+  - ["埋め込みモデル", "text-embedding-3-small"]
+  - ["ベクターストア", "Redis"]
+  - ["距離メトリック", "cosine"]
+  - ["ベクター閾値", "0.1"]
+  - ["デモの形態", "最初のリクエストはミス、2 回目の類似リクエストはヒット"]
+policies.semanticCache.intro: "Kong はモデルを再度呼び出す必要があるかを判断する前に、意味的に類似した過去のプロンプトがないか Redis を確認します。"
+policies.semanticCache.plainEnglish:
+  - "最初のリクエストでキャッシュをシードします。"
+  - "Kong はプロンプトを埋め込み、Redis を確認し、ミスとなり、リクエストをモデルへ転送します。"
+  - "2 回目の類似リクエストはキャッシュにヒットし、モデルを再度呼び出すことなく Kong から返されます。"
+policies.semanticCache.title: "セマンティックキャッシュ"
+policies.semanticCache.why: "意味的に類似したプロンプトについて、コスト削減と高速な再利用を実現できることを示します。"
+policies.semanticGuard.config:
+  - ["ポリシー", "AI Semantic Prompt Guard"]
+  - ["埋め込みモデル", "text-embedding-3-small"]
+  - ["ベクターストア", "Redis"]
+  - ["距離メトリック", "cosine"]
+  - ["検索閾値", "0.5"]
+  - ["ベクター閾値", "0.2"]
+  - ["デモの形態", "単一プロンプト、許可またはブロック"]
+  - ["拒否テーマ", "暴力、機密情報、ポリシー回避のプロンプト"]
+policies.semanticGuard.intro: "Kong はこれをワンショットのポリシープローブとして扱います。プロンプトを 1 件投入すると、Kong はモデル呼び出し前にそれを許可するかブロックします。"
+policies.semanticGuard.plainEnglish:
+  - "Kong はモデル呼び出しが行われる前に、プロンプトの埋め込みを生成します。"
+  - "その埋め込みを、Redis に保存された拒否トピックとコサイン類似度で比較します。"
+  - "プロンプトが拒否トピックと意味的に近い場合、Kong はブロックします。そうでない場合は、Kong はプロンプトがモデルに到達することを許可し、レスポンスを直接返します。"
+policies.semanticGuard.title: "セマンティックガード"
+policies.semanticGuard.why: "単純なキーワード一致ではなく、意味に基づくセマンティックな許可・拒否の挙動を示します。"
+policies.tokenLimit.config:
+  - ["サブシナリオ", "コンシューマートークンレート制限"]
+  - ["保護対象ルート", "オーケストレーター AI ルート"]
+  - ["ポリシー", "AI Rate Limiting Advanced"]
+  - ["プロバイダーキー", "openai"]
+  - ["構成済みの上限", "1 リクエスト"]
+  - ["ウィンドウ", "300 秒"]
+  - ["想定される結果", "その後のオーケストレーター LLM 呼び出しが HTTP 429 でブロックされる"]
+policies.tokenLimit.intro: "Kong は焦点を絞ったプローブルートにゲートウェイ側のレート制限を適用し、構成されたコンシューマーの予算を使い切るとリクエストをブロックします。"
+policies.tokenLimit.plainEnglish:
+  - "このルートは AI Rate Limiting Advanced によって保護されています。"
+  - "このサブシナリオはコンシューマー単位のトークンレート制限を示します。"
+  - "最初のプローブリクエストは許可される想定です。"
+  - "2 回目のプローブリクエストは、プロバイダーに到達せず Kong で HTTP 429 として拒否される想定です。"
+policies.tokenLimit.title: "AI トークンレート制限"
+policies.tokenLimit.why: "ゲートウェイでの使用量制御と予算の強制を示します。"
+policyModal.configLabel: "適用された構成"
+policyModal.eyebrow: "Kong ポリシー"
+policyModal.intro: "現在のシナリオで Kong が行っていることを、平易な言葉で説明します。"
+policyModal.title: "シナリオのポリシー詳細"
+policyModal.whatLabel: "Kong が行っていること"
+policyModal.whyLabel: "なぜ重要か"
+probe.lakera.copy: "プロンプトを編集し、Lakera の安全モードのいずれかを実行します。ポリシーが発動すると、Kong はリクエストをブロックし、Lakera の検出カテゴリを返すはずです。"
+probe.lakera.label: "Lakera ポリシーガードのリクエスト"
+probe.lakera.mode.contentModeration: "コンテンツモデレーション"
+probe.lakera.mode.dataLeak: "データ漏洩防止"
+probe.lakera.mode.promptDefense: "プロンプト防御"
+probe.lakera.mode.safe: "安全なプロンプト"
+probe.llmJudge.copy: "LLM as Judge シナリオで Kong に送るプロンプトのペイロードを選択します。Kong AI Proxy Advanced がリクエストを候補モデルに通し、続いてジャッジモデルがレスポンスの正確性を採点します。"
+probe.llmJudge.label: "LLM as Judge のリクエスト"
+probe.llmJudge.prompt.escalation: "エスカレーショントリアージ"
+probe.llmJudge.prompt.lowScore: "低スコアプローブ"
+probe.llmJudge.prompt.overview: "KongHQ 概要"
+probe.loadBalancing.copy: "フェイルオーバーまたはセマンティックルーティングのための焦点を絞ったプローブを使用します。フェイルオーバー経路はプライマリモデル障害後のフォールバックを示します。セマンティック経路はプロンプト自体に基づいて最も関連性の高いモデルへルーティングします。"
+probe.loadBalancing.label: "ロードバランシングモード"
+probe.loadBalancing.mode.failover: "LLM フェイルオーバー"
+probe.loadBalancing.mode.semantic: "セマンティックロードバランシング"
+probe.loadBalancing.preset.creative: "クリエイティブ / マーケティング"
+probe.loadBalancing.preset.support: "サポート / オペレーション"
+probe.loadBalancing.send: "ロードバランシングリクエストを送信"
+probe.pii.copy: "Kong AI PII Sanitizer がリクエストとレスポンスをどのように匿名化するかを選択します。下のペイロードは、このシナリオが Kong 経由で送信する実際の PII を含むプロンプトです。"
+probe.pii.label: "サニタイズモード"
+probe.pii.mode.block: "ブロック"
+probe.pii.mode.placeholder: "プレースホルダー"
+probe.pii.mode.synthetic: "合成"
+probe.pii.send: "PII サニタイズリクエストを送信"
+probe.promptCompression.copy: "Kong AI Prompt Compressor がモデル呼び出し前にリクエストをどのように短縮するかを選択します。下のペイロードは Kong 経由で送られる冗長なプロンプトです。"
+probe.promptCompression.label: "圧縮モード"
+probe.promptCompression.mode.rate: "比率指定（50%）"
+probe.promptCompression.mode.tokenCount: "トークン数指定（100）"
+probe.promptCompression.send: "プロンプト圧縮リクエストを送信"
+probe.promptDecorator.copy: "同じ編集可能なプロンプトを、プレーンルートと Kong がデコレートしたルートの両方に対して使用し、出力の構造とトーンの違いを際立たせます。"
+probe.promptDecorator.label: "デコレーターモード"
+probe.promptDecorator.mode.decorated: "デコレーターあり"
+probe.promptDecorator.mode.plain: "デコレーターなし"
+probe.promptDecorator.send: "プロンプトデコレーターリクエストを送信"
+probe.rag.afterCopy: "同じ AtlasFlow サポートの質問を、Redis を基盤とする Kong RAG ルート経由で送信します。"
+probe.rag.afterLabel: "適用後"
+probe.rag.afterSend: "RAG ありで実行"
+probe.rag.beforeCopy: "AtlasFlow サポートの質問を、Kong RAG の注入なしでベースラインルート経由で送信します。"
+probe.rag.beforeLabel: "適用前"
+probe.rag.beforeSend: "ベースラインを実行"
+probe.semanticCache.clear: "セマンティックキャッシュをクリア"
+probe.semanticCache.clearCopy: "すべてのセマンティックキャッシュエントリをクリアし、次の最初のリクエストがクリーンなキャッシュから始まるようにします。"
+probe.semanticCache.firstCopy: "オーケストレーターのトリアージプロンプト用に Kong のセマンティックキャッシュをシードします。"
+probe.semanticCache.firstLabel: "最初のリクエスト"
+probe.semanticCache.firstSend: "最初のリクエストを送信"
+probe.semanticCache.secondCopy: "同じトリアージペイロードを再送し、Kong がキャッシュヒットを返せるようにします。"
+probe.semanticCache.secondLabel: "2 回目のリクエスト"
+probe.semanticCache.secondSend: "2 回目のリクエストを送信"
+probe.semanticGuard.copy: "プロンプトを編集し、セマンティックガードのアクションのいずれかを実行します。Kong はモデル呼び出しを許可する前に、埋め込みを拒否トピックと比較します。"
+probe.semanticGuard.label: "セマンティックガードのリクエスト"
+probe.semanticGuard.mode.employee: "従業員 / 機密情報"
+probe.semanticGuard.mode.policy: "ポリシー / アクセス回避"
+probe.semanticGuard.mode.safe: "安全なプロンプト"
+probe.semanticGuard.mode.violence: "暴力 / 爆弾"
+probe.tokenLimit.copy: "この焦点を絞ったプローブは、レート制限されたルート上で同じ編集可能なプロンプトを 2 回送信し、最初の呼び出しは通過し、2 回目はコンシューマーレベルで Kong によってブロックされるようにします。"
+probe.tokenLimit.label: "AI トークンレート制限"
+probe.tokenLimit.mode.consumer: "コンシューマートークンレート制限"
+probe.tokenLimit.send: "トークンレート制限リクエストを送信"
+scenario.lakera_guard: "Lakera ポリシーガード"
+scenario.llm_as_judge: "LLM as Judge"
+scenario.load_balancing: "ロードバランシング"
+scenario.normal: "通常"
+scenario.pii_sanitizer: "PII サニタイズ"
+scenario.prompt_compression: "プロンプト圧縮"
+scenario.prompt_enhancement: "プロンプトデコレーター"
+scenario.rag: "RAG"
+scenario.semantic_cache: "セマンティックキャッシュ"
+scenario.semantic_guard: "セマンティックガード"
+scenario.token_limit: "AI トークンレート制限"
+scene.choosePreset: "プリセットを選択"
+scene.chooseScenario: "ガバナンスシナリオを選択"
+scene.copy: "更新リスクのあるアカウントが、請求の問題とワークフロー同期の問題を報告しています。UI はトポロジーとトレースに集中し、フォームはこのシナリオのポップアップ内に配置されています。"
+scene.eyebrow: "シナリオ"
+scene.play: "再生"
+scene.preset.acme: "Acme Health"
+scene.preset.contoso: "Contoso Retail"
+scene.preset.northwind: "Northwind Logistics"
+scene.title: "顧客エスカレーションのトリアージ"
+sequenceModal.eyebrow: "通常シナリオ"
+sequenceModal.title: "シーケンス図"
+sidebar.clearTrace: "トレースをクリア"
+sidebar.contextId: "コンテキストID"
+sidebar.emptyCopy: "「シナリオ」を開いてデモの入力を選択し、実行を開始してください。"
+sidebar.emptyTitle: "まだ実行がありません"
+sidebar.kicker: "実行ツリー"
+sidebar.lastActivity: "最終アクティビティ"
+sidebar.noSavedRuns: "保存された実行はありません"
+sidebar.recentRuns: "最近の実行"
+sidebar.runId: "実行ID"
+sidebar.title: "実行トレース"
+stage.activeMcpTool: "アクティブな MCP ツール"
+stage.currentStage: "現在のステージ"
+stage.flowDetail: "「再生」を押すと、Kong が AI、A2A サブエージェント、MCP の各経路にリクエストをルーティングする様子を確認できます。"
+stage.flowTitle: "実行を待機中"
+stage.kicker: "ライブトポロジー"
+stage.title: "Kong を通るトラフィック"
+status.error: "エラー"
+status.idle: "アイドル"
+status.label: "ステータス"
+status.loaded: "読み込み完了"
+status.loading: "読み込み中"
+status.missingContext: "コンテキストがありません"
+topbar.brand: "AI Connectivityガバナンス"
+topbar.chip.authn: "エージェントの認証 / 認可"
+topbar.chip.controls: "セマンティックおよび PII の制御"
+topbar.chip.mcp: "MCP ツールの公開"
+topbar.chip.observability: "ライブオブザーバビリティ"
+topbar.chip.routing: "AI ルーティングとフェイルオーバー"
+topbar.eyebrow: "Kong AI Gateway デモ"
+topbar.helpAria: "このデモについて"
+topbar.heroCopy: "Kong はデータ経路全体をガバナンスします。API トラフィック、イベント、エージェントオーケストレーション、LLM ルーティング、MCP ツールアクセスのすべてが、ライブトレースの可視性を伴ってゲートウェイを通過します。"
+topbar.resetObservability: "オブザーバビリティをリセット"
+topbar.resetScene: "シナリオをリセット"
+topbar.scenes: "シナリオ"
+topbar.viewDiagrams: "ダイアグラムを表示"
+topbar.viewRunOutput: "実行出力を表示"
+traceExplorer.contextId: "コンテキストID"
+traceExplorer.contextPlaceholder: "ctx-..."
+traceExplorer.copy: "このビューは <code>context_id</code> ごとに正規化された Loki ベースのトレースイベントを読み取り、A2A、MCP、LLM のシーケンスをペイロードの詳細とともに表示します。"
+traceExplorer.detailTitle: "イベント詳細"
+traceExplorer.emptyCopy: "最近の実行を開くか、コンテキスト ID を入力してカスタムトレースエクスプローラーを読み込みます。"
+traceExplorer.emptyTitle: "トレースが読み込まれていません"
+traceExplorer.events: "イベント"
+traceExplorer.eyebrow: "カスタムトレースビュー"
+traceExplorer.loadTrace: "トレースを読み込む"
+traceExplorer.messages: "メッセージ"
+traceExplorer.request: "リクエスト"
+traceExplorer.response: "レスポンス"
+traceExplorer.runId: "実行ID"
+traceExplorer.runPlaceholder: "任意の実行 ID フィルター"
+traceExplorer.selectEvent: "イベントを選択"
+traceExplorer.status: "ステータス"
+traceExplorer.statusIdle: "アイドル"
+traceExplorer.summary: "概要"
+traceExplorer.summaryCopy: "選択したイベントのライフサイクルフィールドとペイロードの詳細がここに表示されます。"
+traceExplorer.tasks: "タスク"
+traceExplorer.timeline: "タイムライン"
+traceExplorer.title: "コンテキストトレースエクスプローラー"
