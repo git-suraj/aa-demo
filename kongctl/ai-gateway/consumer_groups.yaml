@@ -1,0 +1,29 @@
+_defaults:
+  kongctl:
+    namespace: ai-gateway-consumer-groups
+ai_gateway_consumer_groups:
+  - ai_gateway: !ref ai-gateway#id
+    consumers:
+      - orchestrator-agent
+    display_name: orchestrator-tools
+    name: orchestrator-tools
+    ref: orchestrator-tools
+  - ai_gateway: !ref ai-gateway#id
+    consumers:
+      - success-agent
+    display_name: success-tools
+    name: success-tools
+    ref: success-tools
+  - ai_gateway: !ref ai-gateway#id
+    consumers:
+      - support-agent
+    display_name: support-tools
+    name: support-tools
+    ref: support-tools
+  - ai_gateway: !ref ai-gateway#id
+    consumers:
+      - consumer1
+      - consumer2
+    display_name: team-a
+    name: team-a
+    ref: team-a

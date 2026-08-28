@@ -1,0 +1,1179 @@
+_defaults:
+  kongctl:
+    namespace: ai-gateway-models
+ai_gateway_models:
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: round-robin
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 60000
+        retries: 5
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator-consumer-cost-demo
+        model:
+          body_param: model
+          values: [gpt-4o-mini]
+    display_name: ai-orchestrator-consumer-cost-demo-chat-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-consumer-cost-demo-chat-route
+    ref: ai-orchestrator-consumer-cost-demo-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 5000
+          output_cost: 10000
+          type: openai
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: priority
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - http_403
+          - http_404
+          - http_429
+          - http_500
+          - http_502
+          - http_503
+          - http_504
+          - invalid_header
+          - non_idempotent
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 3
+        read_timeout: 60000
+        retries: 3
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator-failover-demo
+        model:
+          body_param: model
+          values: [gpt-4o-mini]
+    display_name: ai-orchestrator-failover-demo-chat-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-failover-demo-chat-route
+    ref: ai-orchestrator-failover-demo-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.15
+          output_cost: 0.6
+          type: openai
+          upstream_url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+      - allow_auth_override: false
+        config:
+          input_cost: 0.3
+          output_cost: 2.5
+          type: gemini
+          upstream_url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent
+        name: gemini-2.5-flash
+        provider: gemini
+        weight: 50
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: priority
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - http_403
+          - http_404
+          - http_429
+          - http_500
+          - http_502
+          - http_503
+          - http_504
+          - invalid_header
+          - non_idempotent
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 3
+        read_timeout: 60000
+        retries: 3
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        methods:
+          - POST
+        paths:
+          - /llm-failure-simulator
+        model:
+          body_param: model
+          values: [gpt-4o-mini]
+        preserve_host: false
+        protocols:
+          - http
+          - https
+        strip_path: false
+    display_name: ai-orchestrator-failover-simulator-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-failover-simulator-route
+    policies:
+      - request-termination
+    ref: ai-orchestrator-failover-simulator-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.15
+          output_cost: 0.6
+          type: openai
+          upstream_url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+      - allow_auth_override: false
+        config:
+          input_cost: 0.3
+          output_cost: 2.5
+          type: gemini
+        name: gemini-2.5-flash
+        provider: gemini
+        weight: 50
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: lowest-usage
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+          - non_idempotent
+          - http_429
+          - http_502
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 60000
+        retries: 1
+        slots: 10000
+        tokens_count_strategy: llm-accuracy
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator-judge-demo
+        model:
+          body_param: model
+          values: [gpt-4o-mini]
+    display_name: ai-orchestrator-judge-demo-chat-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-judge-demo-chat-route
+    policies:
+      - ai-llm-as-judge
+    ref: ai-orchestrator-judge-demo-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.15
+          output_cost: 0.6
+          type: openai
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: round-robin
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 60000
+        retries: 5
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator-lakera-demo
+        model:
+          body_param: model
+          values: [gpt-4o-mini]
+    display_name: ai-orchestrator-lakera-demo-chat-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-lakera-demo-chat-route
+    policies:
+      - ai-lakera-guard
+    ref: ai-orchestrator-lakera-demo-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.15
+          output_cost: 0.6
+          type: openai
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: round-robin
+        connect_timeout: 120000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 120000
+        retries: 1
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 120000
+      logging:
+        payloads: true
+      max_request_body_size: 10485760
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator-model-based-complex
+        model:
+          body_param: model
+          values:
+            - complex
+    display_name: complex
+    formats:
+      - type: openai
+    name: complex
+    ref: complex
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.15
+          output_cost: 0.6
+          type: openai
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: round-robin
+        connect_timeout: 120000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 120000
+        retries: 1
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 120000
+      logging:
+        payloads: true
+      max_request_body_size: 10485760
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator-model-based-simple
+        model:
+          body_param: model
+          values:
+            - simple
+    display_name: simple
+    formats:
+      - type: openai
+    name: simple
+    ref: simple
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.3
+          output_cost: 2.5
+          type: gemini
+        name: gemini-2.5-flash
+        provider: gemini
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      logging:
+        payloads: true
+      max_request_body_size: 10485760
+      response_streaming: deny
+      route:
+        paths:
+          - /ai/orchestrator-model-based-demo
+        model:
+          body_param: model
+          values:
+            - model-based-router
+    display_name: Model-based router
+    formats:
+      - type: openai
+    name: model-based-router
+    policies:
+      - datakit
+    ref: model-based-router
+    targets:
+      # Required by the native Model schema; DataKit exits with the selected
+      # internal model response before this fallback target is invoked.
+      - allow_auth_override: false
+        config:
+          type: openai
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: round-robin
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 60000
+        retries: 5
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 5242880
+      response_streaming: deny
+      route:
+        paths:
+          - /ai/orchestrator-model-selector
+        model:
+          body_param: model
+          values:
+            - gpt-4o-mini
+    display_name: ai-orchestrator-model-selector-chat-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-model-selector-chat-route
+    policies:
+      - ai-prompt-decorator
+    ref: ai-orchestrator-model-selector-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          type: openai
+        name: o3-mini
+        provider: openai
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: round-robin
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 60000
+        retries: 5
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator-pii-block-demo
+        model:
+          body_param: model
+          values: [gpt-4o-mini]
+    display_name: ai-orchestrator-pii-block-demo-chat-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-pii-block-demo-chat-route
+    policies:
+      - ai-sanitizer
+    ref: ai-orchestrator-pii-block-demo-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.15
+          output_cost: 0.6
+          type: openai
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: round-robin
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 60000
+        retries: 5
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator-pii-placeholder-demo
+        model:
+          body_param: model
+          values: [gpt-4o-mini]
+    display_name: ai-orchestrator-pii-placeholder-demo-chat-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-pii-placeholder-demo-chat-route
+    policies:
+      - ai-sanitizer-2
+    ref: ai-orchestrator-pii-placeholder-demo-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.15
+          output_cost: 0.6
+          type: openai
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: round-robin
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 60000
+        retries: 5
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator-pii-synthetic-demo
+        model:
+          body_param: model
+          values: [gpt-4o-mini]
+    display_name: ai-orchestrator-pii-synthetic-demo-chat-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-pii-synthetic-demo-chat-route
+    policies:
+      - ai-sanitizer-3
+    ref: ai-orchestrator-pii-synthetic-demo-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.15
+          output_cost: 0.6
+          type: openai
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: round-robin
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 60000
+        retries: 5
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator-prompt-compress-ratio-demo
+        model:
+          body_param: model
+          values: [gpt-4o-mini]
+    display_name: ai-orchestrator-prompt-compress-ratio-demo-chat-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-prompt-compress-ratio-demo-chat-route
+    policies:
+      - ai-prompt-compressor
+    ref: ai-orchestrator-prompt-compress-ratio-demo-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.15
+          output_cost: 0.6
+          type: openai
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: round-robin
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 60000
+        retries: 5
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator-prompt-compress-token-demo
+        model:
+          body_param: model
+          values: [gpt-4o-mini]
+    display_name: ai-orchestrator-prompt-compress-token-demo-chat-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-prompt-compress-token-demo-chat-route
+    policies:
+      - ai-prompt-compressor-2
+    ref: ai-orchestrator-prompt-compress-token-demo-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.15
+          output_cost: 0.6
+          type: openai
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: round-robin
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 60000
+        retries: 5
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator-prompt-enhance-demo
+        model:
+          body_param: model
+          values: [gpt-4o-mini]
+    display_name: ai-orchestrator-prompt-enhance-demo-chat-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-prompt-enhance-demo-chat-route
+    policies:
+      - ai-prompt-decorator-2
+    ref: ai-orchestrator-prompt-enhance-demo-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.15
+          output_cost: 0.6
+          type: openai
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: round-robin
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 60000
+        retries: 5
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator-prompt-enhance-plain-demo
+        model:
+          body_param: model
+          values: [gpt-4o-mini]
+    display_name: ai-orchestrator-prompt-enhance-plain-demo-chat-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-prompt-enhance-plain-demo-chat-route
+    ref: ai-orchestrator-prompt-enhance-plain-demo-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.15
+          output_cost: 0.6
+          type: openai
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: round-robin
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 60000
+        retries: 5
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator-rag-after-demo
+        model:
+          body_param: model
+          values: [gpt-4o-mini]
+    display_name: ai-orchestrator-rag-after-demo-chat-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-rag-after-demo-chat-route
+    policies:
+      - ai-rag-injector
+    ref: ai-orchestrator-rag-after-demo-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.15
+          output_cost: 0.6
+          type: openai
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: round-robin
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 60000
+        retries: 5
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator-rag-before-demo
+        model:
+          body_param: model
+          values: [gpt-4o-mini]
+    display_name: ai-orchestrator-rag-before-demo-chat-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-rag-before-demo-chat-route
+    ref: ai-orchestrator-rag-before-demo-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.15
+          output_cost: 0.6
+          type: openai
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: round-robin
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 60000
+        retries: 5
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator-semantic-cache-demo
+        model:
+          body_param: model
+          values: [gpt-4o-mini]
+    display_name: ai-orchestrator-semantic-cache-demo-chat-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-semantic-cache-demo-chat-route
+    policies:
+      - ai-semantic-cache
+    ref: ai-orchestrator-semantic-cache-demo-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.15
+          output_cost: 0.6
+          type: openai
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: round-robin
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 60000
+        retries: 5
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator-semantic-guard-demo
+        model:
+          body_param: model
+          values: [gpt-4o-mini]
+    display_name: ai-orchestrator-semantic-guard-demo-chat-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-semantic-guard-demo-chat-route
+    policies:
+      - ai-semantic-prompt-guard
+    ref: ai-orchestrator-semantic-guard-demo-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.15
+          output_cost: 0.6
+          type: openai
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: semantic
+        connect_timeout: 60000
+        embeddings:
+          allow_auth_override: false
+          config:
+            azure_api_version: "2023-05-15"
+            azure_deployment_id: null
+            azure_instance: null
+            type: openai
+            upstream_url: https://api.openai.com/v1/embeddings
+          name: text-embedding-3-small
+          provider: openai
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 60000
+        retries: 1
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        vectordb:
+          cluster:
+            max_redirections: 5
+          connect_timeout: 2000
+          connection_is_proxied: false
+          database: 0
+          dimensions: 1024
+          distance_metric: cosine
+          host: redis-stack
+          keepalive:
+            pool_size: 256
+          port: 6379
+          read_timeout: 2000
+          send_timeout: 2000
+          ssl: false
+          ssl_verify: false
+          threshold: 0.55
+          type: redis
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator-semantic-load-balance-demo
+        model:
+          body_param: model
+          values: [gpt-4o-mini]
+    display_name: ai-orchestrator-semantic-load-balance-demo-chat-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-semantic-load-balance-demo-chat-route
+    ref: ai-orchestrator-semantic-load-balance-demo-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.15
+          output_cost: 0.6
+          type: openai
+        name: gpt-4o-mini
+        provider: openai
+        semantic_description: Specialist in enterprise support operations, incident triage, billing disputes, customer escalations, operational risk updates, and concise action plans.
+        weight: 100
+      - allow_auth_override: false
+        config:
+          input_cost: 0.3
+          output_cost: 2.5
+          type: gemini
+        name: gemini-2.5-flash
+        provider: gemini
+        semantic_description: Specialist in creative marketing, launch messaging, campaign concepts, brand voice, event teasers, storytelling, and polished promotional copy.
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: priority
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+          - http_404
+          - non_idempotent
+          - http_403
+          - http_429
+          - http_502
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 60000
+        retries: 1
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator
+        model:
+          body_param: model
+          values:
+            - gpt-4o-mini
+    display_name: ai-orchestrator-chat-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-chat-route
+    ref: ai-orchestrator-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.15
+          output_cost: 0.6
+          type: openai
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+      - allow_auth_override: false
+        config:
+          input_cost: 0.3
+          output_cost: 2.5
+          type: gemini
+          upstream_url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent
+        name: gemini-2.5-flash
+        provider: gemini
+        weight: 50
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: round-robin
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 60000
+        retries: 5
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/orchestrator-token-demo
+        model:
+          body_param: model
+          values: [gpt-4o-mini]
+    display_name: ai-orchestrator-token-demo-chat-route
+    formats:
+      - type: openai
+    name: ai-orchestrator-token-demo-chat-route
+    policies:
+      - ai-rate-limiting-advanced-3
+    ref: ai-orchestrator-token-demo-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.15
+          output_cost: 0.6
+          type: openai
+        name: gpt-4o-mini
+        provider: openai
+        weight: 100
+    type: model
+  - ai_gateway: !ref ai-gateway#id
+    capabilities:
+      - generate
+    config:
+      balancer:
+        algorithm: round-robin
+        connect_timeout: 60000
+        fail_timeout: 10000
+        failover_criteria:
+          - error
+          - timeout
+        hash_on_header: X-Kong-LLM-Request-ID
+        latency_strategy: tpot
+        max_fails: 0
+        read_timeout: 60000
+        retries: 5
+        slots: 10000
+        tokens_count_strategy: total-tokens
+        write_timeout: 60000
+      logging:
+        payloads: true
+      max_request_body_size: 8192
+      response_streaming: allow
+      route:
+        paths:
+          - /ai/subagent
+        model:
+          body_param: model
+          values:
+            - gemini-2.5-flash
+    display_name: ai-subagent-chat-route
+    formats:
+      - type: openai
+    name: ai-subagent-chat-route
+    ref: ai-subagent-chat-route
+    targets:
+      - allow_auth_override: false
+        config:
+          input_cost: 0.3
+          output_cost: 2.5
+          type: gemini
+          upstream_url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent
+        name: gemini-2.5-flash
+        provider: gemini
+        weight: 100
+    type: model

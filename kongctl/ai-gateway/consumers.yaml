@@ -1,0 +1,85 @@
+_defaults:
+  kongctl:
+    namespace: ai-gateway-consumers
+ai_gateway_consumers:
+  - ai_gateway: !ref ai-gateway#id
+    credentials:
+      - display_name: consumer1-credential-2
+        name: consumer1-credential-2
+        ref: consumer1-credential-2
+        type: api-key
+        api_key: !env AIGW_CONSUMER1_API_KEY
+    display_name: consumer1
+    name: consumer1
+    policies:
+      - ai-rate-limiting-advanced
+    ref: consumer1
+    type: api-key
+  - ai_gateway: !ref ai-gateway#id
+    credentials:
+      - display_name: consumer2-credential-2
+        name: consumer2-credential-2
+        ref: consumer2-credential-2
+        type: api-key
+        api_key: !env AIGW_CONSUMER2_API_KEY
+    display_name: consumer2
+    name: consumer2
+    policies:
+      - ai-rate-limiting-advanced-2
+    ref: consumer2
+    type: api-key
+  - ai_gateway: !ref ai-gateway#id
+    credentials:
+      - display_name: internal-router-credential-2
+        name: internal-router-credential-2
+        ref: internal-router-credential-2
+        type: api-key
+        api_key: !env AIGW_INTERNAL_ROUTER_API_KEY
+    display_name: internal-router
+    name: internal-router
+    ref: internal-router
+    type: api-key
+  - ai_gateway: !ref ai-gateway#id
+    credentials:
+      - display_name: orchestrator-agent-credential-2
+        name: orchestrator-agent-credential-2
+        ref: orchestrator-agent-credential-2
+        type: api-key
+        api_key: !env AIGW_ORCHESTRATOR_API_KEY
+    display_name: orchestrator-agent
+    name: orchestrator-agent
+    ref: orchestrator-agent
+    type: api-key
+  - ai_gateway: !ref ai-gateway#id
+    credentials:
+      - display_name: success-agent-credential-2
+        name: success-agent-credential-2
+        ref: success-agent-credential-2
+        type: api-key
+        api_key: !env AIGW_SUCCESS_AGENT_API_KEY
+    display_name: success-agent
+    name: success-agent
+    ref: success-agent
+    type: api-key
+  - ai_gateway: !ref ai-gateway#id
+    credentials:
+      - display_name: support-agent-credential-2
+        name: support-agent-credential-2
+        ref: support-agent-credential-2
+        type: api-key
+        api_key: !env AIGW_SUPPORT_AGENT_API_KEY
+    display_name: support-agent
+    name: support-agent
+    ref: support-agent
+    type: api-key
+  - ai_gateway: !ref ai-gateway#id
+    credentials:
+      - display_name: ui-client-credential-2
+        name: ui-client-credential-2
+        ref: ui-client-credential-2
+        type: api-key
+        api_key: !env AIGW_UI_API_KEY
+    display_name: ui-client
+    name: ui-client
+    ref: ui-client
+    type: api-key

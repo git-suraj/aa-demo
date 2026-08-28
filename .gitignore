@@ -12,3 +12,6 @@ ui/i18n-active.js
 kong/certs/*.crt
 kong/certs/*.key
 kong/certs/*.pem
+kong/ai-gateway-certs/*.crt
+kong/ai-gateway-certs/*.key
+kong/ai-gateway-certs/*.pem

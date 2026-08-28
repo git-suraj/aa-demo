@@ -55,6 +55,7 @@ llm = OrchestratorLLM()
 GEMINI_FALLBACK_URL = f"{KONG_PROXY_URL}/ai/subagent"
 GEMINI_FALLBACK_MODEL = os.getenv("DECK_GEMINI_MODEL") or os.getenv("GEMINI_MODEL") or "gemini-2.5-flash"
 MODEL_ROUTER_SELECTOR_MODEL = os.getenv("DECK_OPENAI_SELECTOR_MODEL") or "o3-mini"
+MODEL_ROUTER_ENTRY_MODEL = "model-based-router"
 TOKEN_LIMIT_CONSUMER_KEYS = {
     "consumer1": os.getenv("DECK_TOKEN_LIMIT_CONSUMER1_KEY", "consumer1-demo-key"),
     "consumer2": os.getenv("DECK_TOKEN_LIMIT_CONSUMER2_KEY", "consumer2-demo-key"),
@@ -865,12 +866,14 @@ async def generate_for_scenario(
     scenario: str,
     prompts: dict[str, str],
     base_url: str,
+    model: str | None = None,
     include_model: bool = True,
     api_key: str | None = None,
 ) -> dict[str, Any]:
     try:
         return await llm.generate(
             base_url=base_url,
+            model=model,
             run_id=run_id,
             context_id=context_id,
             include_model=include_model,
@@ -1746,7 +1749,11 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             scenario="llm_failover" if load_balancing_mode == "failover" else "load_balancing",
             prompts=prompts,
             base_url=ai_route_base_url,
-            include_model=load_balancing_mode == "failover",
+            model=MODEL_ROUTER_ENTRY_MODEL if load_balancing_mode == "model_based" else None,
+            # Native AI Gateway models select the route from the request model.
+            # The classic Gateway route accepted an omitted model for these modes,
+            # but AI Gateway 2.0 must receive the primary model explicitly.
+            include_model=True,
         )
         selected_model = load_balancing_result.get("model")
         selected_provider = (

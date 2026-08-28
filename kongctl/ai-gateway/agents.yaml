@@ -1,0 +1,42 @@
+_defaults:
+  kongctl:
+    namespace: ai-gateway-agents
+ai_gateway_agents:
+  - ai_gateway: !ref ai-gateway#id
+    config:
+      logging:
+        max_payload_size: 1048576
+        payloads: true
+      max_request_body_size: 0
+      route:
+        paths:
+          - /success-agent
+        preserve_host: false
+        protocols:
+          - http
+          - https
+        strip_path: true
+      url: http://success-agent:8000
+    display_name: success-agent-service
+    name: success-agent-service
+    ref: success-agent-service
+    type: a2a
+  - ai_gateway: !ref ai-gateway#id
+    config:
+      logging:
+        max_payload_size: 1048576
+        payloads: true
+      max_request_body_size: 0
+      route:
+        paths:
+          - /support-agent
+        preserve_host: false
+        protocols:
+          - http
+          - https
+        strip_path: true
+      url: http://support-agent:8000
+    display_name: support-agent-service
+    name: support-agent-service
+    ref: support-agent-service
+    type: a2a

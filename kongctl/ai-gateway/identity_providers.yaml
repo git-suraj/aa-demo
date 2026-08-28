@@ -1,0 +1,16 @@
+_defaults:
+  kongctl:
+    namespace: ai-gateway-identity-providers
+
+ai_gateway_identity_providers:
+  - ai_gateway: !ref ai-gateway#id
+    config:
+      key_in_header: true
+      key_in_query: true
+      key_names:
+        - apikey
+        - api-key
+    display_name: Demo API key authentication
+    name: demo-key-auth
+    ref: demo-key-auth
+    type: key-auth

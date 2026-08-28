@@ -1,0 +1,28 @@
+_defaults:
+  kongctl:
+    namespace: ai-gateway-model-providers
+
+ai_gateway_model_providers:
+  - ai_gateway: !ref ai-gateway#id
+    config:
+      auth:
+        type: basic
+        headers:
+          - name: Authorization
+            value: !env AIGW_OPENAI_AUTHORIZATION
+    display_name: OpenAI
+    name: openai
+    ref: openai
+    type: openai
+  - ai_gateway: !ref ai-gateway#id
+    config:
+      auth:
+        type: basic
+        params:
+          - location: query
+            name: key
+            value: !env AIGW_GEMINI_API_KEY
+    display_name: Gemini
+    name: gemini
+    ref: gemini
+    type: gemini

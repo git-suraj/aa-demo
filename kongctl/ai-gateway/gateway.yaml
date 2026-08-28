@@ -1,0 +1,7 @@
+_defaults:
+  kongctl:
+    namespace: ai-gateway
+ai_gateways:
+  - ref: ai-gateway
+    _external:
+      id: 47e9610a-2ad8-4b19-98d3-2b5364a7f38f

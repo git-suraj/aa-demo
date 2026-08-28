@@ -400,6 +400,49 @@ services:
       mock-api:
         condition: service_started
 
+  ai-gateway-dp:
+    image: ${KONG_IMAGE_REPO:-kong}/${KONG_IMAGE_NAME:-kong-ai-gateway-dev}:${KONG_IMAGE_TAG:-2.0.1-rc.5}
+    container_name: ai-gateway-dp
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      KONG_ROLE: data_plane
+      KONG_DATABASE: "off"
+      KONG_CLUSTER_MTLS: pki
+      KONG_CLUSTER_CONTROL_PLANE: ${AIGW_CLUSTER_CONTROL_PLANE}
+      KONG_CLUSTER_SERVER_NAME: ${AIGW_CLUSTER_SERVER_NAME}
+      KONG_CLUSTER_TELEMETRY_ENDPOINT: ${AIGW_CLUSTER_TELEMETRY_ENDPOINT}
+      KONG_CLUSTER_TELEMETRY_SERVER_NAME: ${AIGW_CLUSTER_TELEMETRY_SERVER_NAME}
+      KONG_CLUSTER_CERT: /etc/kong/certs/tls.crt
+      KONG_CLUSTER_CERT_KEY: /etc/kong/certs/tls.key
+      KONG_LUA_SSL_TRUSTED_CERTIFICATE: system
+      KONG_KONNECT_MODE: "on"
+      KONG_VITALS: "off"
+      KONG_PROXY_LISTEN: 0.0.0.0:8000, 0.0.0.0:8443 ssl
+      KONG_STATUS_LISTEN: 0.0.0.0:8100
+      KONG_LOG_LEVEL: notice
+      KONG_PLUGINS: bundled
+    ports:
+      - "8002:8000"
+      - "8444:8443"
+      - "8102:8100"
+    volumes:
+      - ./kong/ai-gateway-certs:/etc/kong/certs:ro
+    depends_on:
+      redis-stack:
+        condition: service_started
+      ai-pii-service:
+        condition: service_started
+      ai-compress-service:
+        condition: service_started
+      support-agent:
+        condition: service_started
+      success-agent:
+        condition: service_started
+      mock-api:
+        condition: service_started
+
   orchestrator:
     build:
       context: .
@@ -408,8 +451,8 @@ services:
     command: ["uvicorn", "services.orchestrator.app:app", "--host", "0.0.0.0", "--port", "8000"]
     environment:
       PORT: "8000"
-      KONG_PROXY_URL: http://kong-dp:8000
-      KONG_AI_PROXY_URL: http://kong-dp:8000/ai/orchestrator
+      KONG_PROXY_URL: http://ai-gateway-dp:8000
+      KONG_AI_PROXY_URL: http://ai-gateway-dp:8000/ai/orchestrator
       AGENT_API_KEY: orchestrator-demo-key
       TRACE_WS_PATH: /trace
       OPENAI_MODEL: gpt-4o-mini
@@ -428,8 +471,8 @@ services:
     command: ["uvicorn", "services.support_agent.app:app", "--host", "0.0.0.0", "--port", "8000"]
     environment:
       PORT: "8000"
-      KONG_MCP_URL: http://kong-dp:8000/mock-mcp
-      KONG_AI_PROXY_URL: http://kong-dp:8000/ai/subagent
+      KONG_MCP_URL: http://ai-gateway-dp:8000/mock-mcp
+      KONG_AI_PROXY_URL: http://ai-gateway-dp:8000/ai/subagent
       AGENT_API_KEY: support-demo-key
       OPENAI_MODEL: gemini-2.5-flash
 
@@ -441,8 +484,8 @@ services:
     command: ["uvicorn", "services.success_agent.app:app", "--host", "0.0.0.0", "--port", "8000"]
     environment:
       PORT: "8000"
-      KONG_MCP_URL: http://kong-dp:8000/mock-mcp
-      KONG_AI_PROXY_URL: http://kong-dp:8000/ai/subagent
+      KONG_MCP_URL: http://ai-gateway-dp:8000/mock-mcp
+      KONG_AI_PROXY_URL: http://ai-gateway-dp:8000/ai/subagent
       AGENT_API_KEY: success-demo-key
       OPENAI_MODEL: gemini-2.5-flash
 

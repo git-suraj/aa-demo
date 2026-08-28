@@ -1,0 +1,185 @@
+_defaults:
+  kongctl:
+    namespace: ai-gateway-mcp-servers
+ai_gateway_mcp_servers:
+  - access:
+      acl_attribute_type: consumer
+      identity_providers:
+        - demo-key-auth
+    ai_gateway: !ref ai-gateway#id
+    config:
+      logging:
+        audits: false
+        payloads: true
+      max_request_body_size: 8192
+      route:
+        paths:
+          - /mock-mcp
+        preserve_host: false
+        protocols:
+          - http
+          - https
+        strip_path: false
+      server:
+        consumer_identifier: username
+        forward_client_headers: true
+        include_consumer_groups: true
+        timeout: 10000
+      url: http://mock-api:8000
+    display_name: mock-api-service
+    name: mock-api-service
+    ref: mock-api-service
+    tools:
+      - access:
+          acls:
+            allow:
+              - orchestrator-tools
+        annotations:
+          title: Customer Account
+        description: Get account metadata and current health signals
+        method: GET
+        name: get_customer_account
+        parameters:
+          - description: Customer ID
+            in: path
+            name: customer_id
+            required: true
+            schema:
+              type: string
+        path: /api/customers/{customer_id}
+      - access:
+          acls:
+            allow:
+              - orchestrator-tools
+        annotations:
+          title: Renewal Risk
+        description: Get renewal risk and contributing factors
+        method: GET
+        name: get_renewal_risk
+        parameters:
+          - description: Customer ID
+            in: path
+            name: customer_id
+            required: true
+            schema:
+              type: string
+        path: /api/customers/{customer_id}/renewal-risk
+      - access:
+          acls:
+            allow:
+              - orchestrator-tools
+        annotations:
+          title: Open Tickets
+        description: Get open support tickets for the customer
+        method: GET
+        name: get_open_tickets
+        parameters:
+          - description: Customer ID
+            in: path
+            name: customer_id
+            required: true
+            schema:
+              type: string
+        path: /api/customers/{customer_id}/tickets
+      - access:
+          acls:
+            allow:
+              - support-tools
+        annotations:
+          title: Incident Status
+        description: Get current incident status and impact
+        method: GET
+        name: get_incident_status
+        parameters:
+          - description: Incident ID
+            in: path
+            name: incident_id
+            required: true
+            schema:
+              type: string
+        path: /api/incidents/{incident_id}
+      - access:
+          acls:
+            allow:
+              - support-tools
+        annotations:
+          title: Runbook Search
+        description: Search operational runbooks
+        method: GET
+        name: search_runbook
+        parameters:
+          - description: Search query
+            in: query
+            name: q
+            required: true
+            schema:
+              type: string
+        path: /api/runbooks/search
+      - access:
+          acls:
+            allow:
+              - success-tools
+        annotations:
+          title: Draft Customer Reply
+        description: Draft a customer-facing reply
+        method: GET
+        name: draft_customer_reply
+        parameters:
+          - in: query
+            name: account_name
+            required: true
+            schema:
+              type: string
+          - in: query
+            name: csm
+            required: true
+            schema:
+              type: string
+          - in: query
+            name: issue_summary
+            required: true
+            schema:
+              type: string
+          - in: query
+            name: renewal_risk
+            required: true
+            schema:
+              type: string
+          - in: query
+            name: technical_summary
+            required: true
+            schema:
+              type: string
+        path: /api/drafts/customer-reply/preview
+      - access:
+          acls:
+            allow:
+              - success-tools
+        annotations:
+          title: Create Follow-up Task
+        description: Create a success-team follow-up task
+        method: GET
+        name: create_followup_task
+        parameters:
+          - in: query
+            name: account_name
+            required: true
+            schema:
+              type: string
+          - in: query
+            name: owner
+            required: true
+            schema:
+              type: string
+          - in: query
+            name: due_date
+            required: true
+            schema:
+              type: string
+          - in: query
+            name: action_items
+            required: false
+            schema:
+              type: string
+        path: /api/tasks/followup/preview
+    type: conversion-listener
