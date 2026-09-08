@@ -4,6 +4,21 @@ _defaults:
 ai_gateway_policies:
   - ai_gateway: !ref ai-gateway#id
     config:
+      # Kong emits `kong.llm_request` events for request and response tokens.
+      # The Consumer authenticated on the Model is the event subject.
+      api_token: !env KONNECT_SYSTEM_TOKEN
+      ingest_endpoint: !env KONNECT_METERING_INGEST_ENDPOINT
+      meter_ai_token_usage: true
+      meter_api_requests: false
+      subject:
+        look_up_value_in: consumer
+    display_name: AA-Demo-2 agent LLM token metering
+    enabled: true
+    name: aa-demo-2-agent-llm-metering
+    ref: aa-demo-2-agent-llm-metering
+    type: metering-and-billing
+  - ai_gateway: !ref ai-gateway#id
+    config:
       custom_cost_count_function: null
       decrease_by_fractions_in_redis: false
       dictionary_name: kong_rate_limiting_counters
@@ -246,7 +261,7 @@ ai_gateway_policies:
           inputs: null
           jq: |
             {
-              apikey: "internal-router-key",
+              apikey: (.apikey // .Apikey // ."api-key" // ."Api-Key" // ""),
               "x-demo-run-id": (."x-demo-run-id" // ."X-Demo-Run-Id" // ""),
               "x-demo-context-id": (."x-demo-context-id" // ."X-Demo-Context-Id" // ""),
               traceparent: (.traceparent // ""),

@@ -5,6 +5,15 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
+if [[ "$#" -gt 1 ]] || [[ "$#" -eq 1 && "$1" != "NORMAL_RUN" ]]; then
+  echo "Usage: $0 [NORMAL_RUN]" >&2
+  exit 2
+fi
+
+if [[ "${1:-}" == "NORMAL_RUN" ]]; then
+  export RUN_NORMAL_DEMO_ON_START=true
+fi
+
 RESET=$'\033[0m'
 BOLD=$'\033[1m'
 CYAN=$'\033[36m'
@@ -148,6 +157,44 @@ ensure_control_plane() {
   echo "$cp_display_name|$cp_id|created"
 }
 
+run_optional_normal_demo() {
+  local enabled="${RUN_NORMAL_DEMO_ON_START:-false}"
+  case "${enabled:l}" in
+    1|true|yes)
+      ;;
+    *)
+      info "Skipping optional normal run (start with NORMAL_RUN to enable it)"
+      return 0
+      ;;
+  esac
+
+  local run_id="startup-normal-$(date +%Y%m%d%H%M%S)"
+  local context_id="${run_id}-context"
+  local payload response_file summary
+  payload="$(jq -nc --arg run_id "$run_id" --arg context_id "$context_id" '{run_id: $run_id, context_id: $context_id, governance_scenario: "normal"}')"
+  response_file="$(mktemp)"
+
+  step "Running optional normal orchestration"
+  if ! curl --fail-with-body --silent --show-error \
+    --max-time "${RUN_NORMAL_DEMO_TIMEOUT_SECONDS:-240}" \
+    -H "Content-Type: application/json" \
+    -H "apikey: ${AIGW_ORCHESTRATOR_API_KEY:-orchestrator-demo-key}" \
+    -H "x-demo-run-id: ${run_id}" \
+    -H "x-demo-context-id: ${context_id}" \
+    --data "$payload" \
+    http://localhost:8000/orchestrator/play >"$response_file"; then
+    fail "Optional normal run failed. The stack remains running; inspect the response below."
+    cat "$response_file" >&2
+    rm -f "$response_file"
+    return 1
+  fi
+
+  summary="$(jq -r '.executive_brief.summary // .summary // "completed"' "$response_file")"
+  rm -f "$response_file"
+  ok "Normal run complete: ${run_id}"
+  info "${summary}"
+}
+
 sync_plugin_schema() {
   local cp_id="$1"
   local plugin_name="$2"
@@ -261,6 +308,7 @@ require_bin curl
 require_bin jq
 require_bin python3
 require_bin deck
+require_bin kongctl
 
 set -a
 source .env
@@ -272,6 +320,16 @@ if [[ -z "${KONNECT_TOKEN:-}" ]]; then
   fail "KONNECT_TOKEN is not set in .env"
   exit 1
 fi
+
+if [[ -z "${KONNECT_SYSTEM_TOKEN:-}" ]]; then
+  fail "KONNECT_SYSTEM_TOKEN is required for AI Gateway Metering & Billing"
+  exit 1
+fi
+
+export AIGW_GATEWAY_ID="${AIGW_GATEWAY_ID:-47e9610a-2ad8-4b19-98d3-2b5364a7f38f}"
+export KONNECT_METERING_INGEST_ENDPOINT="${KONNECT_METERING_INGEST_ENDPOINT:-https://us.api.konghq.com/v3/openmeter/events}"
+export AIGW_OPENAI_AUTHORIZATION="${AIGW_OPENAI_AUTHORIZATION:-Bearer ${DECK_OPENAI_API_KEY}}"
+export AIGW_GEMINI_API_KEY="${AIGW_GEMINI_API_KEY:-${DECK_GEMINI_API_KEY}}"
 
 KONNECT_API_URL="${KONNECT_API_URL:-https://us.api.konghq.com}"
 KONNECT_CONTROL_PLANE_NAME="${KONNECT_CONTROL_PLANE_NAME:-AA Demo}"
@@ -311,6 +369,19 @@ deck gateway sync \
   kong/deck/kong.yaml
 ok "decK sync complete"
 
+step "Syncing AI Gateway 2.0 entities"
+kongctl diff -f kongctl/ai-gateway --mode apply
+kongctl apply --auto-approve -f kongctl/ai-gateway
+ok "AI Gateway 2.0 entities synced to AA-Demo-2"
+
+step "Registering AI Builder Catalog Models and MCP Servers"
+python3 scripts/register_ai_builder_catalog.py
+ok "AI Builder Catalog records linked to AA-Demo-2"
+
+step "Creating agent token-metering and billing catalog"
+python3 scripts/setup_ai_gateway_metering_billing.py
+ok "Agent billing customers and subscriptions are ready"
+
 step "Uploading Konnect observability dashboards"
 python3 scripts/upload_konnect_dashboards.py \
   --control-plane-id "$CONTROL_PLANE_ID" \
@@ -326,6 +397,8 @@ step "Ingesting fictional AtlasFlow support KB"
 python3 scripts/ingest_rag_kb.py
 ok "RAG knowledge base ingested"
 
+run_optional_normal_demo
+
 echo
 echo "${CYAN}========================================${RESET}"
 echo "${BOLD}${GREEN}        Demo Startup Complete${RESET}"
@@ -340,5 +413,5 @@ echo
 echo "${BOLD}Konnect MCP Registry:${RESET}"
 printf "  ${CYAN}Registry${RESET}  %s\n" "AA Demo MCP Registry"
 printf "  ${CYAN}Server${RESET}    %s\n" "com.aa-demo/mock-mcp"
-printf "  ${CYAN}Remote${RESET}    %s\n" "http://localhost:8000/mock-mcp"
+printf "  ${CYAN}Remote${RESET}    %s\n" "http://host.docker.internal:8002/mock-mcp"
 echo

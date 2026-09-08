@@ -57,6 +57,12 @@
   // [label, value] config rows). Returns an array; falls back to `fallback`
   // (default []) when the key is missing.
   function tList(key, vars, fallback) {
+    // Native AI Gateway Model and policy bindings are maintained with kongctl.
+    // Keep these scenario configuration rows sourced from app.js so the +
+    // dialog cannot fall back to the legacy plugin inventory translations.
+    if (key.startsWith("policies.") && (key.endsWith(".config") || key.includes(".config."))) {
+      return Array.isArray(fallback) ? fallback : [];
+    }
     if (has(key)) {
       const value = messages[key];
       const arr = Array.isArray(value) ? value : [value];

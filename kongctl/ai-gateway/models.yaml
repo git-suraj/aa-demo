@@ -46,6 +46,9 @@ ai_gateway_models:
         provider: openai
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -109,6 +112,9 @@ ai_gateway_models:
         provider: gemini
         weight: 50
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -180,6 +186,9 @@ ai_gateway_models:
         provider: gemini
         weight: 50
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -229,6 +238,9 @@ ai_gateway_models:
         provider: openai
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -275,6 +287,9 @@ ai_gateway_models:
         provider: openai
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -320,6 +335,9 @@ ai_gateway_models:
         provider: openai
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -365,6 +383,9 @@ ai_gateway_models:
         provider: gemini
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -397,6 +418,9 @@ ai_gateway_models:
         provider: openai
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -442,6 +466,9 @@ ai_gateway_models:
         provider: openai
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -488,6 +515,9 @@ ai_gateway_models:
         provider: openai
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -534,6 +564,9 @@ ai_gateway_models:
         provider: openai
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -580,6 +613,9 @@ ai_gateway_models:
         provider: openai
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -626,6 +662,9 @@ ai_gateway_models:
         provider: openai
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -672,6 +711,9 @@ ai_gateway_models:
         provider: openai
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -718,6 +760,9 @@ ai_gateway_models:
         provider: openai
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -762,6 +807,9 @@ ai_gateway_models:
         provider: openai
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -808,6 +856,9 @@ ai_gateway_models:
         provider: openai
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -852,6 +903,9 @@ ai_gateway_models:
         provider: openai
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -898,6 +952,9 @@ ai_gateway_models:
         provider: openai
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -944,6 +1001,9 @@ ai_gateway_models:
         provider: openai
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -1026,6 +1086,9 @@ ai_gateway_models:
         semantic_description: Specialist in creative marketing, launch messaging, campaign concepts, brand voice, event teasers, storytelling, and polished promotional copy.
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -1085,6 +1148,9 @@ ai_gateway_models:
         provider: gemini
         weight: 50
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -1131,6 +1197,9 @@ ai_gateway_models:
         provider: openai
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
       - generate
@@ -1177,3 +1246,6 @@ ai_gateway_models:
         provider: gemini
         weight: 100
     type: model
+    access:
+      identity_providers:
+        - demo-key-auth

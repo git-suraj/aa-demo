@@ -2975,7 +2975,8 @@ async def run_compose_command(*args: str) -> dict[str, Any]:
 async def reset_observability_stack() -> dict[str, Any]:
     steps = [
         await run_compose_command("rm", "-sf", "loki"),
-        await run_compose_command("up", "-d", "loki"),
+        await run_compose_command("rm", "-sf", "prometheus"),
+        await run_compose_command("up", "-d", "loki", "prometheus"),
         await run_compose_command("restart", "grafana"),
     ]
     return {"steps": steps}

@@ -134,7 +134,7 @@ nodeDetails.openai.plainEnglish:
   - "Kong routes orchestrator planning and summary calls here in the normal flow."
   - "Some scenarios change how Kong governs this route."
   - "It is kept separate from the shared sub-agent route."
-nodeDetails.openai.title: "OpenAI 4o mini"
+nodeDetails.openai.title: "gpt-4o-mini"
 nodeDetails.openai.why: "It shows caller-specific model routing at the gateway layer."
 nodeDetails.orchestrator.config:
   - ["Framework", "LangGraph"]
@@ -239,10 +239,10 @@ nodes.observability.desc: "Receives Kong gateway logs for live metrics, queries,
 nodes.observability.infoAria: "View Observability details"
 nodes.observability.label: "Observability"
 nodes.observability.title: "Grafana / Loki"
-nodes.openai.desc: "Primary orchestrator model via AI Proxy Advanced."
+nodes.openai.desc: "Primary orchestrator target through the native AI Gateway Model."
 nodes.openai.infoAria: "View OpenAI model details"
 nodes.openai.label: "Primary"
-nodes.openai.title: "OpenAI 4o mini"
+nodes.openai.title: "gpt-4o-mini"
 nodes.orchestrator.desc: "Gets context, calls its LLM, invokes support then success, and assembles the final brief."
 nodes.orchestrator.infoAria: "View Orchestrator details"
 nodes.orchestrator.label: "LangGraph"

@@ -6,6 +6,10 @@
 - Control plane ID: `47e9610a-2ad8-4b19-98d3-2b5364a7f38f`
 - Management surface: AI Gateway 2.0 entities managed with `kongctl`
 
+The native runtime inventory, including Model names, provider targets, and
+policy attachments, is maintained in
+[AI Gateway Models and policies](ai-gateway-models-and-policies.md).
+
 ## Gateway-layer prompt logging
 
 Prompt logging remains a gateway responsibility. The AI Gateway 2.0 models and
@@ -37,3 +41,12 @@ than reimplemented in application code.
 ## Konnect Observability
 
 Konnect Observability for AI Gateway 2.0 is not yet functional, with a target to fix this by end of September 2026.
+
+
+## Register MCP servers
+
+Register MCP servers in the catalog and link to MCP server in the gateway
+
+## Register agents
+
+Register agents in the catalog and link to agents in the gateway

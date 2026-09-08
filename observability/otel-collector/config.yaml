@@ -17,11 +17,32 @@ processors:
       - key: demo.trace_backend
         value: jaeger
         action: upsert
+  # Loki stores OTLP log attributes as structured metadata. Keep that native
+  # representation, and also place the dashboard fields in a JSON body so
+  # LogQL can aggregate consumer-to-tool activity without indexing a
+  # high-cardinality label.
+  transform/ai_gateway_log_body:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - set(log.cache["event"], log.body)
+          - set(log.cache["consumer"], log.attributes["kong.auth.consumer.name"])
+          - set(log.cache["mcp_tool_name"], log.attributes["kong.mcp.rpc.tool_name"])
+          - set(log.cache["mcp_request"], log.attributes["kong.mcp.rpc.payload.request"])
+          - set(log.cache["mcp_response"], log.attributes["kong.mcp.rpc.payload.response"])
+          - set(log.cache["llm_request"], log.attributes["kong.gen_ai.proxy.payload.request"])
+          - set(log.cache["llm_response"], log.attributes["kong.gen_ai.proxy.payload.response"])
+          - set(log.body, log.cache)
   batch:
 
 exporters:
   otlphttp/jaeger:
     endpoint: http://jaeger:4318
+  # Loki 3 accepts OTLP logs at /otlp/v1/logs. Keep payloads as structured
+  # metadata instead of turning high-cardinality values into Loki labels.
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
   prometheus:
     endpoint: 0.0.0.0:9464
   debug:
@@ -45,4 +66,13 @@ service:
         - batch
       exporters:
         - prometheus
+        - debug
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - transform/ai_gateway_log_body
+        - batch
+      exporters:
+        - otlphttp/loki
         - debug

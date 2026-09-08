@@ -13,6 +13,7 @@ This repo is a Konnect hybrid demo for showing how Kong governs both agent-to-ag
   - [Diagram views](#diagram-views)
 - [What it will show](#what-it-will-show)
 - [Runtime shape](#runtime-shape)
+- [AI Gateway Models and policies](#ai-gateway-models-and-policies)
 - [Observability](#observability)
   - [Konnect observability](#konnect-observability)
   - [Loki and Grafana](#loki-and-grafana)
@@ -64,6 +65,7 @@ Minimum environment values required for the main startup flow:
 - `DECK_OPENAI_API_KEY`
 - `DECK_GEMINI_API_KEY`
 - `DECK_REDIS_HOST`
+- `KONNECT_SYSTEM_TOKEN` (a `spat_...` system-account token for Metering & Billing)
 
 Additional environment values required for optional/full governance scenarios:
 
@@ -92,6 +94,17 @@ What the startup flow expects:
 ./scripts/start_rag_demo.sh
 ```
 
+To start the stack and then run one normal, synthetic orchestration through MCP,
+A2A, and the configured LLMs, run:
+
+```bash
+./scripts/start_rag_demo.sh NORMAL_RUN
+```
+
+The run is off by default. Set `RUN_NORMAL_DEMO_TIMEOUT_SECONDS` to change its
+240-second timeout. `RUN_NORMAL_DEMO_ON_START=true` remains available for
+automation.
+
 The startup flow will:
 
 - create or reuse the Konnect control plane
@@ -101,7 +114,11 @@ The startup flow will:
 - run `deck gateway sync`
 - upload Konnect dashboards
 - register the Konnect MCP registry entry
+- register AI Builder Catalog snapshots for the native AI Gateway Models and MCP Server
 - ingest the demo RAG knowledge base
+- apply the AA-Demo-2 native AI Gateway entities
+- create the AA-Demo-2 agent token-meter, billing customers, and subscriptions
+- optionally run one normal orchestration when started with `NORMAL_RUN`
 
 3. Open the main local surfaces:
 
@@ -116,6 +133,11 @@ The startup flow will:
 ./scripts/stop_rag_demo.sh
 ```
 
+Shutdown removes the AA-Demo-2 Metering & Billing and AI Builder Catalog records,
+then all managed AI Gateway child entities before stopping Docker. It retains the pre-created
+`AA-Demo-2` AI Gateway and its data-plane attachment so the next startup can
+recreate the demo.
+
 Important links used in the demo:
 
 - Kong MCP remote: [http://localhost:8000/mock-mcp](http://localhost:8000/mock-mcp)
@@ -125,6 +147,18 @@ Important links used in the demo:
 ## What the project does
 
 This project demonstrates a small, visually clear agent system running behind Kong in Konnect hybrid mode.
+
+## AI Gateway Models and policies
+
+The AI request paths use the AI Gateway 2.0 domain model. The managed unit is
+an **AI Gateway Model**, not a legacy Service, Route, or `ai-proxy-advanced`
+plugin. Each Model defines its path, provider targets, balancer, payload
+logging, access through `demo-key-auth`, and any attached native policy.
+
+The dashboard’s Kong `+` button shows the active scenario's native Model names,
+provider target names, and attached policies. See
+[AI Gateway Models and policies](docs/ai-gateway-models-and-policies.md) for
+the complete route-to-Model and policy mapping.
 
 Example screens:
 
@@ -149,12 +183,13 @@ The demo uses:
 - 1 LangGraph orchestrator
 - 2 LangGraph sub-agents
 - an orchestrator LLM step for triage and executive synthesis
-- LLM calls from the orchestrator and sub-agents routed through Kong AI Proxy Advanced
+- LLM calls from the orchestrator and sub-agents routed through native AI Gateway Models
 - separate Kong AI routes for orchestrator and sub-agents
 - Kong's `ai-a2a-proxy` plugin for agent discovery, A2A execution, and A2A observability between the orchestrator and the sub-agents
 - 1 backing REST API
 - Kong's `ai-mcp-proxy` plugin to expose that API as MCP tools
 - Konnect MCP Registry to publish the demo MCP server for internal discovery
+- AI Builder Catalog records linked to every native AI Gateway Model and the MCP Server
 - Consumers and Consumer Groups to control which agent can see which tools
 - a lightweight UI that shows the flow in real time
 
@@ -179,7 +214,8 @@ This makes Kong's role easy to explain:
 - A2A agent discovery and execution through Kong
 - tool exposure through MCP
 - MCP server registration through Konnect MCP Registry
-- LLM routing through AI Proxy Advanced
+- Model and MCP Server registration through AI Builder Catalog, snapshot-linked to AI Gateway 2.0
+- LLM routing through native AI Gateway Models
 - per-agent tool restrictions
 - observability of agent traffic
 
@@ -189,8 +225,15 @@ MCP discovery shape:
 - the same server is also registered in Konnect as:
   - registry: `AA Demo MCP Registry`
   - server: `com.aa-demo/mock-mcp`
-  - remote: `http://localhost:8000/mock-mcp`
+  - remote: `http://host.docker.internal:8002/mock-mcp` (the native AI Gateway data plane)
 - this keeps discovery/governance metadata in Konnect while Kong remains the runtime control point for auth, routing, and observability
+
+AI Builder Catalog registrations:
+
+- 24 `aa-demo-2-*` AI Model records, one per native AI Gateway Model route
+- one `aa-demo-2-mock-api-service` MCP Server record, with its seven tool definitions
+- each record is linked to its native AA-Demo-2 entity; Catalog is an inventory snapshot, so startup re-runs the registration after native Gateway sync
+- the Catalog MCP remote defaults to `http://host.docker.internal:8002/mock-mcp`; set `AIGW_CATALOG_MCP_REMOTE_URL` if clients reach the local data plane differently
 
 ## Core Governance Components
 
@@ -198,8 +241,8 @@ MCP discovery shape:
   - Kong handles sub-agent discovery and A2A `message/stream` execution between the orchestrator and the support/success agents.
 - `AI MCP Proxy`
   - Kong exposes the backing REST API as MCP tools and enforces per-agent access to those tools.
-- `AI Proxy Advanced`
-  - Kong routes orchestrator and sub-agent LLM traffic to the configured model providers and also supports failover behavior in the demo.
+- `AI Gateway Models`
+  - Kong routes orchestrator and sub-agent LLM traffic to configured provider targets and applies native policies where a scenario requires them.
 - `AI Semantic Prompt Guard`
   - Kong uses embeddings plus Redis to block prompts based on semantic similarity to denied themes.
 - `AI Semantic Cache`
@@ -269,16 +312,18 @@ Diagram views:
 - `support-agent`: handles product and runbook investigation
 - `success-agent`: handles customer follow-up and action items
 - `mock-api`: backing REST API for the 7 tools
-- `ai-llm-service`: LLM traffic routed through Kong AI Proxy Advanced
+- `ai-llm-service`: LLM traffic routed through native AI Gateway Models
 - `redis-stack`: vector database backing the semantic guard scenario
 - `kong-dp`: Kong Gateway `3.14.0.1` in Konnect hybrid mode
 
 ## Observability
 
-The demo exposes three main observability surfaces:
+The demo exposes four main observability surfaces:
 
 - Konnect observability for managed analytics dashboards
-- Loki and Grafana for gateway logs, run-scoped tables, and governance dashboards
+- Grafana for the native AI Gateway OpenTelemetry dashboard
+- Loki for request and response log streams
+- Prometheus for native AI Gateway metrics
 - Jaeger for raw OpenTelemetry trace trees
 - Opik for the synthetic workflow-oriented AI trace exported by Kong
 
@@ -288,16 +333,29 @@ The demo exposes three main observability surfaces:
 - the repo startup flow uploads the demo dashboard definitions into Konnect
 - this is the managed analytics surface for the demo, separate from local Grafana
 
-### Loki and Grafana
+### AI Gateway OpenTelemetry dashboard (default)
 
 - Grafana UI: `http://localhost:3001`
 - Loki API: `http://localhost:3100`
-- Kong sends structured gateway logs to Loki through the global `http-log` path
-- Grafana is the main surface for:
-  - governance dashboards
-  - run trace tables
-  - policy events
-  - request/response exploration
+- Prometheus is internal to the Compose network and is scraped from the OpenTelemetry Collector.
+- The default dashboard is **AA-Demo-2 AI Gateway OpenTelemetry**.
+- A global native AI Gateway OpenTelemetry policy sends traces to Jaeger, access logs to Loki, and AI/MCP metrics to Prometheus. It also adds run, context, scenario, and authenticated consumer attributes. Provider target URIs and query strings are removed before logs leave the gateway.
+
+The dashboard shows:
+
+- MCP and LLM input/output as separate log streams
+- consumer-to-tool call counts and MCP tool latency
+- model calls grouped by agent, and model latency
+- total tool calls grouped by MCP tool
+- tokens consumed per agent and per model
+
+The call and token panels show cumulative native OpenTelemetry counters as whole
+numbers, not requests or tokens per second. The totals begin again when you
+reset local observability or restart its Prometheus container. The latency
+panels show average duration per completed MCP tool call or model call in
+milliseconds, so they remain populated between requests.
+
+`Reset Observability` clears both local Loki log history and Prometheus metric history, then reloads Grafana. It does not alter Konnect, gateway, or billing data.
 
 ### Jaeger
 
@@ -309,6 +367,7 @@ What is included:
   - `KONG_TRACING_INSTRUMENTATIONS=all`
   - `KONG_TRACING_SAMPLING_RATE=1.0`
 - a global Kong `opentelemetry` plugin in [kong/deck/kong.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml)
+- a global native AI Gateway OpenTelemetry policy in [kongctl/ai-gateway/opentelemetry.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kongctl/ai-gateway/opentelemetry.yaml), covering Models and MCP Servers on `ai-gateway-dp`
 - a local OpenTelemetry Collector service in [docker-compose.yml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/docker-compose.yml)
 - collector config in [observability/otel-collector/config.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/observability/otel-collector/config.yaml)
 - a local Jaeger service in [docker-compose.yml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/docker-compose.yml)
@@ -678,16 +737,16 @@ The AI routes are split by caller type:
   - secondary failover target: `gemini-2.5-flash`
 - `/ai/orchestrator-failover-demo/chat/completions`
   - used by the `Load Balancing -> LLM Failover` subscene
-  - configured for Kong `ai-proxy-advanced` priority failover
+  - handled by the `ai-orchestrator-failover-demo-chat-route` AI Gateway Model with a native priority balancer
 - `/ai/orchestrator-semantic-load-balance-demo/chat/completions`
   - used by the `Load Balancing -> Semantic Load Balancing` subscene
-  - configured for Kong `ai-proxy-advanced` semantic routing with Redis-backed embeddings
+  - handled by the `ai-orchestrator-semantic-load-balance-demo-chat-route` AI Gateway Model with native semantic routing and Redis-backed embeddings
 - `/ai/orchestrator-model-based-demo/chat/completions`
   - used by the `Load Balancing -> Model-Based Routing` subscene
-  - configured for Kong `datakit` plus `ai-proxy-advanced` tier routing
+  - handled by the `model-based-router` AI Gateway Model with the `datakit` policy
 - `/ai/orchestrator-model-selector/chat/completions`
   - internal selector route used by the model-based routing subscene
-  - configured for Kong `ai-prompt-decorator` plus `ai-proxy-advanced`
+  - handled by the `ai-orchestrator-model-selector-chat-route` AI Gateway Model with the `ai-prompt-decorator` policy
 - `/ai/orchestrator-token-demo/chat/completions`
   - used only for the AI token limit scenario
   - protected by Kong `ai-rate-limiting-advanced`
@@ -717,12 +776,14 @@ The AI routes are split by caller type:
   - protected by Kong `ai-lakera-guard`
 - `/ai/orchestrator-judge-demo/chat/completions`
   - used only for the LLM as Judge scenario
-  - applies `ai-proxy-advanced` for the candidate response and `ai-llm-as-judge` for scoring
+  - handled by `ai-orchestrator-judge-demo-chat-route` with the `ai-llm-as-judge` policy
 - `/ai/subagent/chat/completions`
   - used by both sub-agents
   - target: `gemini-2.5-flash`
 
-The services use OpenAI-compatible clients pointed at those Kong routes, and Kong forwards the requests using the AI Proxy Advanced plugin.
+The services use OpenAI-compatible clients pointed at those Kong routes. Kong
+matches each request to its native AI Gateway Model and sends it to the selected
+provider target.
 
 Prompt decoration is not applied on the standard orchestrator AI routes. It is used only in the dedicated `Prompt Decorator` scenario so the difference is easy to demonstrate.
 
@@ -968,15 +1029,15 @@ This subscene demonstrates prompt-aware model routing rather than failure recove
 Behind the scenes:
 
 - the orchestrator switches to `/ai/orchestrator-semantic-load-balance-demo/chat/completions`
-- Kong uses `ai-proxy-advanced` with `balancer.algorithm: semantic`
+- the `ai-orchestrator-semantic-load-balance-demo-chat-route` AI Gateway Model uses `balancer.algorithm: semantic`
 - Kong embeds the request prompt with `text-embedding-3-small`
 - Kong compares the prompt meaning against target descriptions stored through the semantic balancer and Redis
 - the demo uses two editable prompt presets:
   - `Support / Operational`
   - `Creative / Marketing`
 - the route then selects the most relevant target:
-  - `OpenAI 4o mini` for support / operational prompts
-  - `Gemini 2.5 Flash` for creative / marketing prompts
+  - `gpt-4o-mini` for support / operational prompts
+  - `gemini-2.5-flash` for creative / marketing prompts
 
 #### Model-Based Routing
 
@@ -985,25 +1046,24 @@ This subscene demonstrates selector-driven tier routing rather than prompt simil
 Behind the scenes:
 
 - the orchestrator switches to `/ai/orchestrator-model-based-demo/chat/completions`
-- Kong `datakit` intercepts the request before the final provider route
-- Kong calls `/ai/orchestrator-model-selector/chat/completions` with the same prompt
-- that selector route uses:
-  - `ai-prompt-decorator`
-  - `ai-proxy-advanced`
-  - selector model: `o3-mini` by default through `DECK_OPENAI_SELECTOR_MODEL`
+- the `model-based-router` Model applies the `datakit` policy
+- `datakit` calls `/ai/orchestrator-model-selector/chat/completions` with the same prompt
+- the selector is the `ai-orchestrator-model-selector-chat-route` Model with
+  the `ai-prompt-decorator` policy and target `o3-mini`
 - the selector route is instructed to return only:
   - `simple`
   - `complex`
-- `datakit` rewrites the original request body `model` field with that tier
-- the main model-based route then uses `ai-proxy-advanced` target aliases:
-  - `complex` -> `OpenAI 4o mini`
-  - `simple` -> `Gemini 2.5 Flash`
+- `datakit` makes a second gateway call to the final Model for that tier:
+  - `complex` -> `complex` Model -> `gpt-4o-mini`
+  - `simple` -> `simple` Model -> `gemini-2.5-flash`
+- `datakit` forwards the original API key to both calls, preserving the agent
+  identity used by Metering and Billing.
 - the demo uses two editable prompt presets:
   - `Simple`
   - `Complex`
 - current provider mapping is explicit:
-  - `Simple` prompts are intended to route to `Gemini 2.5 Flash`
-  - `Complex` prompts are intended to route to `OpenAI 4o mini`
+  - `Simple` prompts route to `gemini-2.5-flash`
+  - `Complex` prompts route to `gpt-4o-mini`
 - the UI uses a visualization heuristic for the selector/provider split because Kong performs both phases inside one request and the orchestrator receives only one end-to-end duration
 
 ### 3. AI Token Limit
@@ -1044,7 +1104,7 @@ This sub-scene demonstrates cost-based consumer budgets on the same provider rou
 Behind the scenes:
 
 - the orchestrator switches to `/ai/orchestrator-consumer-cost-demo/chat/completions`
-- that route uses `ai-proxy-advanced` for `OpenAI 4o mini`
+- the `ai-orchestrator-consumer-cost-demo-chat-route` AI Gateway Model targets `gpt-4o-mini`
 - the route itself is key-auth protected
 - the rate limiting policy is applied at the consumer scope, not the route scope
 - two demo consumers are configured:
@@ -1110,7 +1170,7 @@ Behind the scenes:
 - the orchestrator switches to one of three dedicated routes:
   - `/ai/orchestrator-prompt-compress-ratio-demo/chat/completions`
   - `/ai/orchestrator-prompt-compress-token-demo/chat/completions`
-- each route applies `ai-prompt-compressor` before `ai-proxy-advanced`
+- each AI Gateway Model has its matching prompt-compressor policy attached
 - both routes call the external Kong AI Prompt Compressor service at:
   - `docker.cloudsmith.io/kong/ai-compress/service:v0.0.2`
 - the ratio route uses:
@@ -1310,7 +1370,7 @@ Behind the scenes:
   - `/ai/orchestrator-pii-block-demo/chat/completions`
   - `/ai/orchestrator-pii-placeholder-demo/chat/completions`
   - `/ai/orchestrator-pii-synthetic-demo/chat/completions`
-- each route applies `ai-sanitizer` before `ai-proxy-advanced`
+- each AI Gateway Model has its matching AI Sanitizer policy attached
 - the plugin is configured with:
   - `anonymize: [all_and_credentials]`
   - `sanitization_mode: BOTH`
@@ -1369,9 +1429,8 @@ This scenario demonstrates Kong generating a candidate response with one model a
 Behind the scenes:
 
 - the orchestrator switches to `/ai/orchestrator-judge-demo/chat/completions`
-- the route applies:
-  - `ai-proxy-advanced` for the candidate response
-  - `ai-llm-as-judge` for the scoring pass
+- the `ai-orchestrator-judge-demo-chat-route` AI Gateway Model applies
+  `ai-llm-as-judge` for the scoring pass
 - the current route shape is:
   - candidate model: `gpt-4o-mini`
   - judge model: `gemini-2.5-flash`
@@ -1981,7 +2040,9 @@ Loki:    http://localhost:3100/
 Grafana is pre-provisioned with:
 
 - a Loki datasource
-- a dashboard called `Kong Governance Overview`
+- a Prometheus datasource for native AI Gateway metrics
+- the default dashboard `AA-Demo-2 AI Gateway OpenTelemetry`
+- the legacy `Kong Governance Overview` dashboard, retained only for historical reference
 
 The default Grafana credentials are:
 
@@ -2066,9 +2127,9 @@ Stop the stack:
 docker compose down
 ```
 
-## Observability
+## Legacy Loki dashboard reference
 
-Kong now sends gateway logs to Loki through a global `http-log` plugin. The plugin reformats each gateway log line into Loki's `streams` payload and adds a small set of low-cardinality labels so Grafana queries stay useful.
+The remaining material in this section documents the retired `http-log`-based dashboard. It is not the default observability implementation for AI Gateway 2.0.
 
 ### Loki labels
 

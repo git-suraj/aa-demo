@@ -916,7 +916,7 @@ function labelForLoadBalancingPreset(mode, preset) {
     return preset === "creative_marketing" ? "Creative / Marketing" : "Support / Operational";
   }
   if (mode === "model_based") {
-    return preset === "complex_analysis" ? "Complex -> OpenAI 4o mini" : "Simple -> Gemini 2.5 Flash";
+    return preset === "complex_analysis" ? "Complex -> gpt-4o-mini" : "Simple -> gemini-2.5-flash";
   }
   return "Focused Probe";
 }
@@ -931,8 +931,8 @@ function configureOptionalModelNode(scenario = activeScenario || "normal") {
   }
   if (isModelBasedRoutingScenario(scenario)) {
     selectorNodeLabel.textContent = "Selector";
-    selectorNodeTitle.textContent = "OpenAI o3-mini";
-    selectorNodeDescription.textContent = "Kong calls this selector model first, then routes the real request to OpenAI 4o mini or Gemini 2.5 Flash.";
+    selectorNodeTitle.textContent = "o3-mini";
+    selectorNodeDescription.textContent = "Kong calls this selector Model first, then routes the real request to gpt-4o-mini or gemini-2.5-flash.";
     return;
   }
   selectorNodeLabel.textContent = "Judge";
@@ -1024,7 +1024,7 @@ function nodeInfoDetails(target, scenario = activeScenario || "normal") {
       ]),
     },
     openai: {
-      title: t("nodeDetails.openai.title", null, "OpenAI 4o mini"),
+      title: t("nodeDetails.openai.title", null, "gpt-4o-mini"),
       intro: t("nodeDetails.openai.intro", null, "This is the primary orchestrator model path in the standard run."),
       plainEnglish: tList("nodeDetails.openai.plainEnglish", null, [
         "Kong routes orchestrator planning and summary calls here in the normal flow.",
@@ -1058,12 +1058,12 @@ function nodeInfoDetails(target, scenario = activeScenario || "normal") {
           plainEnglish: [
             "Kong sends the user prompt here before the final provider call.",
             "The selector returns only simple or complex.",
-            "Kong uses that answer to route the real request to OpenAI 4o mini or Gemini 2.5 Flash.",
+            "Kong uses that answer to route the real request to gpt-4o-mini or gemini-2.5-flash.",
           ],
           why: "It makes model-tier routing visible as a separate decision step at the gateway layer.",
           config: [
             ["Scenario", "Model-Based Routing"],
-            ["Selector model", "OpenAI o3-mini"],
+            ["Selector target", "o3-mini (OpenAI)"],
             ["Returns", "simple or complex"],
           ],
         }
@@ -1208,8 +1208,10 @@ function policyDetailsForScenario(scenario) {
         ["UI access", "Key-auth using the UI consumer key"],
         ["Agent-to-agent", "AI A2A Proxy handles discovery and message/stream execution"],
         ["Tool exposure", "AI MCP Proxy exposes only the allowed tools per consumer group"],
-        ["Orchestrator LLM route", "AI Proxy Advanced to OpenAI 4o mini"],
-        ["Sub-agent LLM route", "AI Proxy Advanced to Gemini 2.5 Flash"],
+        ["Orchestrator AI Gateway Model", "ai-orchestrator-chat-route: gpt-4o-mini (OpenAI)"],
+        ["Sub-agent AI Gateway Model", "ai-subagent-chat-route: gemini-2.5-flash (Gemini)"],
+        ["Access", "demo-key-auth identity provider"],
+        ["Agent metering", "aa-demo-2-agent-llm-metering is attached to each agent Consumer"],
       ]),
     },
     load_balancing: {
@@ -1217,7 +1219,7 @@ function policyDetailsForScenario(scenario) {
       intro: currentLoadBalancingMode() === "semantic"
         ? t("policies.loadBalancing.intro.semantic", null, "Kong semantically routes the prompt to the most relevant model target before any provider call is made.")
         : currentLoadBalancingMode() === "model_based"
-          ? "Kong asks a selector model whether the request is simple or complex, then routes complex prompts to OpenAI 4o mini and simple prompts to Gemini 2.5 Flash."
+          ? "Kong asks a selector Model whether the request is simple or complex, then routes complex prompts to gpt-4o-mini and simple prompts to gemini-2.5-flash."
           : t("policies.loadBalancing.intro.failover", null, "Kong tries the primary OpenAI path first, then fails over to Gemini when that path is configured to fail."),
       plainEnglish: currentLoadBalancingMode() === "semantic"
         ? tList("policies.loadBalancing.plainEnglish.semantic", null, [
@@ -1229,7 +1231,7 @@ function policyDetailsForScenario(scenario) {
           ? [
             "The orchestrator makes one focused probe request through Kong.",
             "Kong sends the prompt to a selector route that returns only simple or complex.",
-            "Kong rewrites the request body with that tier and routes complex prompts to OpenAI 4o mini and simple prompts to Gemini 2.5 Flash.",
+            "Kong calls the final tier Model: complex prompts use gpt-4o-mini and simple prompts use gemini-2.5-flash.",
           ]
           : tList("policies.loadBalancing.plainEnglish.failover", null, [
               "The orchestrator makes one focused probe request through Kong.",
@@ -1244,10 +1246,10 @@ function policyDetailsForScenario(scenario) {
       config: currentLoadBalancingMode() === "semantic"
         ? tList("policies.loadBalancing.config.semantic", null, [
             ["Mode", "Semantic Load Balancing"],
-            ["Prompt Preset", `${labelForLoadBalancingPreset("semantic", currentLoadBalancingPromptPreset())} (${currentLoadBalancingPromptPreset() === "creative_marketing" ? "routes to Gemini 2.5 Flash" : "routes to OpenAI 4o mini"})`],
-            ["Support target", "OpenAI 4o mini"],
+            ["Prompt Preset", `${labelForLoadBalancingPreset("semantic", currentLoadBalancingPromptPreset())} (${currentLoadBalancingPromptPreset() === "creative_marketing" ? "routes to gemini-2.5-flash" : "routes to gpt-4o-mini"})`],
+            ["Support target", "gpt-4o-mini (OpenAI)"],
             ["Creative target", "Gemini 2.5 Flash"],
-            ["Plugin", "AI Proxy Advanced"],
+            ["AI Gateway Model", "ai-orchestrator-semantic-load-balance-demo-chat-route"],
             ["Balancer algorithm", "semantic"],
             ["Embedding model", "text-embedding-3-small"],
             ["Vector store", "Redis"],
@@ -1256,17 +1258,18 @@ function policyDetailsForScenario(scenario) {
           ? [
             ["Mode", "Model-Based Routing"],
             ["Prompt Preset", labelForLoadBalancingPreset("model_based", currentLoadBalancingPromptPreset())],
-            ["Selector route", "OpenAI o3-mini classifier"],
-            ["Complex tier", "OpenAI 4o mini"],
-            ["Simple tier", "Gemini 2.5 Flash"],
-            ["Plugins", "Datakit + AI Prompt Decorator + AI Proxy Advanced"],
-            ["Routing key", "model_alias complex/simple"],
+            ["Router Model", "model-based-router"],
+            ["Attached policy", "datakit"],
+            ["Selector Model", "ai-orchestrator-model-selector-chat-route: o3-mini"],
+            ["Selector policy", "ai-prompt-decorator"],
+            ["Complex Model", "complex: gpt-4o-mini (OpenAI)"],
+            ["Simple Model", "simple: gemini-2.5-flash (Gemini)"],
           ]
           : tList("policies.loadBalancing.config.failover", null, [
               ["Mode", "LLM Failover"],
-              ["Primary model", "OpenAI 4o mini"],
-              ["Fallback model", "Gemini 2.5 Flash"],
-              ["Plugin", "AI Proxy Advanced"],
+              ["AI Gateway Model", "ai-orchestrator-failover-demo-chat-route"],
+              ["Primary target", "gpt-4o-mini (OpenAI)"],
+              ["Fallback target", "gemini-2.5-flash (Gemini)"],
               ["Balancer algorithm", "priority"],
               ["Retries", "3"],
               ["Configured triggers", "error, timeout, invalid_header, http_403, http_404, http_429, http_500, http_502, http_503, http_504, non_idempotent"],
@@ -1282,9 +1285,9 @@ function policyDetailsForScenario(scenario) {
       ]),
       why: t("policies.llmFailover.why", null, "It shows model resilience at the gateway layer instead of in application code."),
       config: tList("policies.llmFailover.config", null, [
-        ["Primary model", "OpenAI 4o mini"],
-        ["Fallback model", "Gemini 2.5 Flash"],
-        ["Plugin", "AI Proxy Advanced"],
+        ["AI Gateway Model", "ai-orchestrator-failover-demo-chat-route"],
+        ["Primary target", "gpt-4o-mini (OpenAI)"],
+        ["Fallback target", "gemini-2.5-flash (Gemini)"],
       ]),
     },
     token_limit: {
@@ -1296,7 +1299,7 @@ function policyDetailsForScenario(scenario) {
         ? [
             "The cost route is protected by AI Rate Limiting Advanced with consumer-scoped plugins.",
             "consumer1 is limited to $5 and consumer2 is limited to $10 over the same time window.",
-            "Each play sends one OpenAI 4o mini request for the selected consumer.",
+            "Each play sends one gpt-4o-mini request for the selected consumer.",
             "Replay the scene to consume more budget until Kong returns HTTP 429 for that consumer.",
             "Grafana can then show per-consumer calls, tokens, and accumulated cost from the gateway logs.",
           ]
@@ -1316,15 +1319,17 @@ function policyDetailsForScenario(scenario) {
             ["Selected consumer", currentTokenLimitConsumer()],
             ["consumer1 budget", "$5"],
             ["consumer2 budget", "$10"],
-            ["Policy", "AI Rate Limiting Advanced"],
+            ["AI Gateway Model", "ai-orchestrator-consumer-cost-demo-chat-route"],
+            ["Attached policy", "ai-rate-limiting-advanced or ai-rate-limiting-advanced-2, by Consumer"],
             ["Count strategy", "cost"],
-            ["Model", "OpenAI 4o mini"],
+            ["Target", "gpt-4o-mini (OpenAI)"],
             ["Window", "300 seconds"],
           ]
         : tList("policies.tokenLimit.config", null, [
             ["Subscene", "Model Token Rate Limit"],
             ["Protected route", "Orchestrator AI route"],
-            ["Policy", "AI Rate Limiting Advanced"],
+            ["AI Gateway Model", "ai-orchestrator-token-demo-chat-route"],
+            ["Attached policy", "ai-rate-limiting-advanced-3"],
             ["Provider key", "openai"],
             ["Configured limit", "1 request"],
             ["Window", "300 seconds"],
@@ -1342,7 +1347,8 @@ function policyDetailsForScenario(scenario) {
       why: t("policies.promptEnhancement.why", null, "It shows how response style and prompt standards can be enforced centrally."),
       config: [
         ["Mode", currentPromptEnhancementMode() === "plain" ? t("policies.promptEnhancement.mode.plain", null, "Without Decorator") : t("policies.promptEnhancement.mode.decorated", null, "With Decorator")],
-        ["Policy", "AI Prompt Decorator"],
+        ["AI Gateway Model", "ai-orchestrator-prompt-enhance-demo-chat-route"],
+        ["Attached policy", "ai-prompt-decorator-2"],
         ["Prepended message 1", t("policies.promptEnhancement.prependedMessage1", null, "You are responding under AI governance enforced by Kong Gateway.")],
         ["Prepended message 2", t("policies.promptEnhancement.prependedMessage2", null, "Executive escalation policy with sections: Situation, Risk, Actions, Next Checkpoint")],
         ["Additional requirements", t("policies.promptEnhancement.additionalRequirements", null, "Enterprise-safe tone, regulatory mention when relevant, end with confidence score and owner")],
@@ -1359,7 +1365,8 @@ function policyDetailsForScenario(scenario) {
       ]),
       why: t("policies.promptCompression.why", null, "It shows prompt-size governance, lower token cost, and context-window control at the gateway layer."),
       config: [
-        ["Policy", "AI Prompt Compressor"],
+        ["AI Gateway Model", currentPromptCompressionMode() === "token_count" ? "ai-orchestrator-prompt-compress-token-demo-chat-route" : "ai-orchestrator-prompt-compress-ratio-demo-chat-route"],
+        ["Attached policy", currentPromptCompressionMode() === "token_count" ? "ai-prompt-compressor-2" : "ai-prompt-compressor"],
         ["Compression service", "ai-compress-service:8080"],
         ["Mode", currentPromptCompressionMode() === "token_count" ? t("policies.promptCompression.mode.tokenCount", null, "By Token Count (100 tokens)") : t("policies.promptCompression.mode.ratio", null, "By Ratio (50%)")],
         ["Applied route", currentPromptCompressionMode() === "token_count" ? t("policies.promptCompression.appliedRoute.tokenCount", null, "Prompt-compress token-count orchestrator route") : t("policies.promptCompression.appliedRoute.ratio", null, "Prompt-compress ratio orchestrator route")],
@@ -1375,7 +1382,8 @@ function policyDetailsForScenario(scenario) {
       ]),
       why: t("policies.semanticGuard.why", null, "It shows semantic allow-or-deny behavior based on meaning, not simple keyword matching."),
       config: tList("policies.semanticGuard.config", null, [
-        ["Policy", "AI Semantic Prompt Guard"],
+        ["AI Gateway Model", "ai-orchestrator-semantic-guard-demo-chat-route"],
+        ["Attached policy", "ai-semantic-prompt-guard"],
         ["Embedding model", "text-embedding-3-small"],
         ["Vector store", "Redis"],
         ["Distance metric", "cosine"],
@@ -1395,7 +1403,8 @@ function policyDetailsForScenario(scenario) {
       ]),
       why: t("policies.semanticCache.why", null, "It demonstrates lower cost and faster reuse for semantically similar prompts."),
       config: tList("policies.semanticCache.config", null, [
-        ["Policy", "AI Semantic Cache"],
+        ["AI Gateway Model", "ai-orchestrator-semantic-cache-demo-chat-route"],
+        ["Attached policy", "ai-semantic-cache"],
         ["Embedding model", "text-embedding-3-small"],
         ["Vector store", "Redis"],
         ["Distance metric", "cosine"],
@@ -1413,8 +1422,9 @@ function policyDetailsForScenario(scenario) {
       ]),
       why: t("policies.llmAsJudge.why", null, "It shows gateway-side evaluation without adding app-side scoring code."),
       config: tList("policies.llmAsJudge.config", null, [
-        ["Policy", "AI LLM as Judge"],
-        ["Candidate model", "OpenAI 4o mini"],
+        ["AI Gateway Model", "ai-orchestrator-judge-demo-chat-route"],
+        ["Attached policy", "ai-llm-as-judge"],
+        ["Candidate target", "gpt-4o-mini (OpenAI)"],
         ["Judge model", "Gemini 2.5 Flash"],
         ["Judge rubric", "Accurate, relevant to the request, and useful for the user's stated task"],
         ["Prompt presets", "Escalation Triage, KongHQ Overview, or Kong vs Apigee/AWS"],
@@ -1431,7 +1441,8 @@ function policyDetailsForScenario(scenario) {
       ]),
       why: t("policies.piiSanitizer.why", null, "It shows privacy controls at the gateway rather than in every application and prompt path."),
       config: [
-        ["Policy", "AI Sanitizer"],
+        ["AI Gateway Model", `ai-orchestrator-pii-${currentPiiMode()}-demo-chat-route`],
+        ["Attached policy", currentPiiMode() === "placeholder" ? "ai-sanitizer-2" : currentPiiMode() === "synthetic" ? "ai-sanitizer-3" : "ai-sanitizer"],
         ["Protected directions", "Request and response"],
         ["Protected categories", "all_and_credentials"],
         ["Backend service", "ai-pii-service:8080"],
@@ -1448,10 +1459,11 @@ function policyDetailsForScenario(scenario) {
       ]),
       why: t("policies.rag.why", null, "It shows retrieval and grounding at the gateway layer instead of in application code."),
       config: tList("policies.rag.config", null, [
-        ["Policy", "AI RAG Injector"],
+        ["AI Gateway Model", currentRagMode() === "after" ? "ai-orchestrator-rag-after-demo-chat-route" : "ai-orchestrator-rag-before-demo-chat-route"],
+        ["Attached policy", currentRagMode() === "after" ? "ai-rag-injector" : "None (baseline)"],
         ["Vector store", "Redis"],
         ["Embedding model", "text-embedding-3-large"],
-        ["Answer model", "OpenAI 4o mini"],
+        ["Answer target", "gpt-4o-mini (OpenAI)"],
         ["Demo shape", "Before and after comparison"],
       ]),
     },
@@ -1465,7 +1477,8 @@ function policyDetailsForScenario(scenario) {
       ]),
       why: t("policies.lakeraGuard.why", null, "It demonstrates external policy enforcement at the gateway without app-side moderation code."),
       config: tList("policies.lakeraGuard.config", null, [
-        ["Policy", "AI Lakera Guard"],
+        ["AI Gateway Model", "ai-orchestrator-lakera-demo-chat-route"],
+        ["Attached policy", "ai-lakera-guard"],
         ["Reveal failure categories", "true"],
         ["Log blocked content", "true"],
         ["Demo shape", "Single prompt, allow or block"],
@@ -1479,7 +1492,6 @@ function policyDetailsForScenario(scenario) {
 function renderPolicyModal() {
   const details = nodeInfoDetails("kong", activeScenario || "normal");
   renderInfoModal(details);
-  void hydrateKongPolicyModal(details);
 }
 
 function renderInfoModal(details) {
@@ -1633,45 +1645,8 @@ function renderPolicyConfig(details) {
   return `${baseConfig}${sections.join("")}`;
 }
 
-function currentKongScenarioQuery() {
-  const params = new URLSearchParams();
-  params.set("token_limit_mode", currentTokenLimitMode());
-  params.set("token_limit_consumer", currentTokenLimitConsumer());
-  params.set("load_balancing_mode", currentLoadBalancingMode());
-  params.set("prompt_enhancement_mode", currentPromptEnhancementMode());
-  params.set("pii_sanitizer_mode", currentPiiMode());
-  params.set("prompt_compression_mode", currentPromptCompressionMode());
-  params.set("rag_mode", playForm.elements.namedItem("rag_mode")?.value || "before");
-  params.set("lakera_mode", currentLakeraMode());
-  return params;
-}
-
-async function hydrateKongPolicyModal(baseDetails) {
-  try {
-    const query = currentKongScenarioQuery();
-    const response = await fetch(
-      `${config.apiBaseUrl}/scenario-config/${encodeURIComponent(activeScenario || "normal")}?${query.toString()}`,
-      {
-        headers: { apikey: config.apiKey },
-      },
-    );
-    if (!response.ok) {
-      throw new Error(`Failed to load Kong scenario config (${response.status})`);
-    }
-    const gatewayInventory = await response.json();
-    renderInfoModal({
-      ...baseDetails,
-      gatewayInventory,
-    });
-  } catch (error) {
-    renderInfoModal({
-      ...baseDetails,
-      config: [
-        ...baseDetails.config,
-        ["Live gateway config", error.message],
-      ],
-    });
-  }
+function currentRagMode() {
+  return playForm.elements.namedItem("rag_mode")?.value || "before";
 }
 
 function createTraceNode(id, level, title, summary, meta = {}) {
@@ -2936,7 +2911,7 @@ function upsertLlmNode(payload) {
       nodeId,
       traceState.nodes[parentId].level + 1,
       `LLM call: ${payload.stage}`,
-      "AI Proxy Advanced request routed through Kong.",
+      "Native AI Gateway Model request routed through Kong.",
       { actor, timestamp: payload.timestamp },
     );
     addTraceNode(node, parentId);
@@ -3815,7 +3790,7 @@ function scheduleModelBasedProviderPreview(delayMs = modelBasedSelectorDelayMs()
       "Predicted model route",
       provider === "gemini"
         ? "The selector is expected to classify this request as simple and route it to Gemini 2.5 Flash."
-        : "The selector is expected to classify this request as complex and route it to OpenAI 4o mini.",
+        : "The selector is expected to classify this request as complex and route it to gpt-4o-mini.",
     );
     modelBasedSelectionTimer = null;
   }, delayMs);
@@ -3997,7 +3972,7 @@ function renderFinalOutput(result) {
         <strong>${t("outputModal.tokenLimit.title", null, "AI Token Rate Limit Probe")}</strong>
         <p class="output-section-copy">${
           tokenLimitProbe.mode === "consumer_cost"
-            ? `Created by the orchestrator in the consumer cost rate limit subscene. This run sends one OpenAI 4o mini request for ${escapeHtml(tokenLimitProbe.consumer || "the selected consumer")}. Replay the scene to keep consuming that consumer's configured dollar budget.`
+            ? `Created by the orchestrator in the consumer cost rate limit subscene. This run sends one gpt-4o-mini request for ${escapeHtml(tokenLimitProbe.consumer || "the selected consumer")}. Replay the scene to keep consuming that consumer's configured dollar budget.`
             : "Created by the orchestrator in the model token rate limit subscene. This run sends one request on the governed route. Replay the scene to consume the route budget and trigger the block."
         }</p>
         <div class="output-subgrid">
@@ -4170,7 +4145,7 @@ function renderFinalOutput(result) {
             <span>${t("outputModal.judge.routeLabel", null, "Evaluation Route")}</span>
             ${renderDefinitionList([
               ["Scenario", "LLM as Judge"],
-              ["Candidate Models", "OpenAI 4o mini, Gemini 2.5 Flash"],
+              ["Candidate targets", "gpt-4o-mini (OpenAI), gemini-2.5-flash (Gemini)"],
               ["Judge Model", judgeProbe.judge_model || "Gemini 2.5 Flash"],
             ])}
             ${renderTextBlock(judgeProbe.scoring_note)}

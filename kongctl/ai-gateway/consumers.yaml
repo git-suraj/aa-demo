@@ -8,7 +8,7 @@ ai_gateway_consumers:
         name: consumer1-credential-2
         ref: consumer1-credential-2
         type: api-key
-        api_key: !env AIGW_CONSUMER1_API_KEY
+        api_key: !secret {source: !env AIGW_CONSUMER1_API_KEY}
     display_name: consumer1
     name: consumer1
     policies:
@@ -21,7 +21,7 @@ ai_gateway_consumers:
         name: consumer2-credential-2
         ref: consumer2-credential-2
         type: api-key
-        api_key: !env AIGW_CONSUMER2_API_KEY
+        api_key: !secret {source: !env AIGW_CONSUMER2_API_KEY}
     display_name: consumer2
     name: consumer2
     policies:
@@ -34,7 +34,7 @@ ai_gateway_consumers:
         name: internal-router-credential-2
         ref: internal-router-credential-2
         type: api-key
-        api_key: !env AIGW_INTERNAL_ROUTER_API_KEY
+        api_key: !secret {source: !env AIGW_INTERNAL_ROUTER_API_KEY}
     display_name: internal-router
     name: internal-router
     ref: internal-router
@@ -45,9 +45,13 @@ ai_gateway_consumers:
         name: orchestrator-agent-credential-2
         ref: orchestrator-agent-credential-2
         type: api-key
-        api_key: !env AIGW_ORCHESTRATOR_API_KEY
-    display_name: orchestrator-agent
+        api_key: !secret {source: !env AIGW_ORCHESTRATOR_API_KEY}
+    display_name: aa-demo-2-orchestrator
+    # Keep this immutable native identifier so its existing credential remains
+    # attached. The display name and billing customer are aa-demo-2-orchestrator.
     name: orchestrator-agent
+    policies:
+      - aa-demo-2-agent-llm-metering
     ref: orchestrator-agent
     type: api-key
   - ai_gateway: !ref ai-gateway#id
@@ -56,9 +60,11 @@ ai_gateway_consumers:
         name: success-agent-credential-2
         ref: success-agent-credential-2
         type: api-key
-        api_key: !env AIGW_SUCCESS_AGENT_API_KEY
-    display_name: success-agent
+        api_key: !secret {source: !env AIGW_SUCCESS_AGENT_API_KEY}
+    display_name: aa-demo-2-success-agent
     name: success-agent
+    policies:
+      - aa-demo-2-agent-llm-metering
     ref: success-agent
     type: api-key
   - ai_gateway: !ref ai-gateway#id
@@ -67,9 +73,11 @@ ai_gateway_consumers:
         name: support-agent-credential-2
         ref: support-agent-credential-2
         type: api-key
-        api_key: !env AIGW_SUPPORT_AGENT_API_KEY
-    display_name: support-agent
+        api_key: !secret {source: !env AIGW_SUPPORT_AGENT_API_KEY}
+    display_name: aa-demo-2-support-agent
     name: support-agent
+    policies:
+      - aa-demo-2-agent-llm-metering
     ref: support-agent
     type: api-key
   - ai_gateway: !ref ai-gateway#id
@@ -78,7 +86,7 @@ ai_gateway_consumers:
         name: ui-client-credential-2
         ref: ui-client-credential-2
         type: api-key
-        api_key: !env AIGW_UI_API_KEY
+        api_key: !secret {source: !env AIGW_UI_API_KEY}
     display_name: ui-client
     name: ui-client
     ref: ui-client

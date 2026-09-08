@@ -161,8 +161,8 @@
               <article class="topology-node openai-node" data-node="openai">
                 <button class="node-info-button" data-info-target="openai" type="button" aria-label="View OpenAI model details" data-i18n-aria-label="nodes.openai.infoAria">+</button>
                 <span class="node-label" data-i18n="nodes.openai.label">Primary</span>
-                <h3 data-i18n="nodes.openai.title">OpenAI 4o mini</h3>
-                <p data-i18n="nodes.openai.desc">Primary orchestrator model via AI Proxy Advanced.</p>
+                <h3 data-i18n="nodes.openai.title">gpt-4o-mini</h3>
+                <p data-i18n="nodes.openai.desc">Primary orchestrator target through the native AI Gateway Model.</p>
               </article>
 
               <article class="topology-node gemini-node" data-node="gemini">
@@ -491,7 +491,7 @@
           <section id="llm-judge-controls" class="probe-controls" hidden>
             <article class="probe-card">
               <span class="probe-label" data-i18n="probe.llmJudge.label">LLM as Judge Request</span>
-              <p class="probe-copy" data-i18n="probe.llmJudge.copy">Choose the prompt payload to send through Kong for the LLM as Judge scenario. Kong AI Proxy Advanced sends the request through candidate models, then the judge model scores the response for accuracy.</p>
+              <p class="probe-copy" data-i18n="probe.llmJudge.copy">Choose the prompt payload to send through Kong for the LLM as Judge scenario. The native AI Gateway Model sends the request to the candidate target, then the judge model scores the response for accuracy.</p>
               <div class="preset-options" id="llm-judge-prompt-options">
                 <label class="preset-option">
                   <input type="radio" name="llm_judge_prompt_choice" value="escalation" checked />

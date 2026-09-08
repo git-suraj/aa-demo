@@ -5,7 +5,7 @@ Create or reuse a Konnect MCP Registry and publish an MCP server entry to it.
 Defaults are geared toward this repo's local demo setup:
 - registry name: aa-demo-mcp-registry
 - display name: AA Demo MCP Registry
-- remote URL: http://localhost:8000/mock-mcp
+- remote URL: http://host.docker.internal:8002/mock-mcp
 - remote transport: streamable-http
 
 This targets the Konnect Labs MCP Registry API documented here:
@@ -32,7 +32,10 @@ DEFAULT_REGISTRY_DESCRIPTION = "Registry for internal AA demo MCP servers routed
 DEFAULT_MCP_NAME = "com.aa-demo/mock-mcp"
 DEFAULT_MCP_DESCRIPTION = "AA Demo MCP server exposed through Kong AI MCP Proxy."
 DEFAULT_MCP_VERSION = "1.0.0"
-DEFAULT_REMOTE_URL = "http://localhost:8000/mock-mcp"
+# This is the published port of the native AI Gateway data plane. ``localhost``
+# is rejected by AI Builder validation and would otherwise describe the legacy
+# gateway on port 8000.
+DEFAULT_REMOTE_URL = "http://host.docker.internal:8002/mock-mcp"
 DEFAULT_REMOTE_TYPE = "streamable-http"
 
 

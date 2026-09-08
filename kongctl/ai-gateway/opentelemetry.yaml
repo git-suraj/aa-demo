@@ -1,0 +1,51 @@
+_defaults:
+  kongctl:
+    namespace: ai-gateway-policies
+
+# Global scope instruments every native AI Gateway request, including Model and
+# MCP Server traffic. The collector then fans those spans out to Jaeger and
+# Opik; it is reachable by this Docker service name only inside the compose
+# network.
+ai_gateway_policies:
+  - ai_gateway: !ref ai-gateway#id
+    config:
+      access_logs:
+        # AI Gateway writes the completed ai.* record before this policy's log
+        # phase. Payload logging is enabled on our Models and MCP Server, so the
+        # OTLP access log includes LLM/MCP request and response payloads.
+        endpoint: http://otel-collector:4318/v1/logs
+        custom_attributes_by_lua:
+          demo.run_id: return kong.request.get_header("x-demo-run-id")
+          demo.context_id: return kong.request.get_header("x-demo-context-id")
+          demo.scenario: return kong.request.get_header("x-demo-scenario-mode")
+          kong.auth.consumer.name: |
+            local consumer = kong.client.get_consumer()
+            return consumer and consumer.username or nil
+          # Preserve prompts and responses for the demo, but never persist a
+          # provider credential that can appear in an upstream query string.
+          kong.gen_ai.proxy.tried_targets: return nil
+          kong.upstream.uri: return nil
+          telemetry.source: return "aa-demo-2-ai-gateway"
+          url.query: return nil
+      metrics:
+        enable_ai_metrics: true
+        enable_consumer_attribute: true
+        enable_latency_metrics: true
+        enable_request_metrics: true
+        endpoint: http://otel-collector:4318/v1/metrics
+      propagation:
+        default_format: w3c
+        extract:
+          - w3c
+        inject:
+          - w3c
+      resource_attributes:
+        service.name: aa-demo-ai-gateway
+        service.namespace: aa-demo
+      traces_endpoint: http://otel-collector:4318/v1/traces
+    display_name: AA-Demo-2 OpenTelemetry
+    enabled: true
+    global: true
+    name: aa-demo-2-opentelemetry
+    ref: aa-demo-2-opentelemetry
+    type: opentelemetry

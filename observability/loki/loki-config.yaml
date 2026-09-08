@@ -28,6 +28,11 @@ schema_config:
 analytics:
   reporting_enabled: false
 
+# Native AI Gateway OTEL access logs contain the completed ai.* record. Keep
+# that structured payload intact for the demo's LLM and MCP input/output log
+# streams instead of dropping records at Loki's default 128-field limit.
+limits_config:
+  max_structured_metadata_entries_count: 512
+
 ruler:
   alertmanager_url: http://localhost:9093
-

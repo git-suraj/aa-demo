@@ -5,6 +5,9 @@ _defaults:
 ai_gateway_identity_providers:
   - ai_gateway: !ref ai-gateway#id
     config:
+      # DataKit's internal model calls must retain the caller's key so the
+      # native Consumer (and therefore the billing subject) is unchanged.
+      hide_credentials: false
       key_in_header: true
       key_in_query: true
       key_names:
