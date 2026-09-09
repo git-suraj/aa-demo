@@ -30,7 +30,7 @@ from services.common.llm import OrchestratorLLM
 from services.common.kong_gateway_inventory import consumer_objects
 from services.common.kong_gateway_inventory import find_route_object
 from services.common.kong_gateway_inventory import load_kong_gateway_inventory
-from services.common.mcp_client import KongMCPClient
+from services.common.mcp_client import KongMCPClient, MCPError
 from services.common.trace import TraceBroker
 from services.common.trace_context import current_trace_headers
 from services.common.trace_context import reset_trace_headers
@@ -96,6 +96,7 @@ class PlayRequest(BaseModel):
     pii_sanitizer_mode: str = "placeholder"
     rag_mode: str = "before"
     lakera_mode: str = "content_moderation"
+    opa_tool: str = "draft_customer_reply"
     llm_judge_prompt_choice: str = "escalation"
     llm_judge_user_prompt: str | None = None
     system_prompt: str | None = None
@@ -1702,6 +1703,34 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         context_id=context_id,
     )
     await emit_component(run_id, "kong", "active")
+    if scenario == "opa_authorization":
+        tool = request.opa_tool
+        arguments = (
+            {"query_account_name": "Acme Health", "query_csm": "Maya Patel", "query_issue_summary": request.issue_summary, "query_renewal_risk": "high", "query_technical_summary": request.product_issue}
+            if tool == "draft_customer_reply"
+            else {"query_account_name": "Acme Health", "query_owner": "Maya Patel", "query_due_date": "2026-09-10", "query_action_items": "Confirm ownership"}
+        )
+        await emit_component(run_id, "success-agent", "active", stage="opa_tool_probe")
+        await emit_component(run_id, "opa", "active", stage="opa_authorization")
+        await emit(run_id, "tool_call_started", actor="success-agent", tool=tool, input=arguments)
+        client = KongMCPClient("http://kong-dp:8000/opa-mcp", "success-demo-key", "success-agent", run_id=run_id, context_id=context_id)
+        try:
+            result = await client.call_tool(tool, arguments)
+            outcome, message = "allowed", "OPA allowed the MCP tool call."
+        except MCPError as exc:
+            result = {"message": str(exc)}
+            outcome, message = "denied", "OPA denied the MCP tool call before the upstream API was invoked."
+        await emit_component(run_id, "opa", "complete" if outcome == "allowed" else "error", stage="opa_authorization")
+        await emit(run_id, "policy_event", actor="success-agent", stage="opa_authorization", summary=message, input={"tool": tool, "arguments": arguments}, output={"outcome": outcome, "opa_result": result})
+        response = {"headline": f"OPA {outcome} {tool}", "governance_scenario": scenario, "policy_outcome": "blocked" if outcome == "denied" else "allowed", "opa_probe": {"tool": tool, "outcome": outcome, "input": arguments, "output": result}, "executive_brief": {"summary": message}, "recommended_summary": message, "available_tools": [tool], "called_mcp_tools": [tool] if outcome == "allowed" else [], "tool_plan_steps": []}
+        await emit(run_id, "final_response", headline=response["headline"], output=response)
+        completed_components = ["success-agent", "kong"]
+        if outcome == "allowed":
+            completed_components.append("mcp")
+        for component in completed_components:
+            await emit_component(run_id, component, "complete")
+        await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=response)
+        return {"run_id": run_id, "context_id": context_id, "result": response}
     await emit(
         run_id,
         "scenario_selected",

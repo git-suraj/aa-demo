@@ -393,6 +393,8 @@ services:
       - ./kong/plugins/trace-enricher:/usr/local/share/lua/5.1/kong/plugins/trace-enricher:ro
       - ./kong/plugins/workflow-graph:/usr/local/share/lua/5.1/kong/plugins/workflow-graph:ro
     depends_on:
+      opa:
+        condition: service_started
       jaeger:
         condition: service_started
       loki:
@@ -410,6 +412,30 @@ services:
       success-agent:
         condition: service_started
       mock-api:
+        condition: service_started
+
+  opa:
+    image: openpolicyagent/opa:1.9.0
+    container_name: opa
+    restart: unless-stopped
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "--config-file=/config/opa.yaml", "/policies"]
+    expose:
+      - "8181"
+    volumes:
+      - ./opa/opa.yaml:/config/opa.yaml:ro
+      - ./opa/policies:/policies:ro
+    depends_on:
+      opa-audit:
+        condition: service_started
+
+  opa-audit:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+    container_name: opa-audit
+    command: ["uvicorn", "services.opa_audit.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    depends_on:
+      loki:
         condition: service_started
 
   ai-gateway-dp:

@@ -141,6 +141,7 @@ recreate the demo.
 Important links used in the demo:
 
 - Kong MCP remote: [http://localhost:8000/mock-mcp](http://localhost:8000/mock-mcp)
+- Focused OPA MCP remote: [http://localhost:8000/opa-mcp](http://localhost:8000/opa-mcp)
 - Support agent card through Kong: [http://localhost:8000/support-agent/.well-known/agent-card.json](http://localhost:8000/support-agent/.well-known/agent-card.json)
 - Success agent card through Kong: [http://localhost:8000/success-agent/.well-known/agent-card.json](http://localhost:8000/success-agent/.well-known/agent-card.json)
 
@@ -241,6 +242,8 @@ AI Builder Catalog registrations:
   - Kong handles sub-agent discovery and A2A `message/stream` execution between the orchestrator and the support/success agents.
 - `AI MCP Proxy`
   - Kong exposes the backing REST API as MCP tools and enforces per-agent access to those tools.
+- `OPA`
+  - Kong sends the focused MCP tool request to Open Policy Agent. OPA returns the runtime allow or deny decision before Kong invokes the MCP tool.
 - `AI Gateway Models`
   - Kong routes orchestrator and sub-agent LLM traffic to configured provider targets and applies native policies where a scenario requires them.
 - `AI Semantic Prompt Guard`
@@ -976,6 +979,7 @@ The route path is selected by the `governance_scenario` field sent in the `Play`
 - `lakera_guard` -> `/ai/orchestrator-lakera-demo/chat/completions`
 - `rag` -> `/ai/orchestrator-rag-before-demo/chat/completions` or `/ai/orchestrator-rag-after-demo/chat/completions`
 - `pii_sanitizer` -> `/ai/orchestrator-pii-placeholder-demo/chat/completions`, `/ai/orchestrator-pii-synthetic-demo/chat/completions`, or `/ai/orchestrator-pii-block-demo/chat/completions`
+- `opa_authorization` -> `/opa-mcp` (a focused MCP authorization route, not an AI route)
 
 So the basis for route selection is simple: whichever governance scenario the user selected in the UI is included in the request payload, and the orchestrator picks the matching Kong AI route before it starts its own LLM steps.
 
@@ -1497,6 +1501,41 @@ Behind the scenes:
 - Kong writes the Lakera decision into the trace and audit logs so the UI and Grafana can show the policy outcome directly
 
 This mode is useful for showing third-party safety enforcement at the gateway layer without adding moderation code to the application.
+
+### 12. OPA Authorization
+
+This focused scene shows Kong authorizing an MCP tool call with Open Policy Agent (OPA). It does not run the normal LLM or multi-agent workflow.
+
+In **Compliance & Abuse Prevention**, select **OPA Authorization**, then select one of these tools:
+
+- `Draft customer reply`: allowed. Kong sends the MCP request attributes to OPA, receives an allow decision, and then invokes the MCP tool.
+- `Create follow-up task`: denied. Kong returns OPA's `403` response and does not invoke the MCP tool or its backing API.
+
+The focused topology shows Success Agent, Kong Gateway, OPA, MCP Tools, and Grafana/Loki. OPA is above Kong because Kong, not the agent, calls OPA.
+
+Behind the scenes:
+
+- the Success Agent calls Kong at `/opa-mcp` with the `success-agent` Consumer credential
+- the Route applies `key-auth`, the OPA plugin, then `ai-mcp-proxy`
+- the OPA plugin sends the authenticated Consumer and parsed MCP JSON-RPC request to `http://opa:8181/v1/data/aa_demo/mcp/decision`
+- OPA returns `result.allow`
+  - when `true`, Kong continues to `ai-mcp-proxy`
+  - when `false`, the OPA plugin returns `result.status` and `result.message` directly to the agent; the MCP upstream is not called
+- the OPA decision log receiver writes the request input and decision result to Loki with `component="opa"` and the demo run ID
+
+The OPA plugin configuration is in [kong/deck/kong.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml). The Rego policy is in [opa/policies/mcp.rego](/Users/surajpillai/Documents/work/demos/learn/aa-demo/opa/policies/mcp.rego).
+
+#### View the OPA policy
+
+From the repository, view the policy source:
+
+```sh
+sed -n '1,220p' opa/policies/mcp.rego
+```
+
+The Compose service mounts this file read-only at `/policies/mcp.rego`, so the repository file is the policy that the running OPA service evaluates.
+
+In Grafana, open **Kong Governance Overview** and use the **OPA Authorization Decisions** panel. Filter by the run ID to see OPA's parsed MCP request input and the `result.allow` decision. Credentials are redacted before the decision event is written to Loki.
 
 ## What happens when Play is pressed
 

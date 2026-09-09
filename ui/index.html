@@ -113,6 +113,7 @@
                 <path id="line-kong-lakera" d="M830 410 L1004 410 L1004 560 L1090 560" />
                 <path id="line-kong-compress" d="M830 428 L980 428 L980 620 L1090 620" />
                 <path id="line-kong-pii" d="M830 420 L942 420 L942 560 L1090 560" />
+                <path id="line-kong-opa" d="M700 280 L700 256" />
                 <path id="line-kong-observability" class="telemetry-line" d="M700 456 L700 860" />
               </svg>
 
@@ -191,6 +192,12 @@
                 <span class="node-label" data-i18n="nodes.lakera.label">Policy Guard</span>
                 <h3 data-i18n="nodes.lakera.title">Lakera</h3>
                 <p data-i18n="nodes.lakera.desc">Used by Kong AI Lakera Guard to inspect prompts before they can reach the model.</p>
+              </article>
+
+              <article class="topology-node opa-node scenario-optional" data-node="opa">
+                <span class="node-label">Policy Decision</span>
+                <h3>Open Policy Agent</h3>
+                <p>Decides whether Kong may invoke the selected MCP tool.</p>
               </article>
 
               <article class="topology-node pii-node scenario-optional" data-node="pii-service">
@@ -326,6 +333,7 @@
               <input name="incident_id" value="INC-1007" />
             </label>
             <input type="hidden" name="governance_scenario" value="normal" />
+            <input type="hidden" name="opa_tool" value="draft_customer_reply" />
             <input type="hidden" name="load_balancing_mode" value="failover" />
             <input type="hidden" name="load_balancing_prompt_preset" value="support_operational" />
             <input type="hidden" name="token_limit_mode" value="consumer" />

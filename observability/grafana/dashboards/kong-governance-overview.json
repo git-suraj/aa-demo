@@ -137,6 +137,43 @@
         "type": "loki",
         "uid": "grafana-loki"
       },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 148
+      },
+      "id": 330,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showCommonLabels": true,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "{component=\"opa\",run_id!=\"\",run_id=~\"$run_id\"} | json",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "OPA Authorization Decisions",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {

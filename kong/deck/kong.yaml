@@ -92,7 +92,7 @@ plugins:
           local header_message_id = tostring(request_headers['x-demo-message-id'] or request_headers['X-Demo-Message-Id'] or '')
           local scenario_mode = tostring(request_headers['x-demo-scenario-mode'] or request_headers['X-Demo-Scenario-Mode'] or '')
           local component = 'gateway'
-          if route['name'] == 'mock-mcp-route' then
+          if route['name'] == 'mock-mcp-route' or route['name'] == 'opa-mcp-route' then
             component = 'mcp'
           elseif string.sub(service['name'] or '', 1, 3) == 'ai-' then
             component = 'llm'
@@ -1800,6 +1800,101 @@ services:
                   acl:
                     allow:
                       - support-tools
+                - name: draft_customer_reply
+                  description: Draft a customer-facing reply
+                  method: GET
+                  path: /api/drafts/customer-reply/preview
+                  annotations:
+                    title: Draft Customer Reply
+                  parameters:
+                    - name: account_name
+                      in: query
+                      required: true
+                      schema:
+                        type: string
+                    - name: csm
+                      in: query
+                      required: true
+                      schema:
+                        type: string
+                    - name: issue_summary
+                      in: query
+                      required: true
+                      schema:
+                        type: string
+                    - name: renewal_risk
+                      in: query
+                      required: true
+                      schema:
+                        type: string
+                    - name: technical_summary
+                      in: query
+                      required: true
+                      schema:
+                        type: string
+                  acl:
+                    allow:
+                      - success-tools
+                - name: create_followup_task
+                  description: Create a success-team follow-up task
+                  method: GET
+                  path: /api/tasks/followup/preview
+                  annotations:
+                    title: Create Follow-up Task
+                  parameters:
+                    - name: account_name
+                      in: query
+                      required: true
+                      schema:
+                        type: string
+                    - name: owner
+                      in: query
+                      required: true
+                      schema:
+                        type: string
+                    - name: due_date
+                      in: query
+                      required: true
+                      schema:
+                        type: string
+                    - name: action_items
+                      in: query
+                      required: false
+                      schema:
+                        type: string
+                  acl:
+                    allow:
+                      - success-tools
+
+      # Dedicated focused-demo route. Keeping OPA here means the normal MCP
+      # route remains unchanged while the scene shows only the policy decision.
+      - name: opa-mcp-route
+        paths:
+          - /opa-mcp
+        strip_path: false
+        plugins:
+          - name: key-auth
+            config:
+              key_names:
+                - apikey
+          - name: opa
+            config:
+              opa_host: opa
+              opa_port: 8181
+              opa_path: /v1/data/aa_demo/mcp/decision
+              include_consumer_in_opa_input: true
+              include_parsed_json_body_in_opa_input: true
+          - name: ai-mcp-proxy
+            config:
+              logging:
+                log_payloads: true
+                log_statistics: true
+              mode: conversion-listener
+              include_consumer_groups: true
+              server:
+                timeout: 10000
+              max_request_body_size: 8192
+              tools:
                 - name: draft_customer_reply
                   description: Draft a customer-facing reply
                   method: GET

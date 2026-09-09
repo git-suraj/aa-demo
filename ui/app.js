@@ -20,6 +20,7 @@ const flowStageTitle = document.getElementById("flow-stage-title");
 const flowStageDetail = document.getElementById("flow-stage-detail");
 const topologyActivity = document.getElementById("topology-activity");
 const topologyActivityName = document.getElementById("topology-activity-name");
+const topology = document.querySelector(".topology");
 const traceTree = document.getElementById("trace-tree");
 const presetOptions = document.getElementById("preset-options");
 const challengeOptions = document.getElementById("challenge-options");
@@ -121,6 +122,7 @@ const nodes = {
   "judge-model": document.querySelector('[data-node="judge-model"]'),
   redis: document.querySelector('[data-node="redis"]'),
   lakera: document.querySelector('[data-node="lakera"]'),
+  opa: document.querySelector('[data-node="opa"]'),
   compressor: document.querySelector('[data-node="compressor"]'),
   "pii-service": document.querySelector('[data-node="pii-service"]'),
   observability: document.querySelector('[data-node="observability"]'),
@@ -143,6 +145,7 @@ const lineMap = {
   "kong-judge": document.getElementById("line-kong-judge"),
   "kong-redis": document.getElementById("line-kong-redis"),
   "kong-lakera": document.getElementById("line-kong-lakera"),
+  "kong-opa": document.getElementById("line-kong-opa"),
   "kong-compress": document.getElementById("line-kong-compress"),
   "kong-pii": document.getElementById("line-kong-pii"),
   "kong-observability": document.getElementById("line-kong-observability"),
@@ -581,6 +584,7 @@ function labelForScenario(scenario) {
     pii_sanitizer: "scenario.pii_sanitizer",
     rag: "scenario.rag",
     lakera_guard: "scenario.lakera_guard",
+    opa_authorization: "scenario.opa_authorization",
   };
   const fallbacks = {
     normal: "Normal",
@@ -595,6 +599,7 @@ function labelForScenario(scenario) {
     pii_sanitizer: "PII Sanitization",
     rag: "RAG",
     lakera_guard: "Lakera Policy Guard",
+    opa_authorization: "OPA Authorization",
   };
   const key = keys[scenario] || keys.normal;
   return t(key, null, fallbacks[scenario] || fallbacks.normal);
@@ -602,7 +607,7 @@ function labelForScenario(scenario) {
 
 const challengeSceneMap = {
   change_management_observability: ["normal"],
-  compliance_abuse_prevention: ["prompt_enhancement", "semantic_guard", "pii_sanitizer", "lakera_guard"],
+  compliance_abuse_prevention: ["prompt_enhancement", "semantic_guard", "pii_sanitizer", "lakera_guard", "opa_authorization"],
   budget_management: ["prompt_compression", "semantic_cache"],
   hallucinations_relevancy: ["rag", "llm_as_judge"],
   traffic_management: ["load_balancing"],
@@ -694,6 +699,15 @@ const sceneSubsceneMap = {
       { value: "content_moderation", label: () => t("probe.lakera.mode.contentModeration", null, "Content Moderation") },
       { value: "prompt_defense", label: () => t("probe.lakera.mode.promptDefense", null, "Prompt Defense") },
       { value: "data_leak_prevention", label: () => t("probe.lakera.mode.dataLeak", null, "Data Leak Prevention") },
+    ],
+  },
+  opa_authorization: {
+    inputName: "opa_tool_choice",
+    hiddenField: "opa_tool",
+    defaultValue: "draft_customer_reply",
+    options: [
+      { value: "draft_customer_reply", label: () => "Draft customer reply — allowed" },
+      { value: "create_followup_task", label: () => "Create follow-up task — denied" },
     ],
   },
 };
@@ -842,6 +856,9 @@ function applySubsceneChoice(scenario, subscene) {
     renderRagPayloads();
   } else if (scenario === "lakera_guard") {
     renderLakeraPayload(true, subscene);
+  } else if (scenario === "opa_authorization") {
+    const field = playForm.elements.namedItem("opa_tool");
+    if (field) field.value = subscene;
   }
   renderSubsceneOptions(scenario);
   if (policyModal?.open && activeScenario === scenario) {
@@ -1483,6 +1500,26 @@ function policyDetailsForScenario(scenario) {
         ["Log blocked content", "true"],
         ["Demo shape", "Single prompt, allow or block"],
       ]),
+    },
+    opa_authorization: {
+      title: "OPA Authorization",
+      intro: "Kong asks Open Policy Agent whether the selected MCP tool call is permitted before Kong invokes the tool.",
+      plainEnglish: [
+        "The Success Agent sends its selected tool call to Kong at the focused /opa-mcp route.",
+        "Kong sends the authenticated Consumer and parsed MCP JSON-RPC body to OPA.",
+        "OPA allow continues to AI MCP Proxy. OPA deny returns the configured HTTP response from Kong and never reaches MCP.",
+      ],
+      why: "It shows attribute-based MCP authorization at the gateway without putting policy code in the agent.",
+      config: [
+        ["Focused Route", "/opa-mcp"],
+        ["Plugin sequence", "key-auth → opa → ai-mcp-proxy"],
+        ["OPA decision path", "/v1/data/aa_demo/mcp/decision"],
+        ["OPA input", "Authenticated Consumer and parsed MCP JSON-RPC body"],
+        ["Allowed tool", "draft_customer_reply"],
+        ["Denied tool", "create_followup_task (HTTP 403)"],
+        ["Policy source", "opa/policies/mcp.rego"],
+        ["Decision evidence", "Grafana: OPA Authorization Decisions"],
+      ],
     },
   };
 
@@ -2581,6 +2618,9 @@ function scenarioPromptOverrides(payload) {
     payload.user_prompt = lakeraPayload?.value?.trim() || defaultPayload.user_prompt;
     return payload;
   }
+  if (scenario === "opa_authorization") {
+    return { governance_scenario: scenario, opa_tool: payload.opa_tool || "draft_customer_reply", run_id: payload.run_id, context_id: payload.context_id };
+  }
   return payload;
 }
 
@@ -3208,7 +3248,9 @@ function resetTopology() {
   hideTopologyActivity();
   updateScenarioInfraVisibility(activeScenario);
   markNode("kong", "active");
-  markNode("mcp", "active");
+  if (activeScenario !== "opa_authorization") {
+    markNode("mcp", "active");
+  }
 }
 
 function markNode(name, state) {
@@ -3271,6 +3313,12 @@ function applyComponentState(component, state) {
     }
     if (component === "kong") {
       markNode("kong", state);
+      return;
+    }
+    if (component === "opa") {
+      markNode("kong", state === "complete" ? "active" : state);
+      markNode("opa", state);
+      markLine("kong-opa", state);
       return;
     }
     if (component === "orchestrator" || component === "support-agent" || component === "success-agent") {
@@ -3385,15 +3433,20 @@ function updateScenarioInfraVisibility(scenario) {
   const showPii = scenario === "pii_sanitizer";
   const showCompression = scenario === "prompt_compression";
   const showLakera = scenario === "lakera_guard";
-  const focusedScenario = showLoadBalancing || showTokenLimit || showPromptEnhancement || showRedis || showJudge || showPii || showCompression || showLakera;
+  const showOpa = scenario === "opa_authorization";
+  const focusedScenario = showLoadBalancing || showTokenLimit || showPromptEnhancement || showRedis || showJudge || showPii || showCompression || showLakera || showOpa;
 
   configureOptionalModelNode(scenario);
+  topology?.classList.toggle("opa-focused-scene", showOpa);
 
   setScenarioVisibility("redis", showRedis);
   setLineVisibility("kong-redis", showRedis);
 
   setScenarioVisibility("lakera", showLakera);
   setLineVisibility("kong-lakera", showLakera);
+
+  setScenarioVisibility("opa", showOpa);
+  setLineVisibility("kong-opa", showOpa);
 
   setScenarioVisibility("judge-model", showJudge);
   setLineVisibility("kong-judge", showJudge);
@@ -3403,22 +3456,28 @@ function updateScenarioInfraVisibility(scenario) {
 
   setScenarioVisibility("pii-service", showPii);
   setLineVisibility("kong-pii", showPii);
-  setScenarioVisibility("openai", true);
-  setLineVisibility("kong-openai", true);
-  setScenarioVisibility("orchestrator", !showConsumerCostTokenLimit);
-  setLineVisibility("kong-orchestrator", !showConsumerCostTokenLimit);
+  setScenarioVisibility("openai", !showOpa);
+  setLineVisibility("kong-openai", !showOpa);
+  setScenarioVisibility("orchestrator", !showConsumerCostTokenLimit && !showOpa);
+  setLineVisibility("kong-orchestrator", !showConsumerCostTokenLimit && !showOpa);
 
   setScenarioVisibility("gemini", scenario === "load_balancing" || scenario === "llm_failover" || (!focusedScenario));
   setLineVisibility("kong-gemini", scenario === "load_balancing" || scenario === "llm_failover" || (!focusedScenario));
 
   setScenarioVisibility("support-agent", !focusedScenario);
-  setScenarioVisibility("success-agent", !focusedScenario);
-  setScenarioVisibility("mcp", !focusedScenario);
+  setScenarioVisibility("success-agent", showOpa || !focusedScenario);
+  setScenarioVisibility("mcp", showOpa || !focusedScenario);
   setScenarioVisibility("backend-api", !focusedScenario);
+  setScenarioVisibility("user", !showOpa);
+  setScenarioVisibility("ui", !showOpa);
   setLineVisibility("kong-support", !focusedScenario);
-  setLineVisibility("kong-success", !focusedScenario);
-  setLineVisibility("kong-mcp", !focusedScenario);
+  setLineVisibility("kong-success", showOpa || !focusedScenario);
+  setLineVisibility("kong-mcp", showOpa || !focusedScenario);
   setLineVisibility("kong-backend", !focusedScenario);
+  setLineVisibility("user-ui", !showOpa);
+  setLineVisibility("ui-kong", !showOpa);
+  setScenarioVisibility("observability", true);
+  setLineVisibility("kong-observability", true);
 }
 
 function activateActorPath(actor, state = "active") {
@@ -3438,6 +3497,14 @@ function activateActorPath(actor, state = "active") {
 }
 
 function activateToolPath(actor, state = "active") {
+  if (activeScenario === "opa_authorization") {
+    activateActorPath(actor, state);
+    markNode("opa", state);
+    markNode("mcp", state);
+    markLine("kong-opa", state);
+    markLine("kong-mcp", state);
+    return;
+  }
   activateActorPath(actor, state);
   markNode("mcp", state);
   markNode("backend-api", state);
@@ -4596,6 +4663,14 @@ function handleTraceEvent(payload) {
       upsertToolNode(payload);
       setFlowStage(`Tool call: ${payload.tool}`, `${labelForActor(payload.actor || "orchestrator")} is calling an MCP tool through Kong.`);
       showTopologyActivity(payload.tool);
+      if (traceState.scenario === "opa_authorization") {
+        // OPA decides before Kong proxies to MCP. Keep the MCP path dormant
+        // until the allow response arrives in the policy_event below.
+        activateActorPath(payload.actor || "success-agent", "active");
+        markNode("opa", "active");
+        markLine("kong-opa", "active");
+        break;
+      }
       setMcpPathState("active", 0, payload.actor || "orchestrator");
       break;
 
@@ -4886,6 +4961,7 @@ function handleTraceEvent(payload) {
         pii_sanitizer_blocked: "Kong PII sanitization blocked request",
         llm_as_judge: "LLM as Judge evaluation applied",
         lakera_blocked: "Kong Lakera Guard blocked request",
+        opa_authorization: "OPA authorization decision",
         failover_primary_failed: "Primary model path failed",
         failover: "Kong selected fallback model",
         semantic_load_balancing: "Kong selected the semantic route target",
@@ -4942,6 +5018,26 @@ function handleTraceEvent(payload) {
       if (payload.stage === "token_limit") {
         applyTokenLimitBlockedPath();
         setFlowStage("Token policy blocked request", payload.summary || "Kong AI token governance blocked the OpenAI path.");
+      }
+      if (payload.stage === "opa_authorization") {
+        const outcome = payload.output?.outcome || "denied";
+        const state = outcome === "allowed" ? "complete" : "error";
+        if (outcome === "allowed") {
+          // OPA has allowed the call, so show the MCP invocation briefly.
+          setMcpPathState("complete", 1000, "success-agent");
+        } else {
+          hideTopologyActivity();
+          activateActorPath("success-agent", state);
+          nodes.mcp?.classList.remove("active", "complete", "error");
+          lineMap["kong-mcp"]?.classList.remove("active", "complete", "error");
+        }
+        markNode("opa", state);
+        markLine("kong-opa", state);
+        setObservabilityPath("complete");
+        setFlowStage(
+          `OPA ${outcome} the tool call`,
+          payload.summary || "Kong received the OPA decision before sending a request upstream.",
+        );
       }
       if (payload.stage === "semantic_load_balancing") {
         activateActorPath("orchestrator", "active");

@@ -832,6 +832,7 @@ html[lang="ko"] .topbar h1 {
 .redis-node,
 .judge-node,
 .lakera-node,
+.opa-node,
 .compress-node,
 .pii-node,
 .observability-node {
@@ -862,6 +863,28 @@ html[lang="ko"] .topbar h1 {
   background:
     linear-gradient(180deg, rgba(255, 120, 120, 0.14), rgba(255, 120, 120, 0.04)),
     rgba(11, 13, 18, 0.94);
+}
+
+.opa-node {
+  top: 78px;
+  left: calc(50% - 110px);
+  right: auto;
+  border-color: rgba(243, 179, 84, 0.62);
+  background:
+    linear-gradient(180deg, rgba(243, 179, 84, 0.15), rgba(243, 179, 84, 0.04)),
+    rgba(11, 13, 18, 0.94);
+}
+
+/* The OPA scene intentionally reduces the normal topology to four actors.
+   These fixed coordinates align the focused Kong → OPA path with the SVG. */
+.topology.opa-focused-scene .kong-node {
+  top: 280px;
+}
+
+.topology.opa-focused-scene .opa-node {
+  top: 78px;
+  left: calc(50% - 110px);
+  right: auto;
 }
 
 .compress-node {
@@ -2314,6 +2337,16 @@ html[lang="ko"] .topbar h1 {
   .kong-node {
     top: 340px;
     left: calc(50% - 130px);
+  }
+
+  .topology.opa-focused-scene .kong-node {
+    top: 280px;
+  }
+
+  .topology.opa-focused-scene .opa-node {
+    top: 78px;
+    left: calc(50% - 110px);
+    right: auto;
   }
 
   .orchestrator-node {
