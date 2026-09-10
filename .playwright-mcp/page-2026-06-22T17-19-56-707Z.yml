@@ -1,0 +1,172 @@
+- generic [active] [ref=e1]:
+  - generic:
+    - generic:
+      - generic:
+        - banner [ref=e2]:
+          - generic [ref=e3]:
+            - menu [ref=e4]:
+              - menuitem [ref=e5] [cursor=pointer]:
+                - generic [ref=e8]:
+                  - img [ref=e10]
+                  - textbox "Lookup by Trace ID..." [ref=e12]
+              - menuitem "About Jaeger" [ref=e13] [cursor=pointer]:
+                - generic [ref=e15]:
+                  - text: About Jaeger
+                  - img [ref=e16]
+            - menu [ref=e18]:
+              - menuitem "JAEGER UI" [ref=e19] [cursor=pointer]:
+                - link "JAEGER UI" [ref=e21]:
+                  - /url: /
+              - menuitem "Search" [ref=e22] [cursor=pointer]:
+                - link "Search" [ref=e24]:
+                  - /url: /search
+              - menuitem "Compare" [ref=e25] [cursor=pointer]:
+                - link "Compare" [ref=e27]:
+                  - /url: /trace/...
+              - menuitem "System Architecture" [ref=e28] [cursor=pointer]:
+                - link "System Architecture" [ref=e30]:
+                  - /url: /dependencies
+              - menuitem "Monitor" [ref=e31] [cursor=pointer]:
+                - link "Monitor" [ref=e33]:
+                  - /url: /monitor
+              - menuitem [disabled]:
+                - img:
+                  - img
+        - main [ref=e34]:
+          - generic [ref=e35]:
+            - generic [ref=e37]:
+              - generic [ref=e38]:
+                - 'switch "aa- demo- kong: kong 763fa13" [checked] [ref=e39] [cursor=pointer]':
+                  - img [ref=e40]
+                  - 'heading "aa- demo- kong: kong 763fa13" [level=1] [ref=e42]':
+                    - generic [ref=e43]:
+                      - generic [ref=e44]: aa-
+                      - generic [ref=e45]: demo-
+                      - generic [ref=e46]: "kong:"
+                      - generic [ref=e47]: kong
+                    - generic [ref=e48]: 763fa13
+                - generic [ref=e50]:
+                  - textbox "Find..." [ref=e52]
+                  - img [ref=e54] [cursor=pointer]
+                  - button [disabled] [ref=e57]:
+                    - img
+                  - button [disabled] [ref=e58]:
+                    - img
+                  - button [disabled] [ref=e59]:
+                    - img
+                  - button [disabled] [ref=e60]:
+                    - img
+                - button "⌘" [ref=e61] [cursor=pointer]:
+                  - generic [ref=e62]: ⌘
+                - button "Trace Timeline" [ref=e63] [cursor=pointer]:
+                  - generic [ref=e64]: Trace Timeline
+                  - img [ref=e65]
+              - list [ref=e67]:
+                - listitem [ref=e68]:
+                  - text: Trace Start
+                  - strong [ref=e69]:
+                    - generic [ref=e70]: June 22 2026, 22:46:11.771
+                - listitem [ref=e71]:
+                  - separator [ref=e72]
+                - listitem [ref=e73]:
+                  - text: Duration
+                  - strong [ref=e74]: 1.81ms
+                - listitem [ref=e75]:
+                  - separator [ref=e76]
+                - listitem [ref=e77]:
+                  - text: Services
+                  - strong [ref=e78]: "1"
+                - listitem [ref=e79]:
+                  - separator [ref=e80]
+                - listitem [ref=e81]:
+                  - text: Depth
+                  - strong [ref=e82]: "2"
+                - listitem [ref=e83]:
+                  - separator [ref=e84]
+                - listitem [ref=e85]:
+                  - text: Total Spans
+                  - strong [ref=e86]: "10"
+              - generic [ref=e87]:
+                - generic [ref=e88]:
+                  - generic [ref=e89]: 0μs
+                  - generic [ref=e90]: 451.75μs
+                  - generic [ref=e91]: 903.5μs
+                  - generic [ref=e92]: 1.36ms
+                  - generic [ref=e93]: 1.81ms
+                - img [ref=e97]
+            - generic [ref=e108]:
+              - generic [ref=e109]:
+                - generic [ref=e110]:
+                  - heading "Service & Operation" [level=3] [ref=e111]
+                  - generic [ref=e112]:
+                    - img [ref=e113] [cursor=pointer]
+                    - img [ref=e115] [cursor=pointer]
+                    - img [ref=e117] [cursor=pointer]
+                    - img [ref=e120] [cursor=pointer]
+                - generic [ref=e123]:
+                  - generic:
+                    - generic:
+                      - generic: 0μs
+                    - generic:
+                      - generic: 451.75μs
+                    - generic:
+                      - generic: 903.5μs
+                    - generic:
+                      - generic: 1.36ms
+                    - generic:
+                      - generic: 1.81ms
+              - generic [ref=e128]:
+                - generic:
+                  - generic [ref=e130]:
+                    - generic [ref=e132]:
+                      - switch [checked] [ref=e133]:
+                        - img [ref=e136]
+                      - switch "aa-demo-kong kong" [ref=e138] [cursor=pointer]:
+                        - generic [ref=e139]: aa-demo-kong
+                        - text: kong
+                    - generic [ref=e143] [cursor=pointer]: 1.45ms
+                  - generic [ref=e154]:
+                    - switch "aa-demo-kong kong.rewrite.plugin.post-function" [ref=e160] [cursor=pointer]:
+                      - generic [ref=e161]: aa-demo-kong
+                      - text: kong.rewrite.plugin.post-function
+                    - generic [ref=e165] [cursor=pointer]: 4μs
+                  - generic [ref=e168]:
+                    - switch "aa-demo-kong kong.router" [ref=e174] [cursor=pointer]:
+                      - generic [ref=e175]: aa-demo-kong
+                      - text: kong.router
+                    - generic [ref=e179] [cursor=pointer]: 27μs
+                  - generic [ref=e182]:
+                    - switch "aa-demo-kong kong.access.plugin.prompt-capture" [ref=e188] [cursor=pointer]:
+                      - generic [ref=e189]: aa-demo-kong
+                      - text: kong.access.plugin.prompt-capture
+                    - generic [ref=e193] [cursor=pointer]: 84μs
+                  - generic [ref=e196]:
+                    - switch "aa-demo-kong kong.access.plugin.key-auth" [ref=e202] [cursor=pointer]:
+                      - generic [ref=e203]: aa-demo-kong
+                      - text: kong.access.plugin.key-auth
+                    - generic [ref=e207] [cursor=pointer]: 111μs
+                  - generic [ref=e210]:
+                    - switch "aa-demo-kong kong.access.plugin.ai-mcp-proxy" [ref=e216] [cursor=pointer]:
+                      - generic [ref=e217]: aa-demo-kong
+                      - text: kong.access.plugin.ai-mcp-proxy
+                    - generic [ref=e221] [cursor=pointer]: 320μs
+                  - generic [ref=e224]:
+                    - switch "aa-demo-kong kong.header_filter.plugin.ai-mcp-proxy" [ref=e230] [cursor=pointer]:
+                      - generic [ref=e231]: aa-demo-kong
+                      - text: kong.header_filter.plugin.ai-mcp-proxy
+                    - generic [ref=e235] [cursor=pointer]: 46μs
+                  - generic [ref=e238]:
+                    - switch "aa-demo-kong kong.header_filter.plugin.opentelemetry" [ref=e244] [cursor=pointer]:
+                      - generic [ref=e245]: aa-demo-kong
+                      - text: kong.header_filter.plugin.opentelemetry
+                    - generic [ref=e249] [cursor=pointer]: 3μs
+                  - generic [ref=e252]:
+                    - switch "aa-demo-kong kong.header_filter.plugin.post-function" [ref=e258] [cursor=pointer]:
+                      - generic [ref=e259]: aa-demo-kong
+                      - text: kong.header_filter.plugin.post-function
+                    - generic [ref=e263] [cursor=pointer]: 1μs
+                  - generic [ref=e266]:
+                    - 'switch "aa-demo-kong orchestrator tool: notifications/initialized" [ref=e272] [cursor=pointer]':
+                      - generic [ref=e273]: aa-demo-kong
+                      - text: "orchestrator tool: notifications/initialized"
+                    - generic [ref=e277] [cursor=pointer]: 4μs

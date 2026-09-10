@@ -1,0 +1,26 @@
+deck gateway dump -o kong.yaml --konnect-addr https://us.api.konghq.com --konnect-token "$KONNECT_TOKEN" --konnect-control-plane-name 'AA Demo'
+
+
+https://docs.google.com/presentation/d/1C_bgx1DR6ThpV3PmJtvr2NXS1T-sDB5ix_tLIDSfF-A/edit?slide=id.p11#slide=id.p11
+move everything first and test
+
+
+update project to setup everything -
+- new cp id - ca3017a2-68a7-4932-a5e4-e21db21c4541
+- new binary - kong/kong-ai-gateway-dev:2.0.1-rc.3
+- kongctl to setup everything
+
+
+kongctl install extension Kong/kongctl-ext-aigw-converter
+deck gateway dump \       
+  --konnect-token $KONNECT_TOKEN \
+  --konnect-control-plane-name $KONNECT_CONTROL_PLANE_NAME \
+  > kong.yaml
+kongctl convert ai-gateway kong.yaml \
+  --from deck \
+  --to kongctl \
+  --gateway-name support-ai \
+  --output-file ai-gateway.yaml
+
+
+docker compose up -d --build

@@ -1,6 +1,6 @@
 # Kong Agent + MCP Demo
 
-This repo is a Konnect hybrid demo for showing how Kong governs both agent-to-agent traffic and MCP tool traffic.
+This repo is a self-hosted Kong Gateway Enterprise hybrid demo for showing how Kong governs both agent-to-agent traffic and MCP tool traffic. Its Postgres-backed control plane and data plane both run in Docker; it does not use Konnect at runtime.
 
 ## Contents
 
@@ -15,7 +15,6 @@ This repo is a Konnect hybrid demo for showing how Kong governs both agent-to-ag
 - [Runtime shape](#runtime-shape)
 - [AI Gateway Models and policies](#ai-gateway-models-and-policies)
 - [Observability](#observability)
-  - [Konnect observability](#konnect-observability)
   - [Loki and Grafana](#loki-and-grafana)
   - [Jaeger](#jaeger)
   - [Opik](#opik)
@@ -29,9 +28,8 @@ Before running the demo, make sure you have:
 - `curl`
 - `jq`
 - `deck`
-- a valid Konnect personal access token with access to the target control plane
+- a valid Kong Gateway Enterprise license in `KONG_LICENSE_DATA`
 - a populated `.env` file based on [.env.example](/Users/surajpillai/Documents/work/demos/learn/aa-demo/.env.example)
-- MCP registry enabled in your org
 
 Cloudsmith-hosted supporting images required for focused governance scenarios:
 
@@ -55,17 +53,12 @@ Notes:
   - password: `1Passwordfrom shared vault`
 - Prompt Compression requires memory. I have configured 16GB for docker
 
-Minimum environment values required for the main startup flow:
+Minimum environment values required for the self-hosted startup flow:
 
-- `KONNECT_TOKEN`
-- `KONNECT_CONTROL_PLANE_NAME`
-- `KONG_CLUSTER_CONTROL_PLANE`
-- `KONG_CLUSTER_SERVER_NAME`
 - `OPENAI_API_KEY`
 - `DECK_OPENAI_API_KEY`
 - `DECK_GEMINI_API_KEY`
 - `DECK_REDIS_HOST`
-- `KONNECT_SYSTEM_TOKEN` (a `spat_...` system-account token for Metering & Billing)
 
 Additional environment values required for optional/full governance scenarios:
 
@@ -74,11 +67,8 @@ Additional environment values required for optional/full governance scenarios:
 
 What the startup flow expects:
 
-- the startup script can create or reuse a Konnect control plane
-  - default name: `AA Demo`
-  - override with `KONNECT_CONTROL_PLANE_NAME`
-- Konnect custom plugin schemas can be created or updated
-- `deck gateway sync` can write the current Kong config to the target control plane
+- Docker can start Postgres, the local Kong control plane, and a local Kong data plane
+- `deck gateway sync` can write the converted Kong primitives to the local Admin API
 - the local stack can start ports for:
   - UI `8000`
   - Grafana `3001`
@@ -91,14 +81,14 @@ What the startup flow expects:
 2. Start the full demo stack:
 
 ```bash
-./scripts/start_rag_demo.sh
+./scripts/start_self_hosted_demo.sh
 ```
 
 To start the stack and then run one normal, synthetic orchestration through MCP,
 A2A, and the configured LLMs, run:
 
 ```bash
-./scripts/start_rag_demo.sh NORMAL_RUN
+./scripts/start_self_hosted_demo.sh NORMAL_RUN
 ```
 
 The run is off by default. Set `RUN_NORMAL_DEMO_TIMEOUT_SECONDS` to change its
@@ -107,17 +97,10 @@ automation.
 
 The startup flow will:
 
-- create or reuse the Konnect control plane
-  - default name: `AA Demo`
-  - override with `KONNECT_CONTROL_PLANE_NAME`
-- sync custom plugin schemas
-- run `deck gateway sync`
-- upload Konnect dashboards
-- register the Konnect MCP registry entry
-- register AI Builder Catalog snapshots for the native AI Gateway Models and MCP Server
+- generate a local shared-mTLS certificate for the hybrid nodes
+- start Postgres, the self-hosted Kong control plane, the data plane, and the demo services
+- run `deck gateway sync` against `http://localhost:8001`
 - ingest the demo RAG knowledge base
-- apply the AA-Demo-2 native AI Gateway entities
-- create the AA-Demo-2 agent token-meter, billing customers, and subscriptions
 - optionally run one normal orchestration when started with `NORMAL_RUN`
 
 3. Open the main local surfaces:
@@ -130,13 +113,76 @@ The startup flow will:
 4. If you need to stop everything:
 
 ```bash
-./scripts/stop_rag_demo.sh
+docker compose --profile opik down
 ```
 
-Shutdown removes the AA-Demo-2 Metering & Billing and AI Builder Catalog records,
-then all managed AI Gateway child entities before stopping Docker. It retains the pre-created
-`AA-Demo-2` AI Gateway and its data-plane attachment so the next startup can
-recreate the demo.
+To delete the local control-plane database too, add `-v`; the next startup will recreate it and resync the declarative configuration.
+
+## Bring Konnect AI Gateway changes into the local deployment
+
+Develop AI Gateway 2.0 entities on `ai-gateway-2-0` and apply them to Konnect as usual. When you want to bring those changes into this self-hosted branch, use Konnect as the conversion source and commit only the reviewed, secret-free Gateway state.
+
+You need `kongctl`, `yq`, Docker, and a Konnect personal access token with access to the AI Gateway. Keep the token in your shell or your Konnect development environment. Do not add it to this branch's `.env`.
+
+1. Export the current AI Gateway and its child entities to a temporary directory. Replace `KONNECT_PAT` with an environment variable that contains your token.
+
+```sh
+mkdir -p /tmp/aa-demo-konnect-export
+kongctl dump declarative \
+  --resources=ai_gateways \
+  --include-child-resources \
+  --pat "$KONNECT_PAT" \
+  --output-file /tmp/aa-demo-konnect-export/konnect-ai-gateway.yaml
+```
+
+The export can contain provider credentials, observability tokens, and Consumer credentials. Treat it as sensitive and keep it out of Git.
+
+2. Extract the selected AI Gateway entity model. This demo has one AI Gateway, so the first entry is the intended source.
+
+```sh
+yq '.ai_gateways[0] | del(.ref, .display_name, .deployment_type, .data_plane_certificates, .kongctl)' \
+  /tmp/aa-demo-konnect-export/konnect-ai-gateway.yaml \
+  > /tmp/aa-demo-konnect-export/ai.yaml
+```
+
+3. Convert the AI Gateway 2.0 entity model to self-hosted Gateway primitives with the current decK image.
+
+```sh
+docker run --rm \
+  -v /tmp/aa-demo-konnect-export:/work \
+  -w /work \
+  kong/deck:latest \
+  file ai2kong \
+  --source ai.yaml \
+  --output-file kong.generated.yaml
+```
+
+4. Review `kong.generated.yaml` against [kong/deck/kong.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml). Copy the intended Service, Route, Consumer, Consumer Group, and Plugin changes into `kong/deck/kong.yaml`. Replace any exported credentials with its existing decK environment references, such as `DECK_OPENAI_API_KEY`. Confirm that Key Auth and request termination behavior remain present because the conversion can report an unresolved auth-strategy reference from the Konnect export.
+
+5. Validate and sync the reviewed state to the local control plane.
+
+```sh
+set -a
+source .env
+set +a
+source scripts/resolve_embeddings_env.sh
+deck file validate kong/deck/kong.yaml
+deck gateway sync --kong-addr http://localhost:8001 kong/deck/kong.yaml
+```
+
+6. Delete the temporary export after the review.
+
+```sh
+rm -rf /tmp/aa-demo-konnect-export
+```
+
+Verify the update through the local Admin API:
+
+```sh
+curl --fail http://localhost:8001/services
+```
+
+Kong documents this conversion as `deck file ai2kong`: AI Models become Services, Routes, and AI Proxy Advanced plugins; MCP Servers become AI MCP Proxy routes; A2A Agents become AI A2A Proxy routes; and policies become Kong Plugins at the equivalent scope. [Configure AI Gateway on-prem](https://developer.konghq.com/ai-gateway/configure-on-prem/).
 
 Important links used in the demo:
 
@@ -147,16 +193,16 @@ Important links used in the demo:
 
 ## What the project does
 
-This project demonstrates a small, visually clear agent system running behind Kong in Konnect hybrid mode.
+This project demonstrates a small, visually clear agent system running behind a self-hosted Kong Gateway Enterprise hybrid deployment.
 
 ## AI Gateway Models and policies
 
-The AI request paths use the AI Gateway 2.0 domain model. The managed unit is
-an **AI Gateway Model**, not a legacy Service, Route, or `ai-proxy-advanced`
-plugin. Each Model defines its path, provider targets, balancer, payload
-logging, access through `demo-key-auth`, and any attached native policy.
+The AI request paths use the self-hosted representation of AI Gateway 2.0.
+Each former AI Model is materialized as a Service, one or more Routes, and
+`ai-proxy-advanced`; AI MCP Servers use `ai-mcp-proxy`; A2A Agents use
+`ai-a2a-proxy`; and policies become Kong plugins at the equivalent scope.
 
-The dashboard’s Kong `+` button shows the active scenario's native Model names,
+The dashboard’s Kong `+` button shows the active scenario's model names,
 provider target names, and attached policies. See
 [AI Gateway Models and policies](docs/ai-gateway-models-and-policies.md) for
 the complete route-to-Model and policy mapping.
@@ -317,24 +363,19 @@ Diagram views:
 - `mock-api`: backing REST API for the 7 tools
 - `ai-llm-service`: LLM traffic routed through native AI Gateway Models
 - `redis-stack`: vector database backing the semantic guard scenario
-- `kong-dp`: Kong Gateway `3.14.0.1` in Konnect hybrid mode
+- `kong-database`: Postgres database used only by the local control plane
+- `kong-cp`: self-hosted Kong Gateway Enterprise control plane
+- `kong-dp`: self-hosted Kong Gateway Enterprise data plane
 
 ## Observability
 
 The demo exposes four main observability surfaces:
 
-- Konnect observability for managed analytics dashboards
 - Grafana for the native AI Gateway OpenTelemetry dashboard
 - Loki for request and response log streams
 - Prometheus for native AI Gateway metrics
 - Jaeger for raw OpenTelemetry trace trees
 - Opik for the synthetic workflow-oriented AI trace exported by Kong
-
-### Konnect observability
-
-- Konnect is used for control-plane-managed observability dashboards
-- the repo startup flow uploads the demo dashboard definitions into Konnect
-- this is the managed analytics surface for the demo, separate from local Grafana
 
 ### AI Gateway OpenTelemetry dashboard (default)
 
@@ -358,7 +399,7 @@ reset local observability or restart its Prometheus container. The latency
 panels show average duration per completed MCP tool call or model call in
 milliseconds, so they remain populated between requests.
 
-`Reset Observability` clears both local Loki log history and Prometheus metric history, then reloads Grafana. It does not alter Konnect, gateway, or billing data.
+`Reset Observability` clears both local Loki log history and Prometheus metric history, then reloads Grafana. It does not alter Gateway configuration.
 
 ### Jaeger
 
@@ -370,7 +411,7 @@ What is included:
   - `KONG_TRACING_INSTRUMENTATIONS=all`
   - `KONG_TRACING_SAMPLING_RATE=1.0`
 - a global Kong `opentelemetry` plugin in [kong/deck/kong.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml)
-- a global native AI Gateway OpenTelemetry policy in [kongctl/ai-gateway/opentelemetry.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kongctl/ai-gateway/opentelemetry.yaml), covering Models and MCP Servers on `ai-gateway-dp`
+- a global `opentelemetry` plugin in [kong/deck/kong.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml), covering the self-hosted AI plugin routes on `kong-dp`
 - a local OpenTelemetry Collector service in [docker-compose.yml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/docker-compose.yml)
 - collector config in [observability/otel-collector/config.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/observability/otel-collector/config.yaml)
 - a local Jaeger service in [docker-compose.yml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/docker-compose.yml)
@@ -1935,7 +1976,11 @@ The `mock-api` service is not published directly to the host in the default comp
 docker exec orchestrator curl -s http://mock-api:8000/customers/cust_acme
 ```
 
-## Files added in this scaffold
+## Legacy Konnect reference (not used by this branch)
+
+The remainder of this historical reference section documents the original Konnect setup. It is retained for comparison only. Use the self-hosted startup instructions above and [the on-prem deployment notes](kong/onprem/README.md); do not run the Konnect commands below on this branch.
+
+## Files added in the original Konnect scaffold
 
 - `docker-compose.yml`: local container topology
 - `.env.example`: hybrid mode environment placeholders

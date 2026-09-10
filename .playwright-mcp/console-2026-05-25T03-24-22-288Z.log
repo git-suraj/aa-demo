@@ -1,0 +1,3 @@
+[  163453ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:8000/orchestrator/trace/runs/1f592566-49bf-499f-a3a0-f70af85d685a:0
+[  214665ms] [ERROR] Failed to load resource: the server responded with a status of 400 (Bad Request) @ http://localhost:8000/ai/orchestrator-semantic-load-balance-demo/chat/completions:0
+[  318184ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/play:0

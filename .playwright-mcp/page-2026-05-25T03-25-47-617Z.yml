@@ -1,0 +1,232 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - img "Kong logo" [ref=e5]
+      - generic [ref=e6]:
+        - paragraph [ref=e7]: Kong AI Gateway Demo
+        - heading "Kong Unified Governance" [level=1] [ref=e8]
+        - paragraph [ref=e9]: "Kong governs the full data path: API traffic, events, agent orchestration, LLM routing, and MCP tool access all pass through the gateway with live trace visibility."
+        - generic "Kong governance highlights" [ref=e10]:
+          - generic [ref=e11]: AI routing and failover
+          - generic [ref=e12]: MCP tool exposure
+          - generic [ref=e13]: Agent AuthN/AuthZ
+          - generic [ref=e14]: Semantic and PII controls
+          - generic [ref=e15]: Live observability
+    - generic [ref=e16]:
+      - button "Scenes" [ref=e17] [cursor=pointer]
+      - button "View Diagrams" [ref=e18] [cursor=pointer]
+      - button "Reset Scene" [ref=e19] [cursor=pointer]
+      - button "Reset Observability" [ref=e20] [cursor=pointer]
+      - button "View Run Output" [ref=e21] [cursor=pointer]
+      - button "About this demo" [ref=e22] [cursor=pointer]: "?"
+  - main [ref=e23]:
+    - complementary [ref=e24]:
+      - generic [ref=e25]:
+        - generic [ref=e26]:
+          - paragraph [ref=e27]: Execution Tree
+          - heading "Run Trace" [level=2] [ref=e28]
+        - generic [ref=e29]: running
+      - generic [ref=e30]:
+        - generic [ref=e31]:
+          - generic [ref=e32]: Run ID
+          - strong [ref=e33]: 1f592566-49bf-499f-a3a0-f70af85d685a
+        - generic [ref=e34]:
+          - generic [ref=e35]: Context ID
+          - strong [ref=e36]: ctx-a1222d0b-9dca-4122-90cf-5e8bf0a8e0a3
+        - generic [ref=e37]:
+          - generic [ref=e38]: Last Activity
+          - strong [ref=e39]: 08:51:56
+        - generic [ref=e40]:
+          - generic [ref=e41]: Recent Runs
+          - combobox "Recent Runs" [ref=e42]:
+            - option "08:51:56 · Load Balancing · ctx ctx-a122…e0a3 · running · 1f592566…685a" [selected]
+      - generic [ref=e140]:
+        - 'button "Run started: 1f592566-49bf-499f-a3a0-f70af85d685a 08:51:56 active" [ref=e141] [cursor=pointer]':
+          - generic [ref=e142]: "Run started: 1f592566-49bf-499f-a3a0-f70af85d685a"
+          - generic [ref=e143]: 08:51:56
+          - generic [ref=e144]: active
+        - button "Orchestrator called -- active" [ref=e145] [cursor=pointer]:
+          - generic [ref=e146]: Orchestrator called
+          - generic [ref=e147]: "--"
+          - generic [ref=e148]: active
+        - 'button "Scenario selected: Load Balancing 08:51:56 complete" [ref=e149] [cursor=pointer]':
+          - generic [ref=e150]: "Scenario selected: Load Balancing"
+          - generic [ref=e151]: 08:51:56
+          - generic [ref=e152]: complete
+        - 'button "LLM call: load_balancing_semantic 08:51:56 active" [ref=e153] [cursor=pointer]':
+          - generic [ref=e154]: "LLM call: load_balancing_semantic"
+          - generic [ref=e155]: 08:51:56
+          - generic [ref=e156]: active
+      - button "Clear Trace" [ref=e48] [cursor=pointer]
+    - generic [ref=e49]:
+      - generic [ref=e50]:
+        - generic [ref=e52]:
+          - paragraph [ref=e53]: Live Topology
+          - heading "Traffic Through Kong" [level=2] [ref=e54]
+        - generic [ref=e56]:
+          - generic [ref=e57]: Current Stage
+          - strong [ref=e58]: Semantic match in progress
+          - paragraph [ref=e59]: Kong is comparing the prompt with semantic target descriptions before selecting a model.
+        - generic [ref=e60]:
+          - img [ref=e61]
+          - article [ref=e68]:
+            - button "View User Request details" [ref=e69] [cursor=pointer]: +
+            - generic [ref=e70]: Entry
+            - heading "User Request" [level=3] [ref=e71]
+            - paragraph [ref=e72]: Play starts one fixed escalation workflow.
+          - article [ref=e73]:
+            - button "View Dashboard details" [ref=e74] [cursor=pointer]: +
+            - generic [ref=e75]: Hosted UI
+            - heading "Dashboard" [level=3] [ref=e76]
+            - paragraph [ref=e77]: Served through Kong. Shows live path activation and trace state.
+          - article [ref=e78]:
+            - button "View Kong Gateway details" [ref=e79] [cursor=pointer]: +
+            - generic [ref=e80]: Gateway Core
+            - heading "Kong Gateway" [level=3] [ref=e81]
+            - paragraph [ref=e82]: Agent routing (A2A), LLM routing, Auth, ACLs, and MCP tool exposure.
+          - article [ref=e83]:
+            - button "View Orchestrator details" [ref=e84] [cursor=pointer]: +
+            - generic [ref=e85]: LangGraph
+            - heading "Orchestrator" [level=3] [ref=e86]
+            - paragraph [ref=e87]: Gets context, calls its LLM, invokes support then success, and assembles the final brief.
+          - article:
+            - button "View Support Agent details": +
+            - generic: Sub-agent
+            - heading "Support Agent" [level=3]
+            - paragraph: Uses incident and runbook tools, then summarizes the technical posture.
+          - article:
+            - button "View Success Agent details": +
+            - generic: Sub-agent
+            - heading "Success Agent" [level=3]
+            - paragraph: Uses reply and task tools, then produces the customer action plan.
+          - article [ref=e98]:
+            - button "View OpenAI model details" [ref=e99] [cursor=pointer]: +
+            - generic [ref=e100]: Primary
+            - heading "OpenAI 4o mini" [level=3] [ref=e101]
+            - paragraph [ref=e102]: Primary orchestrator model via AI Proxy Advanced.
+          - article [ref=e103]:
+            - button "View Gemini model details" [ref=e104] [cursor=pointer]: +
+            - generic [ref=e105]: Failover / Shared
+            - heading "Gemini 2.5 Flash" [level=3] [ref=e106]
+            - paragraph [ref=e107]: Orchestrator failover and the sub-agent LLM route.
+          - article:
+            - button "View Judge model details": +
+            - generic: Judge
+            - heading "Gemini 2.5 Flash" [level=3]
+            - paragraph: Scores the candidate response for accuracy before Kong returns the judged result to the orchestrator.
+          - article:
+            - button "View Redis details": +
+            - generic: Vector Store
+            - heading "Redis Vector DB" [level=3]
+            - paragraph: Used by Kong Semantic Guard and Semantic Cache policies to compare embeddings.
+          - article:
+            - button "View Lakera details": +
+            - generic: Policy Guard
+            - heading "Lakera" [level=3]
+            - paragraph: Used by Kong AI Lakera Guard to inspect prompts before they can reach the model.
+          - article:
+            - button "View AI PII Service details": +
+            - generic: Sanitization
+            - heading "AI PII Service" [level=3]
+            - paragraph: Used by Kong AI Sanitizer to anonymize sensitive data in the request and response path.
+          - article:
+            - button "View AI Prompt Compressor details": +
+            - generic: Compression
+            - heading "AI Compress Service" [level=3]
+            - paragraph: Used by Kong AI Prompt Compressor to shrink verbose prompts before the model call.
+          - article [ref=e108]:
+            - button "View Observability details" [ref=e109] [cursor=pointer]: +
+            - generic [ref=e110]: Observability
+            - heading "Grafana / Loki" [level=3] [ref=e111]
+            - paragraph [ref=e112]: Receives Kong gateway logs for live metrics, queries, and dashboard panels.
+          - article:
+            - button "View MCP Tools details": +
+            - generic: Tool Plane
+            - heading "MCP Tools" [level=3]
+            - paragraph: Kong exposes the backing REST API as tools, publishes the server in Konnect MCP Registry, and filters access per consumer group.
+          - article:
+            - button "View Backend APIs details": +
+            - generic: Upstream
+            - heading "Backend APIs" [level=3]
+            - paragraph: Mock account, incident, runbook, draft, and task endpoints reached through Kong.
+      - generic [ref=e123]:
+        - generic [ref=e125]:
+          - paragraph [ref=e126]: Selected Step
+          - 'heading "Run started: 1f592566-49bf-499f-a3a0-f70af85d685a" [level=2] [ref=e157]'
+        - generic [ref=e128]:
+          - generic [ref=e158]: 08:51:56
+          - generic [ref=e159]: active
+        - generic [ref=e130]:
+          - strong [ref=e131]: Summary
+          - paragraph [ref=e132]: Top-level workflow started for Load Balancing.
+        - generic [ref=e133]:
+          - generic [ref=e134]:
+            - strong [ref=e135]: Input
+            - generic [ref=e136]: "{ \"run_id\": \"1f592566-49bf-499f-a3a0-f70af85d685a\", \"context_id\": null, \"customer_id\": \"cust_acme\", \"account_name\": \"Acme Health\", \"issue_summary\": \"Customer reports a billing dispute and workflow-agent sync delays.\", \"product_issue\": \"workflow agent sync delays\", \"billing_issue\": \"billing overcharge on enterprise add-ons\", \"incident_id\": \"INC-1007\", \"governance_scenario\": \"load_balancing\", \"load_balancing_mode\": \"semantic\", \"load_balancing_prompt_preset\": \"creative_marketing\", \"semantic_cache_step\": \"single\", \"prompt_enhancement_mode\": \"decorated\", \"prompt_compression_mode\": \"rate\", \"prompt_compression_value\": 50, \"pii_sanitizer_mode\": \"placeholder\", \"rag_mode\": \"before\", \"lakera_mode\": \"content_moderation\", \"llm_judge_prompt_choice\": \"escalation\", \"llm_judge_user_prompt\": null, \"system_prompt\": null, \"user_prompt\": \"Draft creative launch messaging for a new Kong AI governance experience.\\nDeliverables:\\n1) One campaign concept title.\\n2) Three launch taglines.\\n3) A short event teaser for a customer summit.\\n4) Keep the tone polished, vivid, and marketing-forward.\" }"
+          - generic [ref=e137]:
+            - strong [ref=e138]: Output
+            - generic [ref=e139]: "-"
+  - dialog [ref=e160]:
+    - generic [ref=e161]:
+      - generic [ref=e162]:
+        - generic [ref=e163]:
+          - paragraph [ref=e164]: Scene
+          - heading "Customer Escalation Triage" [level=2] [ref=e165]
+        - button "Close" [active] [ref=e166] [cursor=pointer]
+      - paragraph [ref=e167]: A renewal-risk account reports a billing issue and a workflow sync issue. The UI stays focused on the topology and trace, while the form lives here in the scene popup.
+      - generic [ref=e168]:
+        - generic [ref=e169]: Choose a governance scenario
+        - generic [ref=e170]:
+          - generic [ref=e171] [cursor=pointer]:
+            - radio "Normal" [checked] [ref=e172]
+            - generic [ref=e173]: Normal
+          - generic [ref=e174] [cursor=pointer]:
+            - radio "Load Balancing" [ref=e175]
+            - generic [ref=e176]: Load Balancing
+          - generic [ref=e177] [cursor=pointer]:
+            - radio "AI Token Rate Limit" [ref=e178]
+            - generic [ref=e179]: AI Token Rate Limit
+          - generic [ref=e180] [cursor=pointer]:
+            - radio "Prompt Decorator" [ref=e181]
+            - generic [ref=e182]: Prompt Decorator
+          - generic [ref=e183] [cursor=pointer]:
+            - radio "Prompt Compression" [ref=e184]
+            - generic [ref=e185]: Prompt Compression
+          - generic [ref=e186] [cursor=pointer]:
+            - radio "Semantic Guard" [ref=e187]
+            - generic [ref=e188]: Semantic Guard
+          - generic [ref=e189] [cursor=pointer]:
+            - radio "Semantic Cache" [ref=e190]
+            - generic [ref=e191]: Semantic Cache
+          - generic [ref=e192] [cursor=pointer]:
+            - radio "LLM as Judge" [ref=e193]
+            - generic [ref=e194]: LLM as Judge
+          - generic [ref=e195] [cursor=pointer]:
+            - radio "PII Sanitization" [ref=e196]
+            - generic [ref=e197]: PII Sanitization
+          - generic [ref=e198] [cursor=pointer]:
+            - radio "RAG" [ref=e199]
+            - generic [ref=e200]: RAG
+          - generic [ref=e201] [cursor=pointer]:
+            - radio "Lakera Policy Guard" [ref=e202]
+            - generic [ref=e203]: Lakera Policy Guard
+      - generic [ref=e204]:
+        - generic [ref=e205]:
+          - text: Customer ID
+          - textbox "Customer ID" [ref=e206]: cust_acme
+        - generic [ref=e207]:
+          - text: Account Name
+          - textbox "Account Name" [ref=e208]: Acme Health
+        - generic [ref=e209]:
+          - text: Product Issue
+          - textbox "Product Issue" [ref=e210]: workflow agent sync delays
+        - generic [ref=e211]:
+          - text: Billing Issue
+          - textbox "Billing Issue" [ref=e212]: billing overcharge on enterprise add-ons
+        - generic [ref=e213]:
+          - text: Issue Summary
+          - textbox "Issue Summary" [ref=e214]: Customer reports a billing dispute and workflow-agent sync delays.
+        - generic [ref=e215]:
+          - text: Incident ID
+          - textbox "Incident ID" [ref=e216]: INC-1007
+      - button "Play" [ref=e218] [cursor=pointer]

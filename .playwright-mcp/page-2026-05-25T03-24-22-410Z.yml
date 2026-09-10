@@ -1,0 +1,152 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - img "Kong logo" [ref=e5]
+      - generic [ref=e6]:
+        - paragraph [ref=e7]: Kong AI Gateway Demo
+        - heading "Kong Unified Governance" [level=1] [ref=e8]
+        - paragraph [ref=e9]: "Kong governs the full data path: API traffic, events, agent orchestration, LLM routing, and MCP tool access all pass through the gateway with live trace visibility."
+        - generic "Kong governance highlights" [ref=e10]:
+          - generic [ref=e11]: AI routing and failover
+          - generic [ref=e12]: MCP tool exposure
+          - generic [ref=e13]: Agent AuthN/AuthZ
+          - generic [ref=e14]: Semantic and PII controls
+          - generic [ref=e15]: Live observability
+    - generic [ref=e16]:
+      - button "Scenes" [ref=e17] [cursor=pointer]
+      - button "View Diagrams" [ref=e18] [cursor=pointer]
+      - button "Reset Scene" [ref=e19] [cursor=pointer]
+      - button "Reset Observability" [ref=e20] [cursor=pointer]
+      - button "View Run Output" [ref=e21] [cursor=pointer]
+      - button "About this demo" [ref=e22] [cursor=pointer]: "?"
+  - main [ref=e23]:
+    - complementary [ref=e24]:
+      - generic [ref=e25]:
+        - generic [ref=e26]:
+          - paragraph [ref=e27]: Execution Tree
+          - heading "Run Trace" [level=2] [ref=e28]
+        - generic [ref=e29]: idle
+      - generic [ref=e30]:
+        - generic [ref=e31]:
+          - generic [ref=e32]: Run ID
+          - strong [ref=e33]: not started
+        - generic [ref=e34]:
+          - generic [ref=e35]: Context ID
+          - strong [ref=e36]: not started
+        - generic [ref=e37]:
+          - generic [ref=e38]: Last Activity
+          - strong [ref=e39]: not started
+        - generic [ref=e40]:
+          - generic [ref=e41]: Recent Runs
+          - combobox "Recent Runs" [ref=e42]:
+            - option "08:51:56 · Load Balancing · ctx ctx-a122…e0a3 · running · 1f592566…685a" [selected]
+      - generic [ref=e44]:
+        - heading "No run yet" [level=3] [ref=e45]
+        - paragraph [ref=e46]: Press Play to stream the execution tree in real time.
+      - button "Clear Trace" [ref=e48] [cursor=pointer]
+    - generic [ref=e49]:
+      - generic [ref=e50]:
+        - generic [ref=e52]:
+          - paragraph [ref=e53]: Live Topology
+          - heading "Traffic Through Kong" [level=2] [ref=e54]
+        - generic [ref=e56]:
+          - generic [ref=e57]: Current Stage
+          - strong [ref=e58]: Waiting for a run
+          - paragraph [ref=e59]: Press Play to see Kong route the request across AI, sub-agent, and MCP paths.
+        - generic [ref=e60]:
+          - img [ref=e61]
+          - article [ref=e68]:
+            - button "View User Request details" [ref=e69] [cursor=pointer]: +
+            - generic [ref=e70]: Entry
+            - heading "User Request" [level=3] [ref=e71]
+            - paragraph [ref=e72]: Play starts one fixed escalation workflow.
+          - article [ref=e73]:
+            - button "View Dashboard details" [ref=e74] [cursor=pointer]: +
+            - generic [ref=e75]: Hosted UI
+            - heading "Dashboard" [level=3] [ref=e76]
+            - paragraph [ref=e77]: Served through Kong. Shows live path activation and trace state.
+          - article [ref=e78]:
+            - button "View Kong Gateway details" [ref=e79] [cursor=pointer]: +
+            - generic [ref=e80]: Gateway Core
+            - heading "Kong Gateway" [level=3] [ref=e81]
+            - paragraph [ref=e82]: Agent routing (A2A), LLM routing, Auth, ACLs, and MCP tool exposure.
+          - article [ref=e83]:
+            - button "View Orchestrator details" [ref=e84] [cursor=pointer]: +
+            - generic [ref=e85]: LangGraph
+            - heading "Orchestrator" [level=3] [ref=e86]
+            - paragraph [ref=e87]: Gets context, calls its LLM, invokes support then success, and assembles the final brief.
+          - article [ref=e88]:
+            - button "View Support Agent details" [ref=e89] [cursor=pointer]: +
+            - generic [ref=e90]: Sub-agent
+            - heading "Support Agent" [level=3] [ref=e91]
+            - paragraph [ref=e92]: Uses incident and runbook tools, then summarizes the technical posture.
+          - article [ref=e93]:
+            - button "View Success Agent details" [ref=e94] [cursor=pointer]: +
+            - generic [ref=e95]: Sub-agent
+            - heading "Success Agent" [level=3] [ref=e96]
+            - paragraph [ref=e97]: Uses reply and task tools, then produces the customer action plan.
+          - article [ref=e98]:
+            - button "View OpenAI model details" [ref=e99] [cursor=pointer]: +
+            - generic [ref=e100]: Primary
+            - heading "OpenAI 4o mini" [level=3] [ref=e101]
+            - paragraph [ref=e102]: Primary orchestrator model via AI Proxy Advanced.
+          - article [ref=e103]:
+            - button "View Gemini model details" [ref=e104] [cursor=pointer]: +
+            - generic [ref=e105]: Failover / Shared
+            - heading "Gemini 2.5 Flash" [level=3] [ref=e106]
+            - paragraph [ref=e107]: Orchestrator failover and the sub-agent LLM route.
+          - article:
+            - button "View Judge model details": +
+            - generic: Judge
+            - heading "Gemini 2.5 Flash" [level=3]
+            - paragraph: Scores the candidate response for accuracy before Kong returns the judged result to the orchestrator.
+          - article:
+            - button "View Redis details": +
+            - generic: Vector Store
+            - heading "Redis Vector DB" [level=3]
+            - paragraph: Used by Kong Semantic Guard and Semantic Cache policies to compare embeddings.
+          - article:
+            - button "View Lakera details": +
+            - generic: Policy Guard
+            - heading "Lakera" [level=3]
+            - paragraph: Used by Kong AI Lakera Guard to inspect prompts before they can reach the model.
+          - article:
+            - button "View AI PII Service details": +
+            - generic: Sanitization
+            - heading "AI PII Service" [level=3]
+            - paragraph: Used by Kong AI Sanitizer to anonymize sensitive data in the request and response path.
+          - article:
+            - button "View AI Prompt Compressor details": +
+            - generic: Compression
+            - heading "AI Compress Service" [level=3]
+            - paragraph: Used by Kong AI Prompt Compressor to shrink verbose prompts before the model call.
+          - article [ref=e108]:
+            - button "View Observability details" [ref=e109] [cursor=pointer]: +
+            - generic [ref=e110]: Observability
+            - heading "Grafana / Loki" [level=3] [ref=e111]
+            - paragraph [ref=e112]: Receives Kong gateway logs for live metrics, queries, and dashboard panels.
+          - article [ref=e113]:
+            - button "View MCP Tools details" [ref=e114] [cursor=pointer]: +
+            - generic [ref=e115]: Tool Plane
+            - heading "MCP Tools" [level=3] [ref=e116]
+            - paragraph [ref=e117]: Kong exposes the backing REST API as tools, publishes the server in Konnect MCP Registry, and filters access per consumer group.
+          - article [ref=e118]:
+            - button "View Backend APIs details" [ref=e119] [cursor=pointer]: +
+            - generic [ref=e120]: Upstream
+            - heading "Backend APIs" [level=3] [ref=e121]
+            - paragraph [ref=e122]: Mock account, incident, runbook, draft, and task endpoints reached through Kong.
+      - generic [ref=e123]:
+        - generic [ref=e125]:
+          - paragraph [ref=e126]: Selected Step
+          - heading "No step selected" [level=2] [ref=e127]
+        - generic [ref=e129]: Click a trace row
+        - generic [ref=e130]:
+          - strong [ref=e131]: Summary
+          - paragraph [ref=e132]: The selected trace step will show timing, request input, and output payload here.
+        - generic [ref=e133]:
+          - generic [ref=e134]:
+            - strong [ref=e135]: Input
+            - generic [ref=e136]: "-"
+          - generic [ref=e137]:
+            - strong [ref=e138]: Output
+            - generic [ref=e139]: "-"
