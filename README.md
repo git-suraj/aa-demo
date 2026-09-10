@@ -113,10 +113,16 @@ The startup flow will:
 4. If you need to stop everything:
 
 ```bash
-docker compose --profile opik down
+./scripts/stop_self_hosted_demo.sh
 ```
 
-To delete the local control-plane database too, add `-v`; the next startup will recreate it and resync the declarative configuration.
+To delete the local control-plane database and all other Docker volumes too, run:
+
+```bash
+./scripts/stop_self_hosted_demo.sh --volumes
+```
+
+The next startup will recreate the local database and resync the configuration.
 
 ## Bring Konnect AI Gateway changes into the local deployment
 

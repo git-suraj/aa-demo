@@ -19,4 +19,16 @@ Set `KONG_LICENSE_DATA` to the one-line JSON Enterprise license in `.env` before
 
 The script generates a new local cluster certificate only when one does not already exist, starts the Postgres-backed hybrid topology, then syncs the converted Gateway configuration to `kong-cp`. No Konnect API, control plane, or managed data plane is used.
 
-To recreate the topology from scratch, stop it with Docker Compose and remove the `kong-database` volume. This deletes the local control-plane database and requires a new configuration sync on the next start.
+Stop the deployment while preserving its local database:
+
+```sh
+./scripts/stop_self_hosted_demo.sh
+```
+
+To recreate the topology from scratch, remove all local volumes:
+
+```sh
+./scripts/stop_self_hosted_demo.sh --volumes
+```
+
+The next start creates a fresh control-plane database and syncs the configuration again.

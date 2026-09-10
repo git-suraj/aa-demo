@@ -372,7 +372,7 @@ services:
       - kong-database:/var/lib/postgresql/data
 
   kong-migrations:
-    image: kong/kong-gateway:3.14.0.6
+    image: ${KONG_IMAGE_REPO:-kong}/${KONG_IMAGE_NAME:-kong-ai-gateway-dev}:${KONG_IMAGE_TAG:-2.0.1-rc.5}
     container_name: kong-migrations
     env_file:
       - .env
@@ -382,14 +382,13 @@ services:
       KONG_PG_DATABASE: kong
       KONG_PG_USER: kong
       KONG_PG_PASSWORD: ${KONG_PG_PASSWORD:-kong}
-      KONG_LICENSE_DATA: ${KONG_LICENSE_DATA:-}
     command: ["/bin/sh", "-ec", "kong migrations bootstrap || kong migrations up; kong migrations finish"]
     depends_on:
       kong-database:
         condition: service_healthy
 
   kong-cp:
-    image: kong/kong-gateway:3.14.0.6
+    image: ${KONG_IMAGE_REPO:-kong}/${KONG_IMAGE_NAME:-kong-ai-gateway-dev}:${KONG_IMAGE_TAG:-2.0.1-rc.5}
     container_name: kong-cp
     restart: unless-stopped
     env_file:
@@ -401,7 +400,6 @@ services:
       KONG_PG_DATABASE: kong
       KONG_PG_USER: kong
       KONG_PG_PASSWORD: ${KONG_PG_PASSWORD:-kong}
-      KONG_LICENSE_DATA: ${KONG_LICENSE_DATA:-}
       KONG_CLUSTER_MTLS: shared
       KONG_CLUSTER_CERT: /etc/kong/hybrid/cluster.crt
       KONG_CLUSTER_CERT_KEY: /etc/kong/hybrid/cluster.key
@@ -433,7 +431,7 @@ services:
         condition: service_completed_successfully
 
   kong-dp:
-    image: kong/kong-gateway:3.14.0.6
+    image: ${KONG_IMAGE_REPO:-kong}/${KONG_IMAGE_NAME:-kong-ai-gateway-dev}:${KONG_IMAGE_TAG:-2.0.1-rc.5}
     container_name: kong-dp
     restart: unless-stopped
     env_file:
@@ -441,7 +439,6 @@ services:
     environment:
       KONG_ROLE: data_plane
       KONG_DATABASE: "off"
-      KONG_LICENSE_DATA: ${KONG_LICENSE_DATA:-}
       KONG_TRACING_INSTRUMENTATIONS: all
       KONG_TRACING_SAMPLING_RATE: "1.0"
       KONG_CLUSTER_MTLS: shared
@@ -449,7 +446,9 @@ services:
       KONG_CLUSTER_TELEMETRY_ENDPOINT: kong-cp:8006
       KONG_CLUSTER_CERT: /etc/kong/hybrid/cluster.crt
       KONG_CLUSTER_CERT_KEY: /etc/kong/hybrid/cluster.key
-      KONG_LUA_SSL_TRUSTED_CERTIFICATE: /etc/kong/hybrid/cluster.crt
+      # Preserve the system CA bundle for upstream providers such as OpenAI.
+      # The cluster certificate above is used independently for hybrid mTLS.
+      KONG_LUA_SSL_TRUSTED_CERTIFICATE: system
       KONG_VITALS: "off"
       KONG_PROXY_LISTEN: 0.0.0.0:8000, 0.0.0.0:8443 ssl
       KONG_STATUS_LISTEN: 0.0.0.0:8100
@@ -493,6 +492,7 @@ services:
 
   opa:
     image: openpolicyagent/opa:1.9.0
+    platform: linux/amd64
     container_name: opa
     restart: unless-stopped
     command: ["run", "--server", "--addr=0.0.0.0:8181", "--config-file=/config/opa.yaml", "/policies"]

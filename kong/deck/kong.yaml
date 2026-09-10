@@ -536,6 +536,9 @@ services:
       - name: ui-route
         paths:
           - /
+        protocols:
+          - http
+          - https
         strip_path: false
 
   - name: ai-orchestrator-service
@@ -544,6 +547,9 @@ services:
       - name: ai-orchestrator-chat-route
         paths:
           - /ai/orchestrator/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -603,12 +609,18 @@ services:
       - name: ai-orchestrator-failover-demo-chat-route
         paths:
           - /ai/orchestrator-failover-demo/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
       - name: ai-orchestrator-failover-simulator-route
         paths:
           - /llm-failure-simulator
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -686,6 +698,9 @@ services:
       - name: ai-orchestrator-semantic-load-balance-demo-chat-route
         paths:
           - /ai/orchestrator-semantic-load-balance-demo/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -762,6 +777,9 @@ services:
       - name: ai-orchestrator-model-selector-chat-route
         paths:
           - /ai/orchestrator-model-selector/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -805,6 +823,9 @@ services:
       - name: ai-orchestrator-model-based-demo-chat-route
         paths:
           - /ai/orchestrator-model-based-demo/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -912,6 +933,9 @@ services:
       - name: ai-orchestrator-token-demo-chat-route
         paths:
           - /ai/orchestrator-token-demo/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -938,12 +962,16 @@ services:
                   output_cost: 0.60
       - name: ai-rate-limiting-advanced
         config:
-          llm_providers:
-            - name: openai
-              limit:
-                - 1
-              window_size:
-                - 300
+          policies:
+            - match:
+                - type: provider
+                  values:
+                    - openai
+                  partition_by: true
+              limits:
+                - limit: 1
+                  window_size: 300
+                  tokens_count_strategy: total_tokens
 
   - name: ai-orchestrator-consumer-cost-demo-service
     url: https://api.openai.com
@@ -951,6 +979,9 @@ services:
       - name: ai-orchestrator-consumer-cost-demo-chat-route
         paths:
           - /ai/orchestrator-consumer-cost-demo/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -982,6 +1013,9 @@ services:
       - name: ai-orchestrator-prompt-enhance-demo-chat-route
         paths:
           - /ai/orchestrator-prompt-enhance-demo/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -1026,6 +1060,9 @@ services:
       - name: ai-orchestrator-prompt-enhance-plain-demo-chat-route
         paths:
           - /ai/orchestrator-prompt-enhance-plain-demo/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -1057,6 +1094,9 @@ services:
       - name: ai-orchestrator-prompt-compress-ratio-demo-chat-route
         paths:
           - /ai/orchestrator-prompt-compress-ratio-demo/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -1100,6 +1140,9 @@ services:
       - name: ai-orchestrator-prompt-compress-token-demo-chat-route
         paths:
           - /ai/orchestrator-prompt-compress-token-demo/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -1143,6 +1186,9 @@ services:
       - name: ai-orchestrator-semantic-guard-demo-chat-route
         paths:
           - /ai/orchestrator-semantic-guard-demo/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -1213,6 +1259,9 @@ services:
       - name: ai-orchestrator-semantic-cache-demo-chat-route
         paths:
           - /ai/orchestrator-semantic-cache-demo/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -1263,6 +1312,9 @@ services:
       - name: ai-orchestrator-rag-before-demo-chat-route
         paths:
           - /ai/orchestrator-rag-before-demo/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -1294,6 +1346,9 @@ services:
       - name: ai-orchestrator-lakera-demo-chat-route
         paths:
           - /ai/orchestrator-lakera-demo/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -1331,6 +1386,9 @@ services:
       - name: ai-orchestrator-rag-after-demo-chat-route
         paths:
           - /ai/orchestrator-rag-after-demo/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -1389,6 +1447,9 @@ services:
       - name: ai-orchestrator-judge-demo-chat-route
         paths:
           - /ai/orchestrator-judge-demo/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -1473,6 +1534,9 @@ services:
       - name: ai-orchestrator-pii-placeholder-demo-chat-route
         paths:
           - /ai/orchestrator-pii-placeholder-demo/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -1513,6 +1577,9 @@ services:
       - name: ai-orchestrator-pii-synthetic-demo-chat-route
         paths:
           - /ai/orchestrator-pii-synthetic-demo/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -1553,6 +1620,9 @@ services:
       - name: ai-orchestrator-pii-block-demo-chat-route
         paths:
           - /ai/orchestrator-pii-block-demo/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -1594,6 +1664,9 @@ services:
       - name: ai-subagent-chat-route
         paths:
           - /ai/subagent/chat/completions
+        protocols:
+          - http
+          - https
         strip_path: false
         methods:
           - POST
@@ -1629,6 +1702,9 @@ services:
       - name: orchestrator-route
         paths:
           - /orchestrator
+        protocols:
+          - http
+          - https
         strip_path: true
     plugins:
       - name: key-auth
@@ -1661,6 +1737,9 @@ services:
       - name: support-agent-route
         paths:
           - /support-agent
+        protocols:
+          - http
+          - https
         strip_path: true
     plugins:
       - name: key-auth
@@ -1680,6 +1759,9 @@ services:
       - name: success-agent-route
         paths:
           - /success-agent
+        protocols:
+          - http
+          - https
         strip_path: true
     plugins:
       - name: key-auth
@@ -1699,10 +1781,16 @@ services:
       - name: mock-api-route
         paths:
           - /api
+        protocols:
+          - http
+          - https
         strip_path: true
       - name: mock-mcp-route
         paths:
           - /mock-mcp
+        protocols:
+          - http
+          - https
         strip_path: false
         plugins:
           - name: key-auth
@@ -1871,6 +1959,9 @@ services:
       - name: opa-mcp-route
         paths:
           - /opa-mcp
+        protocols:
+          - http
+          - https
         strip_path: false
         plugins:
           - name: key-auth
@@ -1988,13 +2079,16 @@ consumers:
     plugins:
       - name: ai-rate-limiting-advanced
         config:
-          llm_providers:
-            - name: openai
-              limit:
-                - 5
-              window_size:
-                - 300
-          tokens_count_strategy: cost
+          policies:
+            - match:
+                - type: provider
+                  values:
+                    - openai
+                  partition_by: true
+              limits:
+                - limit: 5
+                  window_size: 300
+                  tokens_count_strategy: cost
   - username: consumer2
     groups:
       - name: team-a
@@ -2003,13 +2097,16 @@ consumers:
     plugins:
       - name: ai-rate-limiting-advanced
         config:
-          llm_providers:
-            - name: openai
-              limit:
-                - 10
-              window_size:
-                - 300
-          tokens_count_strategy: cost
+          policies:
+            - match:
+                - type: provider
+                  values:
+                    - openai
+                  partition_by: true
+              limits:
+                - limit: 10
+                  window_size: 300
+                  tokens_count_strategy: cost
   - username: internal-router
     keyauth_credentials:
       - key: ${{ env "DECK_INTERNAL_ROUTER_KEY" }}
