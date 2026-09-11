@@ -3,11 +3,8 @@ _defaults:
     namespace: ai-gateway-identity-providers
 
 ai_gateway_identity_providers:
-  # AI Gateway 2.0 supports OIDC as an Identity Provider, not an AI Gateway
-  # Policy. The delegated MCP server attaches this provider through
-  # access.identity_providers. Its Advanced configuration exchanges the
-  # Keycloak source token, then the MCP Server reads the exchanged token's
-  # scope claim for native per-tool ACLs.
+  # The delegated MCP server attaches this provider to validate the token
+  # emitted by the native DataKit RFC 8693 exchange policy.
   - ai_gateway: !ref ai-gateway#id
     config:
       issuer: http://localhost:8085/realms/bank-demo
@@ -15,30 +12,13 @@ ai_gateway_identity_providers:
       # This scene authorizes directly from claims in the exchanged token;
       # it deliberately does not map the user to an AI Consumer.
       consumer_optional: true
-      # Keep the exchanged bearer token available to the MCP listener. The
-      # listener extracts delegated_tool_scopes for its native per-tool ACL,
-      # and forwards that exchanged token (not the browser source token) to
-      # the banking API for defence-in-depth authorization.
+      # Keep the exchanged bearer token available to the MCP listener and its
+      # Finance API upstream for defence-in-depth authorization.
       hide_credentials: false
       using_pseudo_issuer: true
       jwks_endpoint: http://keycloak:8080/realms/bank-demo/protocol/openid-connect/certs
-      token_endpoint: http://keycloak:8080/realms/bank-demo/protocol/openid-connect/token
-      client_id:
-        - kong-mcp-gateway
-      client_secret:
-        - !secret {source: !env AIGW_KEYCLOAK_KONG_MCP_CLIENT_SECRET}
-      client_auth:
-        - client_secret_post
       auth_methods:
         - bearer
-      token_exchange:
-        subject_token_issuers:
-          - issuer: http://localhost:8085/realms/bank-demo
-            conditions:
-              has_audience:
-                - kong-mcp-gateway
-        request:
-          empty_scopes: false
     display_name: Keycloak delegated-token exchange
     name: delegated-keycloak-oidc
     ref: delegated-keycloak-oidc

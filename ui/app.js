@@ -1607,18 +1607,18 @@ function policyDetailsForScenario(scenario) {
     },
     delegated_agent_access: {
       title: "Delegated Agent Access",
-      intro: "Keycloak issues separate employee and Expense Agent credentials. Kong DataKit exchanges them through RFC 8693, enforces the exchanged token's delegated_tool_scopes claim, and AI Gateway validates and proxies the permitted MCP call.",
+      intro: "Keycloak issues separate employee and Expense Agent credentials. The native AI Gateway 2.0 DataKit Policy exchanges them through RFC 8693, enforces the exchanged token's delegated_tool_scopes claim, and proxies the permitted MCP call.",
       plainEnglish: [
         "Suraj 1 has both mcp:portfolio:read and mcp:payments:initiate.",
         "Suraj 2 has only mcp:portfolio:read, so Kong denies initiate_payment before the banking API is reached.",
-        "DataKit evaluates delegated_tool_scopes from the exchanged token before the MCP listener; it does not rely on Kong Consumer Groups.",
+        "The AI Gateway 2.0 DataKit Policy evaluates delegated_tool_scopes before the MCP tool runs; it does not rely on Kong Consumer Groups.",
       ],
-      why: "It demonstrates human-on-behalf-of-agent access with a down-scoped token, gateway-side scope enforcement, and AI Gateway MCP validation.",
+      why: "It demonstrates human-on-behalf-of-agent access with a down-scoped token and native AI Gateway 2.0 scope enforcement.",
       config: [
         ["AI Gateway MCP Server", "delegated-portfolio-mcp (/delegated-mcp)"],
         ["OIDC auth strategy", "delegated-keycloak-oidc"],
-        ["Scope decision", "DataKit checks delegated_tool_scopes on the exchanged token"],
-        ["AI Gateway role", "Validates and proxies the resulting delegated JWT"],
+        ["Scope decision", "Native DataKit Policy checks delegated_tool_scopes on the exchanged token"],
+        ["MCP Server role", "Validates and proxies the resulting delegated JWT"],
         ["Portfolio tool scope", "mcp:portfolio:read"],
         ["Payment tool scope", "mcp:payments:initiate"],
       ],
@@ -3664,7 +3664,11 @@ function resetTopology() {
   hideTopologyActivity();
   updateScenarioInfraVisibility(activeScenario);
   markNode("kong", "active");
-  markNode("mcp", "active");
+  // Focused authorization scenes must begin with the tool plane inactive.
+  // The MCP node is activated only after the gateway allows a selected tool.
+  if (activeScenario !== "delegated_agent_access" && activeScenario !== "opa_authorization") {
+    markNode("mcp", "active");
+  }
 }
 
 function markNode(name, state) {
@@ -4349,7 +4353,7 @@ function renderFinalOutput(result) {
   const summaryCopy = lakeraProbe
     ? t("outputModal.summary.lakera", null, "This output comes from the Lakera policy guard probe and should show whether Kong blocked the prompt before the model call.")
     : delegatedProbe
-    ? "This focused probe sends the separate employee and Expense Agent tokens through Kong DataKit. DataKit exchanges them with Keycloak, then AI Gateway applies the delegated token's tool scopes to the selected MCP tool ACL."
+    ? "This focused probe sends the separate employee and Expense Agent tokens to the native AI Gateway 2.0 DataKit Policy. DataKit exchanges them with Keycloak, then authorizes the selected MCP tool from the delegated token's scopes."
     : ragProbe
     ? t("outputModal.summary.rag", null, "This answer comes from the orchestrator RAG probe using either the baseline route or the Kong RAG-injected route.")
     : loadBalancingProbe
@@ -4402,7 +4406,7 @@ function renderFinalOutput(result) {
           ? `
       <section class="output-section output-section-wide">
         <strong>Delegated Token and MCP Tool Authorization</strong>
-        <p class="output-section-copy">Kong DataKit exchanged the employee and Expense Agent tokens with Keycloak before AI Gateway evaluated the selected MCP tool's delegated-scope ACL.</p>
+        <p class="output-section-copy">The native AI Gateway 2.0 DataKit Policy exchanged the employee and Expense Agent tokens with Keycloak, then made the selected MCP tool's delegated-scope decision.</p>
         <div class="output-subgrid">
           <div class="output-subsection">
             <span>Authorization Decision</span>
@@ -5444,7 +5448,11 @@ function handleTraceEvent(payload) {
           payload,
         );
         exchangeNode.input = payload.output?.datakit_exchange_request;
-        exchangeNode.output = payload.output?.exchanged_token || { message: "No delegated-token evidence returned by the MCP upstream." };
+        exchangeNode.output = payload.output?.exchanged_token || (
+          allowed
+            ? { message: "The tool was allowed, but the Finance API did not return delegated-token evidence." }
+            : { message: "The native AI Gateway 2.0 DataKit Policy denied this request before the MCP server and Finance API were reached." }
+        );
         exchangeNode.status = "complete";
         setFlowStage(allowed ? "MCP tool allowed" : "MCP tool denied", payload.summary || "Kong completed delegated-scope tool authorization.");
         markNode("kong", allowed ? "complete" : "error");

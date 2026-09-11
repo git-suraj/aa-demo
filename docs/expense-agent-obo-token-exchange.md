@@ -46,8 +46,9 @@ Behind the scenes, the steps are:
 3. Kong reads the source token and the actor token supplied by the registered Expense Agent workload.
 4. A DataKit access-phase flow constructs the RFC 8693 request with `subject_token`, `actor_token`, target audience, and requested scopes, then calls Keycloak's token endpoint.
 5. Keycloak validates both inputs, evaluates its delegation and authorization policy, then issues a short-lived Finance token.
-6. DataKit replaces the upstream `Authorization` header with the delegated token and removes the actor-token header before proxying to the AI Gateway 2.0 MCP listener.
-7. Finance MCP authorizes the requested tool from the delegated token's scopes and records the human and agent context for audit.
+6. The AI Gateway 2.0 DataKit Policy checks the delegated token's tool scope. It returns `403` before MCP execution when the scope is absent.
+7. On allow, DataKit replaces the upstream `Authorization` header with the delegated token and removes the actor-token header before the Finance MCP tool is proxied.
+8. Finance records the human and agent context from the delegated token for audit.
 
 ## Tokens shown in the demo
 
@@ -118,7 +119,7 @@ The central line to narrate is:
 
 ## DataKit implementation boundary
 
-The AI Gateway 2.0 MCP-server entity does not provide a DataKit attachment point. The demo therefore puts DataKit at the Kong request boundary in front of the MCP listener. DataKit performs the exchange and writes the delegated bearer token to the upstream request. AI Gateway 2.0 then validates that delegated token and applies its MCP tool ACLs.
+The DataKit flow is a native AI Gateway 2.0 Policy named `delegated-datakit-token-exchange`, attached directly to the `delegated-portfolio-mcp` MCP Server. It performs the exchange, makes the per-tool scope decision, and writes the delegated bearer token to the upstream request. The MCP Server's OIDC Auth Strategy validates that delegated token before the Finance API receives it.
 
 RFC 8693 also defines a two-token delegation form:
 

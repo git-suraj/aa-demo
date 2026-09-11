@@ -495,10 +495,9 @@ services:
       PORT: "8000"
       KONG_PROXY_URL: http://ai-gateway-dp:8000
       KONG_AI_PROXY_URL: http://ai-gateway-dp:8000/ai/orchestrator
-      # The Expense Agent OBO scene enters through Kong DataKit. DataKit
-      # exchanges the subject and actor tokens, then proxies the MCP request
-      # to the native AI Gateway MCP listener with the delegated token.
-      DELEGATED_MCP_GATEWAY_URL: http://kong-dp:8000/expense-obo-mcp
+      # The native AI Gateway 2.0 MCP Server runs DataKit. It exchanges the
+      # subject and actor tokens, then invokes the permitted MCP tool.
+      DELEGATED_MCP_GATEWAY_URL: http://ai-gateway-dp:8000/delegated-mcp
       OPA_MCP_GATEWAY_URL: http://kong-dp:8000/opa-mcp
       AGENT_API_KEY: orchestrator-demo-key
       TRACE_WS_PATH: /trace

@@ -265,7 +265,7 @@ def scenario_summary(
         "rag": "Kong AI RAG Injector is expected to ground the answer using retrieved fictional support KB content when the after route is selected.",
         "pii_sanitizer": "Kong AI PII Sanitizer is expected to anonymize sensitive fields in both the request sent upstream and the response returned to the client.",
         "opa_authorization": "Kong sends the selected MCP tool call to Open Policy Agent, which allows the reply tool and denies the follow-up task before the MCP upstream is reached.",
-        "delegated_agent_access": "Kong DataKit evaluates the exchanged token's delegated scope before AI Gateway 2.0 validates and proxies the permitted MCP call.",
+        "delegated_agent_access": "The AI Gateway 2.0 DataKit Policy evaluates the exchanged token's delegated scope before the permitted MCP call is proxied.",
     }
     return summaries.get(scenario, summaries["normal"])
 
@@ -387,7 +387,13 @@ async def run_delegated_access_probe(request: PlayRequest, run_id: str, context_
         client_name="delegated-access-demo",
         run_id=run_id,
         context_id=context_id,
-        extra_headers={"x-actor-token": request.actor_access_token},
+        # The MCP conversion listener requires its session ID on tools/call.
+        # Pass the selected tool as a request attribute so the native DataKit
+        # policy can exchange and authorize the session before it is created.
+        extra_headers={
+            "x-actor-token": request.actor_access_token,
+            "x-delegated-tool": tool_name,
+        },
     )
     visible_tools: list[str] = []
     tool_result: dict[str, Any] = {}
@@ -396,10 +402,7 @@ async def run_delegated_access_probe(request: PlayRequest, run_id: str, context_
     try:
         discovered = await client.list_tools()
         visible_tools = [tool.get("name") for tool in discovered if isinstance(tool, dict) and tool.get("name")]
-        await emit_component(run_id, "mcp", "active", actor="delegated-agent", tool=tool_name)
-        await emit(run_id, "delegated_tool_authorized", actor="kong", summary="Kong DataKit evaluated the exchanged token scope before the selected MCP tool call.", output={"tool": tool_name, "visible_tools": visible_tools})
         tool_result = await client.call_tool(tool_name, tool_arguments)
-        await emit_component(run_id, "backend-api", "active", actor="delegated-agent", tool=tool_name)
     except httpx.HTTPStatusError as exc:
         status_code = exc.response.status_code
         denied_message = exc.response.text
@@ -413,6 +416,19 @@ async def run_delegated_access_probe(request: PlayRequest, run_id: str, context_
     allowed = denied_message is None and not bool(tool_result.get("isError"))
     if not allowed and denied_message is None and tool_result.get("isError"):
         denied_message = str(tool_result.get("content") or "MCP tool returned an error.")
+    if allowed:
+        await emit(
+            run_id,
+            "delegated_tool_authorized",
+            actor="kong",
+            summary="Kong DataKit evaluated the exchanged token scope before the selected MCP tool call.",
+            output={"tool": tool_name, "visible_tools": visible_tools},
+        )
+        # The MCP response is already available, but keep the successful tool
+        # hop visible long enough for the focused scene to explain it.
+        await emit(run_id, "tool_call_started", actor="delegated-agent", tool=tool_name, input=tool_arguments)
+        await asyncio.sleep(1.25)
+        await emit(run_id, "tool_call_completed", actor="delegated-agent", tool=tool_name, output=upstream_payload or tool_result)
     headline = f"{tool_name} allowed for {request.delegated_persona.replace('_', ' ').title()}" if allowed else f"{tool_name} denied for {request.delegated_persona.replace('_', ' ').title()}"
     probe = {
         "persona": request.delegated_persona,
@@ -436,8 +452,12 @@ async def run_delegated_access_probe(request: PlayRequest, run_id: str, context_
         summary="Kong allowed the MCP tool call after the DataKit scope check." if allowed else "Kong DataKit denied the MCP tool call before the MCP backend was reached.",
         output=probe,
     )
-    await emit_component(run_id, "mcp", "complete" if allowed else "error", actor="delegated-agent", tool=tool_name)
-    await emit_component(run_id, "backend-api", "complete" if allowed else "idle", actor="delegated-agent", tool=tool_name)
+    # A denied request terminates in the native DataKit Policy. Do not emit
+    # MCP/backend lifecycle events in that case: neither component received
+    # the request, and the focused-scene topology must remain inactive.
+    if allowed:
+        await emit_component(run_id, "mcp", "complete", actor="delegated-agent", tool=tool_name)
+        await emit_component(run_id, "backend-api", "complete", actor="delegated-agent", tool=tool_name)
     final_response = {
         "headline": headline,
         "governance_scenario": "delegated_agent_access",

@@ -26,6 +26,8 @@ class KongMCPClient:
         task_id: str | None = None,
         message_id: str | None = None,
         extra_headers: dict[str, str] | None = None,
+        reuse_session: bool = True,
+        tool_calls_use_session: bool = True,
     ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -37,6 +39,8 @@ class KongMCPClient:
         self.task_id = task_id
         self.message_id = message_id
         self.extra_headers = extra_headers or {}
+        self.reuse_session = reuse_session
+        self.tool_calls_use_session = tool_calls_use_session
         self.session_id: str | None = None
         self._initialized = False
 
@@ -66,7 +70,7 @@ class KongMCPClient:
 
         return payload
 
-    def _headers(self) -> dict[str, str]:
+    def _headers(self, include_session: bool = True) -> dict[str, str]:
         headers = {
             "content-type": "application/json",
             "accept": "application/json, text/event-stream",
@@ -76,7 +80,7 @@ class KongMCPClient:
             headers["authorization"] = f"Bearer {self.bearer_token}"
         elif self.api_key:
             headers["apikey"] = self.api_key
-        if self.session_id:
+        if include_session and self.reuse_session and self.session_id:
             headers["mcp-session-id"] = self.session_id
         if self.run_id:
             headers["x-demo-run-id"] = self.run_id
@@ -107,13 +111,13 @@ class KongMCPClient:
         payload = "\n".join(data_lines).strip()
         return json.loads(payload)
 
-    async def _request(self, payload: dict[str, Any]) -> dict[str, Any]:
+    async def _request(self, payload: dict[str, Any], include_session: bool = True) -> dict[str, Any]:
         payload = self._attach_trace_meta(payload)
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(self.base_url, headers=self._headers(), json=payload)
+            response = await client.post(self.base_url, headers=self._headers(include_session), json=payload)
             response.raise_for_status()
             session_id = response.headers.get("mcp-session-id")
-            if session_id:
+            if self.reuse_session and session_id:
                 self.session_id = session_id
             data = self._parse_response(response)
         if "error" in data:
@@ -166,5 +170,5 @@ class KongMCPClient:
             "method": "tools/call",
             "params": {"name": name, "arguments": arguments},
         }
-        data = await self._request(payload)
+        data = await self._request(payload, include_session=self.tool_calls_use_session)
         return data.get("result", {})

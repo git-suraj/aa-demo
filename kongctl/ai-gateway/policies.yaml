@@ -400,6 +400,150 @@ ai_gateway_policies:
     name: datakit
     ref: datakit
     type: datakit
+  # Native AI Gateway 2.0 DataKit policy for the Expense Agent OBO scene.
+  # It exchanges the human subject_token and workload actor_token with
+  # Keycloak, then applies the exchanged token's delegated tool scopes before
+  # the AI MCP Proxy can call the Finance API.
+  - ai_gateway: !ref ai-gateway#id
+    config:
+      debug: false
+      nodes:
+        - input: request.headers
+          inputs: null
+          jq: |
+            {
+              subject: (.authorization // .Authorization // "" | sub("^[Bb]earer[[:space:]]+"; "")),
+              actor: (."x-actor-token" // ."X-Actor-Token" // "")
+            }
+          name: EXTRACT_EXCHANGE_TOKENS
+          output: null
+          type: jq
+        - input: null
+          inputs: null
+          name: TOKEN_EXCHANGE_CLIENT
+          output: null
+          type: static
+          values:
+            client_secret: !env AIGW_KEYCLOAK_KONG_MCP_CLIENT_SECRET
+        - input: null
+          inputs:
+            client: TOKEN_EXCHANGE_CLIENT
+            tokens: EXTRACT_EXCHANGE_TOKENS
+          jq: |
+            . as $in
+            | "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange"
+              + "&client_id=kong-mcp-gateway"
+              + "&client_secret=" + ($in.client.client_secret | @uri)
+              + "&subject_token_type=urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Aaccess_token"
+              + "&subject_token=" + ($in.tokens.subject | @uri)
+              + "&actor_token_type=urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Aaccess_token"
+              + "&actor_token=" + ($in.tokens.actor | @uri)
+              + "&requested_token_type=urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Aaccess_token"
+              + "&audience=portfolio-mcp"
+              + "&scope=mcp%3Aportfolio%3Aread%20mcp%3Apayments%3Ainitiate"
+          name: BUILD_TOKEN_EXCHANGE_REQUEST
+          output: null
+          type: jq
+        - input: null
+          inputs: null
+          name: TOKEN_EXCHANGE_HEADERS
+          output: null
+          type: static
+          values:
+            content-type: application/x-www-form-urlencoded
+        - input: null
+          inputs:
+            body: BUILD_TOKEN_EXCHANGE_REQUEST
+            headers: TOKEN_EXCHANGE_HEADERS
+            http_proxy: null
+            https_proxy: null
+            proxy_auth_password: null
+            proxy_auth_username: null
+            query: null
+            url: null
+          method: POST
+          name: CALL_KEYCLOAK_TOKEN_EXCHANGE
+          output: null
+          outputs: null
+          ssl_server_name: null
+          ssl_verify: true
+          timeout: 10000
+          type: call
+          url: http://keycloak:8080/realms/bank-demo/protocol/openid-connect/token
+        - input: CALL_KEYCLOAK_TOKEN_EXCHANGE.body
+          inputs: null
+          jq: .access_token
+          name: EXTRACT_DELEGATED_TOKEN
+          output: null
+          type: jq
+        - input: EXTRACT_DELEGATED_TOKEN
+          inputs: null
+          name: DECODE_DELEGATED_TOKEN
+          output: null
+          type: jwt_decode
+        - input: null
+          inputs:
+            claims: DECODE_DELEGATED_TOKEN.payload
+            headers: request.headers
+          jq: |
+            . as $in
+            | (($in.claims.delegated_tool_scopes // "")
+                | if type == "array" then . else split(" ") end) as $scopes
+            | ($in.headers."x-delegated-tool" // $in.headers."X-Delegated-Tool" // "") as $tool
+            | if $tool != "" then
+                if $tool == "get_customer_portfolio" then ($scopes | index("mcp:portfolio:read") != null)
+                elif $tool == "initiate_payment" then ($scopes | index("mcp:payments:initiate") != null)
+                else false
+                end
+              else true
+              end
+          name: AUTHORIZE_DELEGATED_MCP_REQUEST
+          output: null
+          type: jq
+        - else:
+            - BUILD_DELEGATED_TOOL_DENIAL
+            - EXIT_DELEGATED_TOOL_DENIAL
+          input: AUTHORIZE_DELEGATED_MCP_REQUEST
+          name: BRANCH_ON_DELEGATED_TOOL_SCOPE
+          output: null
+          outputs: null
+          then:
+            - SET_DELEGATED_AUTHORIZATION
+          type: branch
+        - input: null
+          inputs: null
+          name: BUILD_DELEGATED_TOOL_DENIAL
+          output: null
+          type: static
+          values:
+            BODY: '{"jsonrpc":"2.0","error":{"code":-32003,"message":"Kong denied this MCP tool: the delegated token does not have the required scope."}}'
+            content-type: application/json
+        - input: null
+          inputs:
+            body: BUILD_DELEGATED_TOOL_DENIAL.BODY
+            headers: BUILD_DELEGATED_TOOL_DENIAL
+          name: EXIT_DELEGATED_TOOL_DENIAL
+          status: 403
+          type: exit
+          warn_headers_sent: null
+        - input: null
+          inputs:
+            original: request.headers
+            token: EXTRACT_DELEGATED_TOKEN
+          jq: |
+            . as $in
+            | $in.original
+            | .authorization = ("Bearer " + $in.token)
+            | del(.Authorization, ."x-actor-token", ."X-Actor-Token")
+          name: SET_DELEGATED_AUTHORIZATION
+          output: service_request.headers
+          type: jq
+      resources: null
+    display_name: Delegated MCP token exchange
+    enabled: true
+    name: delegated-datakit-token-exchange
+    ref: delegated-datakit-token-exchange
+    type: datakit
   - ai_gateway: !ref ai-gateway#id
     config:
       llm_format: openai

@@ -33,6 +33,8 @@ ai_gateway_mcp_servers:
       url: http://identity-bank-api:8000
     display_name: Delegated banking MCP
     name: delegated-portfolio-mcp
+    policies:
+      - delegated-datakit-token-exchange
     ref: delegated-portfolio-mcp
     tools:
       - annotations:
