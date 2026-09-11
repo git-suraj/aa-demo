@@ -491,7 +491,7 @@ html[lang="ko"] .topbar h1 {
 
 .topology {
   position: relative;
-  min-height: 1120px;
+  min-height: 1200px;
   border-radius: 24px;
   border: 1px solid var(--border);
   background:
@@ -573,6 +573,18 @@ html[lang="ko"] .topbar h1 {
   animation: none;
 }
 
+.topology-lines path.scenario-optional-line {
+  opacity: 0;
+  pointer-events: none;
+  filter: none;
+  animation: none;
+}
+
+.topology-lines path.scenario-optional-line.scenario-visible {
+  opacity: 0.72;
+  pointer-events: auto;
+}
+
 .topology-lines path.active {
   stroke: var(--green);
   opacity: 1;
@@ -610,6 +622,16 @@ html[lang="ko"] .topbar h1 {
   background: rgba(11, 13, 18, 0.94);
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.32);
   transition: transform 180ms ease, box-shadow 600ms ease, border-color 600ms ease;
+}
+
+.topology-node.scenario-optional {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.topology-node.scenario-optional.scenario-visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .topology-node.scenario-hidden {
@@ -719,6 +741,160 @@ html[lang="ko"] .topbar h1 {
   left: calc(50% - 110px);
 }
 
+.keycloak-node {
+  top: 56px;
+  left: calc(50% - 120px);
+  width: 230px;
+  border-color: rgba(243, 179, 84, 0.56);
+  background:
+    linear-gradient(180deg, rgba(243, 179, 84, 0.14), rgba(243, 179, 84, 0.04)),
+    rgba(11, 13, 18, 0.94);
+}
+
+.opa-node {
+  top: 78px;
+  left: calc(50% - 110px);
+  right: auto;
+  border-color: rgba(243, 179, 84, 0.62);
+  background:
+    linear-gradient(180deg, rgba(243, 179, 84, 0.15), rgba(243, 179, 84, 0.04)),
+    rgba(11, 13, 18, 0.94);
+}
+
+.topology.opa-focused-scene .kong-node {
+  top: 280px;
+}
+
+.delegated-access-card {
+  max-width: 760px;
+}
+
+.delegated-credentials {
+  margin: 16px 0;
+  padding: 13px 15px;
+  border: 1px solid rgba(124, 192, 255, 0.3);
+  border-radius: 12px;
+  background: rgba(124, 192, 255, 0.07);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.delegated-credentials strong {
+  display: block;
+  color: var(--text);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.delegated-credentials dl {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0 0;
+}
+
+.delegated-credentials dl > div,
+.delegated-credentials dd {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0;
+}
+
+.delegated-credentials dt {
+  min-width: 54px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.delegated-credentials code {
+  color: #c8e6ff;
+  font-family: var(--mono-font, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.76rem;
+}
+
+.delegated-credentials dd span {
+  color: var(--muted);
+}
+
+.delegated-expected-outcomes {
+  margin: 14px 0 16px;
+  padding: 13px 15px;
+  border: 1px solid rgba(131, 255, 94, 0.3);
+  border-radius: 12px;
+  background: rgba(131, 255, 94, 0.07);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.delegated-expected-outcomes strong {
+  display: block;
+  color: var(--text);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.delegated-expected-outcomes ul {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+.delegated-expected-outcomes b {
+  color: var(--text);
+}
+
+.delegated-expected-outcomes code {
+  color: #d6f8bd;
+  font-family: var(--mono-font, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.76rem;
+}
+
+.delegated-token-label {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.delegated-token-label span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.delegated-token {
+  min-height: 220px;
+  margin-top: 8px;
+  font-family: var(--mono-font, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.delegated-token-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.delegated-token-grid .delegated-token-label {
+  margin-top: 18px;
+}
+
+@media (max-width: 760px) {
+  .delegated-token-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .kong-node {
   top: 280px;
   left: calc(50% - 130px);
@@ -806,12 +982,12 @@ html[lang="ko"] .topbar h1 {
 
 .orchestrator-node {
   top: 248px;
-  left: 150px;
+  left: 120px;
 }
 
 .support-node {
   top: 485px;
-  left: 150px;
+  left: 120px;
 }
 
 .success-node {
@@ -885,12 +1061,17 @@ html[lang="ko"] .topbar h1 {
 }
 
 .mcp-node {
-  top: 700px;
-  right: 300px;
+  /* Grafana/Loki, MCP Tools, and Backend APIs form one non-overlapping row. */
+  top: auto;
+  bottom: 340px;
+  left: calc(50% + 110px);
+  right: auto;
+  width: 180px;
 }
 
 .backend-node {
-  top: 700px;
+  top: auto;
+  bottom: 340px;
   right: 14px;
   width: 200px;
 }
@@ -2298,7 +2479,7 @@ html[lang="ko"] .topbar h1 {
   }
 
   .topology {
-    min-height: 1180px;
+    min-height: 1240px;
   }
 
   .user-node {
@@ -2318,12 +2499,12 @@ html[lang="ko"] .topbar h1 {
 
   .orchestrator-node {
     top: 280px;
-    left: 50px;
+    left: 0;
   }
 
   .support-node {
     top: 560px;
-    left: 56px;
+    left: 20px;
   }
 
   .success-node {
@@ -2348,12 +2529,15 @@ html[lang="ko"] .topbar h1 {
   }
 
   .mcp-node {
-    top: 700px;
-    right: 270px;
+    top: auto;
+    bottom: 340px;
+    left: calc(50% + 92px);
+    right: auto;
   }
 
   .backend-node {
-    top: 700px;
+    top: auto;
+    bottom: 340px;
     right: 18px;
     width: 190px;
   }

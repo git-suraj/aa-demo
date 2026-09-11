@@ -1,0 +1,10 @@
+services:
+  audit:
+    url: http://opa-audit:8000
+
+decision_logs:
+  service: audit
+  resource: logs
+  reporting:
+    min_delay_seconds: 1
+    max_delay_seconds: 2

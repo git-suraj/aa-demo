@@ -75,6 +75,8 @@ services:
     volumes:
       - ./observability/otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
     depends_on:
+      opa:
+        condition: service_started
       jaeger:
         condition: service_started
 
@@ -412,6 +414,30 @@ services:
       mock-api:
         condition: service_started
 
+  opa:
+    image: openpolicyagent/opa:1.9.0
+    container_name: opa
+    restart: unless-stopped
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "--config-file=/config/opa.yaml", "/policies"]
+    expose:
+      - "8181"
+    volumes:
+      - ./opa/opa.yaml:/config/opa.yaml:ro
+      - ./opa/policies:/policies:ro
+    depends_on:
+      opa-audit:
+        condition: service_started
+
+  opa-audit:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+    container_name: opa-audit
+    command: ["uvicorn", "services.opa_audit.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    depends_on:
+      loki:
+        condition: service_started
+
   ai-gateway-dp:
     image: ${KONG_IMAGE_REPO:-kong}/${KONG_IMAGE_NAME:-kong-ai-gateway-dev}:${KONG_IMAGE_TAG:-2.0.1-rc.5}
     container_name: ai-gateway-dp
@@ -469,6 +495,11 @@ services:
       PORT: "8000"
       KONG_PROXY_URL: http://ai-gateway-dp:8000
       KONG_AI_PROXY_URL: http://ai-gateway-dp:8000/ai/orchestrator
+      # The Expense Agent OBO scene enters through Kong DataKit. DataKit
+      # exchanges the subject and actor tokens, then proxies the MCP request
+      # to the native AI Gateway MCP listener with the delegated token.
+      DELEGATED_MCP_GATEWAY_URL: http://kong-dp:8000/expense-obo-mcp
+      OPA_MCP_GATEWAY_URL: http://kong-dp:8000/opa-mcp
       AGENT_API_KEY: orchestrator-demo-key
       TRACE_WS_PATH: /trace
       OPENAI_MODEL: gpt-4o-mini
@@ -513,6 +544,33 @@ services:
     command: ["uvicorn", "services.mock_api.app:app", "--host", "0.0.0.0", "--port", "8000"]
     environment:
       PORT: "8000"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2.5
+    container_name: keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # Browser logins use this public URL; Kong uses explicit in-network
+      # JWKS and token endpoints in its OIDC identity provider.
+      KC_HOSTNAME: http://localhost:8085
+    ports:
+      - "8085:8080"
+    volumes:
+      - ./keycloak/bank-demo-realm.json:/opt/keycloak/data/import/bank-demo-realm.json:ro
+
+  identity-bank-api:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+    container_name: identity-bank-api
+    command: ["uvicorn", "services.identity_bank_api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      PORT: "8000"
+    depends_on:
+      keycloak:
+        condition: service_started
 
   ui:
     build:

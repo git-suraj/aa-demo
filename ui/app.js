@@ -20,6 +20,7 @@ const flowStageTitle = document.getElementById("flow-stage-title");
 const flowStageDetail = document.getElementById("flow-stage-detail");
 const topologyActivity = document.getElementById("topology-activity");
 const topologyActivityName = document.getElementById("topology-activity-name");
+const topology = document.querySelector(".topology");
 const traceTree = document.getElementById("trace-tree");
 const presetOptions = document.getElementById("preset-options");
 const challengeOptions = document.getElementById("challenge-options");
@@ -82,6 +83,15 @@ const ragAfterButton = document.getElementById("rag-after-button");
 const lakeraControls = document.getElementById("lakera-controls");
 const lakeraModeOptions = document.getElementById("lakera-mode-options");
 const lakeraPayload = document.getElementById("lakera-payload");
+const delegatedAccessControls = document.getElementById("delegated-access-controls");
+const delegatedPersonaOptions = document.getElementById("delegated-persona-options");
+const delegatedToolOptions = document.getElementById("delegated-tool-options");
+const delegatedLoginButton = document.getElementById("delegated-login-button");
+const delegatedRunButton = document.getElementById("delegated-run-button");
+const delegatedSourceToken = document.getElementById("delegated-source-token");
+const delegatedDecodedToken = document.getElementById("delegated-decoded-token");
+const delegatedActorToken = document.getElementById("delegated-actor-token");
+const delegatedActorDecodedToken = document.getElementById("delegated-actor-decoded-token");
 const noticeKicker = document.getElementById("notice-kicker");
 const noticeTitle = document.getElementById("notice-title");
 const noticeMessage = document.getElementById("notice-message");
@@ -112,6 +122,7 @@ const traceDetailResponse = document.getElementById("trace-detail-response");
 const nodes = {
   user: document.querySelector('[data-node="user"]'),
   ui: document.querySelector('[data-node="ui"]'),
+  keycloak: document.querySelector('[data-node="keycloak"]'),
   kong: document.querySelector('[data-node="kong"]'),
   orchestrator: document.querySelector('[data-node="orchestrator"]'),
   "support-agent": document.querySelector('[data-node="support-agent"]'),
@@ -121,6 +132,7 @@ const nodes = {
   "judge-model": document.querySelector('[data-node="judge-model"]'),
   redis: document.querySelector('[data-node="redis"]'),
   lakera: document.querySelector('[data-node="lakera"]'),
+  opa: document.querySelector('[data-node="opa"]'),
   compressor: document.querySelector('[data-node="compressor"]'),
   "pii-service": document.querySelector('[data-node="pii-service"]'),
   observability: document.querySelector('[data-node="observability"]'),
@@ -135,6 +147,8 @@ const selectorNodeDescription = selectorNode?.querySelector("p");
 const lineMap = {
   "user-ui": document.getElementById("line-user-ui"),
   "ui-kong": document.getElementById("line-ui-kong"),
+  "user-keycloak": document.getElementById("line-user-keycloak"),
+  "keycloak-kong": document.getElementById("line-keycloak-kong"),
   "kong-orchestrator": document.getElementById("line-kong-orchestrator"),
   "kong-support": document.getElementById("line-kong-support"),
   "kong-success": document.getElementById("line-kong-success"),
@@ -143,6 +157,7 @@ const lineMap = {
   "kong-judge": document.getElementById("line-kong-judge"),
   "kong-redis": document.getElementById("line-kong-redis"),
   "kong-lakera": document.getElementById("line-kong-lakera"),
+  "kong-opa": document.getElementById("line-kong-opa"),
   "kong-compress": document.getElementById("line-kong-compress"),
   "kong-pii": document.getElementById("line-kong-pii"),
   "kong-observability": document.getElementById("line-kong-observability"),
@@ -150,10 +165,68 @@ const lineMap = {
   "kong-backend": document.getElementById("line-kong-backend"),
 };
 
+const topologyLineLinks = {
+  "user-ui": ["user", "ui"],
+  "ui-kong": ["ui", "kong"],
+  "user-keycloak": ["user", "keycloak"],
+  "keycloak-kong": ["keycloak", "kong"],
+  "kong-orchestrator": ["kong", "orchestrator"],
+  "kong-support": ["kong", "support-agent"],
+  "kong-success": ["kong", "success-agent"],
+  "kong-openai": ["kong", "openai"],
+  "kong-gemini": ["kong", "gemini"],
+  "kong-judge": ["kong", "judge-model"],
+  "kong-redis": ["kong", "redis"],
+  "kong-lakera": ["kong", "lakera"],
+  "kong-opa": ["kong", "opa"],
+  "kong-compress": ["kong", "compressor"],
+  "kong-pii": ["kong", "pii-service"],
+  "kong-observability": ["kong", "observability"],
+  "kong-mcp": ["kong", "mcp"],
+  "kong-backend": ["kong", "backend-api"],
+};
+
+function syncTopologyLines() {
+  const svg = topology?.querySelector(".topology-lines");
+  if (!topology || !svg) return;
+
+  const topologyBounds = topology.getBoundingClientRect();
+  const viewBox = svg.viewBox.baseVal;
+  if (!topologyBounds.width || !topologyBounds.height || !viewBox.width || !viewBox.height) return;
+
+  const toViewBox = (x, y) => ({
+    x: ((x - topologyBounds.left) / topologyBounds.width) * viewBox.width,
+    y: ((y - topologyBounds.top) / topologyBounds.height) * viewBox.height,
+  });
+  const edgePoint = (source, target) => {
+    const sourceCenterX = source.left + source.width / 2;
+    const sourceCenterY = source.top + source.height / 2;
+    const targetCenterX = target.left + target.width / 2;
+    const targetCenterY = target.top + target.height / 2;
+    const dx = targetCenterX - sourceCenterX;
+    const dy = targetCenterY - sourceCenterY;
+    const scale = 1 / Math.max(Math.abs(dx) / (source.width / 2), Math.abs(dy) / (source.height / 2));
+    return toViewBox(sourceCenterX + dx * scale, sourceCenterY + dy * scale);
+  };
+
+  Object.entries(topologyLineLinks).forEach(([lineName, [sourceName, targetName]]) => {
+    const line = lineMap[lineName];
+    const source = nodes[sourceName];
+    const target = nodes[targetName];
+    if (!line || !source || !target) return;
+    const sourcePoint = edgePoint(source.getBoundingClientRect(), target.getBoundingClientRect());
+    const targetPoint = edgePoint(target.getBoundingClientRect(), source.getBoundingClientRect());
+    line.setAttribute("d", `M ${sourcePoint.x.toFixed(1)} ${sourcePoint.y.toFixed(1)} L ${targetPoint.x.toFixed(1)} ${targetPoint.y.toFixed(1)}`);
+  });
+}
+
 let traceSocket;
 let selectedTraceId = null;
 let selectedRunViewId = null;
 let traceState = createInitialTraceState();
+const sessionRunHistoryKey = "aa-demo.run-history.v1";
+const sessionRunHistoryLimit = 12;
+let sessionRunHistory = loadSessionRunHistory();
 let mcpAnimationTimer = null;
 let failoverResetTimer = null;
 let llmSuccessTimer = null;
@@ -343,6 +416,7 @@ sequenceFullscreenButton?.addEventListener("click", () => {
 
 window.addEventListener("resize", () => {
   fitSequenceModalDiagram();
+  window.requestAnimationFrame(syncTopologyLines);
 });
 
 function createInitialTraceState() {
@@ -581,6 +655,8 @@ function labelForScenario(scenario) {
     pii_sanitizer: "scenario.pii_sanitizer",
     rag: "scenario.rag",
     lakera_guard: "scenario.lakera_guard",
+    opa_authorization: "scenario.opa_authorization",
+    delegated_agent_access: "scenario.delegated_agent_access",
   };
   const fallbacks = {
     normal: "Normal",
@@ -595,6 +671,8 @@ function labelForScenario(scenario) {
     pii_sanitizer: "PII Sanitization",
     rag: "RAG",
     lakera_guard: "Lakera Policy Guard",
+    opa_authorization: "OPA Authorization",
+    delegated_agent_access: "Delegated Agent Access",
   };
   const key = keys[scenario] || keys.normal;
   return t(key, null, fallbacks[scenario] || fallbacks.normal);
@@ -602,7 +680,7 @@ function labelForScenario(scenario) {
 
 const challengeSceneMap = {
   change_management_observability: ["normal"],
-  compliance_abuse_prevention: ["prompt_enhancement", "semantic_guard", "pii_sanitizer", "lakera_guard"],
+  compliance_abuse_prevention: ["prompt_enhancement", "semantic_guard", "pii_sanitizer", "lakera_guard", "opa_authorization", "delegated_agent_access"],
   budget_management: ["prompt_compression", "semantic_cache"],
   hallucinations_relevancy: ["rag", "llm_as_judge"],
   traffic_management: ["load_balancing"],
@@ -694,6 +772,24 @@ const sceneSubsceneMap = {
       { value: "content_moderation", label: () => t("probe.lakera.mode.contentModeration", null, "Content Moderation") },
       { value: "prompt_defense", label: () => t("probe.lakera.mode.promptDefense", null, "Prompt Defense") },
       { value: "data_leak_prevention", label: () => t("probe.lakera.mode.dataLeak", null, "Data Leak Prevention") },
+    ],
+  },
+  opa_authorization: {
+    inputName: "opa_tool_choice",
+    hiddenField: "opa_tool",
+    defaultValue: "draft_customer_reply",
+    options: [
+      { value: "draft_customer_reply", label: () => "Draft customer reply — allowed" },
+      { value: "create_followup_task", label: () => "Create follow-up task — denied" },
+    ],
+  },
+  delegated_agent_access: {
+    inputName: "delegated_persona_choice",
+    hiddenField: "delegated_persona",
+    defaultValue: "suraj_1",
+    options: [
+      { value: "suraj_1", label: () => "Suraj 1 — portfolio and payment" },
+      { value: "suraj_2", label: () => "Suraj 2 — portfolio only" },
     ],
   },
 };
@@ -814,6 +910,9 @@ function applySubsceneChoice(scenario, subscene) {
   if (!config || !subscene) {
     return;
   }
+  const previousDelegatedPersona = scenario === "delegated_agent_access"
+    ? selectedDelegatedPersona()
+    : null;
   if (config.inputName) {
     setChoiceInput(config.inputName, subscene);
   }
@@ -842,6 +941,13 @@ function applySubsceneChoice(scenario, subscene) {
     renderRagPayloads();
   } else if (scenario === "lakera_guard") {
     renderLakeraPayload(true, subscene);
+  } else if (scenario === "delegated_agent_access") {
+    // The scene selector and the in-card selector represent the same person.
+    // Changing either must invalidate credentials issued for the other person.
+    if (previousDelegatedPersona && previousDelegatedPersona !== subscene) {
+      clearDelegatedCredentials();
+    }
+    updateDelegatedAccessForm();
   }
   renderSubsceneOptions(scenario);
   if (policyModal?.open && activeScenario === scenario) {
@@ -980,6 +1086,21 @@ function nodeInfoDetails(target, scenario = activeScenario || "normal") {
         ["Served through", "Kong"],
         ["Role", "Launch runs and visualize governed flow"],
       ]),
+    },
+    keycloak: {
+      title: "Keycloak",
+      intro: "Keycloak authenticates the selected Suraj persona through Authorization Code + PKCE and signs the source human-plus-agent access token.",
+      plainEnglish: [
+        "Suraj 1 receives portfolio-read and payment-initiate scopes.",
+        "Suraj 2 receives only the portfolio-read scope.",
+        "The browser displays the source token only because this is a demo; production UIs must not render bearer tokens.",
+      ],
+      why: "It makes the human identity, agent identity, and delegated authorization evidence visible before Kong processes the MCP call.",
+      config: [
+        ["Flow", "Authorization Code + PKCE"],
+        ["Source client", "suraj-1-copilot or suraj-2-copilot"],
+        ["Target client", "kong-mcp-gateway"],
+      ],
     },
     orchestrator: {
       title: t("nodeDetails.orchestrator.title", null, "Orchestrator"),
@@ -1467,6 +1588,41 @@ function policyDetailsForScenario(scenario) {
         ["Demo shape", "Before and after comparison"],
       ]),
     },
+    opa_authorization: {
+      title: "OPA Authorization",
+      intro: "Kong asks Open Policy Agent whether the selected MCP tool call is permitted before Kong invokes the tool.",
+      plainEnglish: [
+        "The Success Agent sends the selected tool call to Kong at /opa-mcp.",
+        "Kong sends the authenticated Consumer and parsed MCP JSON-RPC body to OPA.",
+        "OPA allow continues to AI MCP Proxy. OPA deny returns HTTP 403 from Kong and never reaches MCP.",
+      ],
+      why: "It demonstrates attribute-based MCP authorization at the gateway without putting policy code in the agent.",
+      config: [
+        ["Focused Route", "/opa-mcp"],
+        ["Plugin sequence", "key-auth → opa → ai-mcp-proxy"],
+        ["OPA decision path", "/v1/data/aa_demo/mcp/decision"],
+        ["Allowed tool", "draft_customer_reply"],
+        ["Denied tool", "create_followup_task (HTTP 403)"],
+      ],
+    },
+    delegated_agent_access: {
+      title: "Delegated Agent Access",
+      intro: "Keycloak issues separate employee and Expense Agent credentials. Kong DataKit exchanges them through RFC 8693, enforces the exchanged token's delegated_tool_scopes claim, and AI Gateway validates and proxies the permitted MCP call.",
+      plainEnglish: [
+        "Suraj 1 has both mcp:portfolio:read and mcp:payments:initiate.",
+        "Suraj 2 has only mcp:portfolio:read, so Kong denies initiate_payment before the banking API is reached.",
+        "DataKit evaluates delegated_tool_scopes from the exchanged token before the MCP listener; it does not rely on Kong Consumer Groups.",
+      ],
+      why: "It demonstrates human-on-behalf-of-agent access with a down-scoped token, gateway-side scope enforcement, and AI Gateway MCP validation.",
+      config: [
+        ["AI Gateway MCP Server", "delegated-portfolio-mcp (/delegated-mcp)"],
+        ["OIDC auth strategy", "delegated-keycloak-oidc"],
+        ["Scope decision", "DataKit checks delegated_tool_scopes on the exchanged token"],
+        ["AI Gateway role", "Validates and proxies the resulting delegated JWT"],
+        ["Portfolio tool scope", "mcp:portfolio:read"],
+        ["Payment tool scope", "mcp:payments:initiate"],
+      ],
+    },
     lakera_guard: {
       title: t("policies.lakeraGuard.title", null, "Lakera Policy Guard"),
       intro: t("policies.lakeraGuard.intro", null, "Kong treats this as a one-shot Lakera probe: one prompt goes in, and Lakera either blocks it or allows it before the model call."),
@@ -1708,6 +1864,94 @@ function formatTime(value) {
   return new Date(value).toLocaleTimeString();
 }
 
+function loadSessionRunHistory() {
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(sessionRunHistoryKey) || "[]");
+    return Array.isArray(stored) ? stored.filter((run) => run?.run_id && Array.isArray(run.events)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistSessionRunHistory() {
+  try {
+    sessionStorage.setItem(sessionRunHistoryKey, JSON.stringify(sessionRunHistory.slice(-sessionRunHistoryLimit)));
+  } catch (error) {
+    // A full or unavailable browser session store must not interrupt a demo run.
+    console.warn("Unable to save browser-session run history", error);
+  }
+}
+
+function redactedSessionEvent(value, fieldName = "") {
+  const sensitiveTokenFields = new Set([
+    "access_token",
+    "actor_access_token",
+    "source_access_token",
+    "subject_token",
+    "actor_token",
+    "raw_jwt",
+    "authorization",
+  ]);
+  if (sensitiveTokenFields.has(fieldName)) {
+    return "[redacted in browser history]";
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => redactedSessionEvent(item));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, redactedSessionEvent(item, key)]),
+    );
+  }
+  return value;
+}
+
+function recordSessionRunEvent(payload) {
+  if (!payload?.run_id) return;
+  let run = sessionRunHistory.find((candidate) => candidate.run_id === payload.run_id);
+  if (!run) {
+    run = {
+      run_id: payload.run_id,
+      context_id: payload.context_id || null,
+      governance_scenario: "normal",
+      summary: null,
+      started_at: null,
+      updated_at: null,
+      status: "running",
+      headline: null,
+      events: [],
+    };
+    sessionRunHistory.push(run);
+  }
+
+  run.events.push(redactedSessionEvent(payload));
+  run.updated_at = payload.timestamp || run.updated_at;
+  if (payload.type === "run_started") {
+    run.context_id = payload.context_id || run.context_id;
+    run.governance_scenario = payload.governance_scenario || run.governance_scenario;
+    run.summary = payload.summary || run.summary;
+    run.started_at = payload.timestamp || run.started_at;
+    run.status = "running";
+  } else if (payload.type === "final_response" || payload.type === "run_completed") {
+    run.headline = payload.output?.headline || payload.headline || run.headline;
+    if (payload.type === "run_completed") {
+      run.status = payload.output?.policy_outcome === "blocked" ? "blocked" : "complete";
+    }
+  }
+
+  sessionRunHistory = sessionRunHistory.slice(-sessionRunHistoryLimit);
+  persistSessionRunHistory();
+}
+
+function mergedRunHistory(serverRuns) {
+  const runs = new Map();
+  sessionRunHistory.forEach((run) => runs.set(run.run_id, run));
+  serverRuns.forEach((run) => runs.set(run.run_id, { ...runs.get(run.run_id), ...run }));
+  return [...runs.values()].sort(
+    (left, right) => new Date(right.updated_at || right.started_at || 0) - new Date(left.updated_at || left.started_at || 0),
+  );
+}
+
 function formatRunOptionLabel(run) {
   const parts = [];
   if (run.started_at) {
@@ -1785,7 +2029,7 @@ async function refreshRunHistory(preferredRunId = selectedRunViewId, { autoLoad 
     }
 
     const data = await response.json();
-    const runs = Array.isArray(data.runs) ? data.runs : [];
+    const runs = mergedRunHistory(Array.isArray(data.runs) ? data.runs : []);
     const selectedRunId = updateRunHistoryOptions(runs, preferredRunId);
 
     if (autoLoad && selectedRunId && !traceState.nodes.run) {
@@ -1834,11 +2078,16 @@ async function loadRunTrace(runId) {
       apikey: config.apiKey,
     },
   });
-  if (!response.ok) {
-    throw new Error(`Failed to load run ${runId} (${response.status})`);
+  let data;
+  if (response.ok) {
+    data = await response.json();
+  } else {
+    const savedRun = sessionRunHistory.find((run) => run.run_id === runId);
+    if (!savedRun) {
+      throw new Error(`Failed to load run ${runId} (${response.status})`);
+    }
+    data = savedRun;
   }
-
-  const data = await response.json();
   selectedRunViewId = runId;
   if (runHistorySelect) {
     runHistorySelect.value = runId;
@@ -1938,6 +2187,7 @@ function applyScenarioChoice(scenario) {
   const isPiiSanitizer = activeScenario === "pii_sanitizer";
   const isRag = activeScenario === "rag";
   const isLakera = activeScenario === "lakera_guard";
+  const isDelegatedAccess = activeScenario === "delegated_agent_access";
   const tokenLimitModeField = playForm.elements.namedItem("token_limit_mode");
   if (tokenLimitModeField) {
     tokenLimitModeField.value = currentTokenLimitMode();
@@ -1979,8 +2229,11 @@ function applyScenarioChoice(scenario) {
   if (lakeraControls) {
     lakeraControls.hidden = !isLakera;
   }
+  if (delegatedAccessControls) {
+    delegatedAccessControls.hidden = !isDelegatedAccess;
+  }
   if (playButton) {
-    playButton.hidden = isLoadBalancing || isTokenLimit || isPromptEnhancement || isPromptCompression || isSemanticCache || isPiiSanitizer || isRag;
+    playButton.hidden = isLoadBalancing || isTokenLimit || isPromptEnhancement || isPromptCompression || isSemanticCache || isPiiSanitizer || isRag || isDelegatedAccess;
   }
   normalOnlyFields.forEach((field) => {
     field.hidden = activeScenario !== "normal";
@@ -2499,8 +2752,197 @@ function renderLakeraPayload(forcePrompt = false, mode = currentLakeraMode()) {
   }
 }
 
+const delegatedPkceStorageKey = "aa-demo.delegated-pkce";
+const delegatedLoginMessageType = "aa-demo.delegated-login";
+
+function selectedDelegatedPersona() {
+  return document.querySelector('input[name="delegated_persona_choice"]:checked')?.value || "suraj_1";
+}
+
+function selectedDelegatedTool() {
+  return document.querySelector('input[name="delegated_tool_choice"]:checked')?.value || "get_customer_portfolio";
+}
+
+function delegatedClientId(persona = selectedDelegatedPersona()) {
+  return persona === "suraj_2" ? "suraj-2-copilot" : "suraj-1-copilot";
+}
+
+function delegatedUsername(persona = selectedDelegatedPersona()) {
+  return persona === "suraj_2" ? "suraj.2@example.com" : "suraj.1@example.com";
+}
+
+function clearDelegatedCredentials() {
+  if (delegatedSourceToken) delegatedSourceToken.value = "";
+  if (delegatedActorToken) delegatedActorToken.value = "";
+  renderDelegatedTokenViews();
+  updateDelegatedAccessForm();
+}
+
+function keycloakBrowserBaseUrl() {
+  return `${window.location.protocol}//${window.location.hostname}:8085`;
+}
+
+function decodeJwtForDisplay(token) {
+  if (!token) return null;
+  try {
+    const [encodedHeader, encodedPayload] = token.split(".");
+    if (!encodedHeader || !encodedPayload) throw new Error("A JWT must have three segments.");
+    const decodeSegment = (value) => {
+      const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
+      return JSON.parse(atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "=")));
+    };
+    return { header: decodeSegment(encodedHeader), claims: decodeSegment(encodedPayload) };
+  } catch (error) {
+    return { error: error.message || "Unable to decode this JWT." };
+  }
+}
+
+function renderDelegatedTokenViews() {
+  const sourceToken = delegatedSourceToken?.value.trim() || "";
+  const actorToken = delegatedActorToken?.value.trim() || "";
+  if (delegatedDecodedToken) {
+    delegatedDecodedToken.value = sourceToken ? JSON.stringify(decodeJwtForDisplay(sourceToken), null, 2) : "";
+  }
+  if (delegatedActorDecodedToken) {
+    delegatedActorDecodedToken.value = actorToken ? JSON.stringify(decodeJwtForDisplay(actorToken), null, 2) : "";
+  }
+}
+
+async function fetchDelegatedActorToken() {
+  const response = await fetch(`${config.apiBaseUrl}/delegation/actor-token`, {
+    method: "POST",
+    headers: { apikey: config.apiKey },
+  });
+  if (!response.ok) {
+    throw new Error(`Unable to obtain the Expense Agent token (${response.status}).`);
+  }
+  const payload = await response.json();
+  return payload.access_token || "";
+}
+
+async function publishDelegatedSourceToken(token, persona) {
+  const personaInput = document.querySelector(`input[name="delegated_persona_choice"][value="${persona}"]`);
+  if (personaInput) personaInput.checked = true;
+  if (delegatedSourceToken) delegatedSourceToken.value = token || "";
+  if (delegatedActorToken) delegatedActorToken.value = "";
+  renderDelegatedTokenViews();
+  applyScenarioChoice("delegated_agent_access");
+  updateDelegatedAccessForm();
+  try {
+    const actorToken = await fetchDelegatedActorToken();
+    if (!actorToken) throw new Error("Keycloak did not return an Expense Agent access token.");
+    if (delegatedActorToken) delegatedActorToken.value = actorToken;
+    renderDelegatedTokenViews();
+    updateDelegatedAccessForm();
+  } catch (error) {
+    setFlowStage("Expense Agent token unavailable", error.message);
+    showNotice({ kicker: "Keycloak", title: "Agent token could not be issued", message: error.message });
+  }
+}
+
+function updateDelegatedAccessForm() {
+  const persona = selectedDelegatedPersona();
+  const tool = selectedDelegatedTool();
+  const personaField = playForm.elements.namedItem("delegated_persona");
+  const toolField = playForm.elements.namedItem("delegated_tool");
+  const tokenField = playForm.elements.namedItem("source_access_token");
+  const actorTokenField = playForm.elements.namedItem("actor_access_token");
+  if (personaField) personaField.value = persona;
+  if (toolField) toolField.value = tool;
+  if (tokenField) tokenField.value = delegatedSourceToken?.value.trim() || "";
+  if (actorTokenField) actorTokenField.value = delegatedActorToken?.value.trim() || "";
+  if (delegatedRunButton) delegatedRunButton.disabled = !delegatedSourceToken?.value.trim() || !delegatedActorToken?.value.trim();
+}
+
+function randomPkceValue() {
+  const bytes = new Uint8Array(48);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+async function pkceChallenge(verifier) {
+  const bytes = new TextEncoder().encode(verifier);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return btoa(String.fromCharCode(...new Uint8Array(digest))).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+async function startDelegatedLogin() {
+  const persona = selectedDelegatedPersona();
+  // Open synchronously from the button click so browsers don't block the
+  // Keycloak page as a popup after the async PKCE challenge is calculated.
+  const loginPopup = window.open("", "keycloak-delegated-login", "popup=yes,width=540,height=760,resizable=yes,scrollbars=yes");
+  const verifier = randomPkceValue();
+  const state = randomPkceValue();
+  const redirectUri = `${window.location.origin}${window.location.pathname}`;
+  localStorage.setItem(delegatedPkceStorageKey, JSON.stringify({ persona, verifier, state, redirectUri }));
+  const params = new URLSearchParams({
+    client_id: delegatedClientId(persona),
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "openid",
+    // Always show Keycloak's login form. Without this, Keycloak's existing
+    // SSO session can silently issue a Suraj 1 token after Suraj 2 is chosen.
+    prompt: "login",
+    login_hint: delegatedUsername(persona),
+    state,
+    code_challenge: await pkceChallenge(verifier),
+    code_challenge_method: "S256",
+  });
+  const loginUrl = `${keycloakBrowserBaseUrl()}/realms/bank-demo/protocol/openid-connect/auth?${params}`;
+  if (loginPopup) {
+    loginPopup.location.assign(loginUrl);
+    loginPopup.focus();
+    return;
+  }
+  // A browser may block popups. Preserve the working full-page PKCE fallback.
+  window.location.assign(loginUrl);
+}
+
+async function consumeDelegatedLoginCallback() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("code");
+  const state = params.get("state");
+  if (!code || !state) return;
+  const saved = localStorage.getItem(delegatedPkceStorageKey);
+  if (!saved) return;
+  const pending = JSON.parse(saved);
+  if (pending.state !== state) throw new Error("Keycloak login state did not match this browser session.");
+  const body = new URLSearchParams({
+    grant_type: "authorization_code",
+    client_id: delegatedClientId(pending.persona),
+    code,
+    redirect_uri: pending.redirectUri,
+    code_verifier: pending.verifier,
+  });
+  const response = await fetch(`${keycloakBrowserBaseUrl()}/realms/bank-demo/protocol/openid-connect/token`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  if (!response.ok) throw new Error(`Keycloak code-to-token request failed (${response.status}).`);
+  const tokenResponse = await response.json();
+  localStorage.removeItem(delegatedPkceStorageKey);
+  window.history.replaceState({}, document.title, pending.redirectUri);
+  if (window.opener && !window.opener.closed) {
+    window.opener.postMessage(
+      { type: delegatedLoginMessageType, origin: window.location.origin, persona: pending.persona, accessToken: tokenResponse.access_token || "" },
+      window.location.origin,
+    );
+    window.close();
+    return;
+  }
+  await publishDelegatedSourceToken(tokenResponse.access_token || "", pending.persona);
+}
+
 function scenarioPromptOverrides(payload) {
   const scenario = payload.governance_scenario || activeScenario;
+  if (scenario === "delegated_agent_access") {
+    payload.delegated_persona = selectedDelegatedPersona();
+    payload.delegated_tool = selectedDelegatedTool();
+    payload.source_access_token = delegatedSourceToken?.value.trim() || "";
+    payload.actor_access_token = delegatedActorToken?.value.trim() || "";
+    return payload;
+  }
   if (scenario === "load_balancing") {
     const mode = payload.load_balancing_mode || currentLoadBalancingMode();
     const defaultPayload = loadBalancingPayloadForMode(mode);
@@ -2586,6 +3028,17 @@ function scenarioPromptOverrides(payload) {
 
 function scenarioRequestPayload(payload) {
   const scenario = payload.governance_scenario || activeScenario;
+  if (scenario === "delegated_agent_access") {
+    return {
+      governance_scenario: "delegated_agent_access",
+      delegated_persona: payload.delegated_persona,
+      delegated_tool: payload.delegated_tool,
+      source_access_token: payload.source_access_token,
+      actor_access_token: payload.actor_access_token,
+      run_id: payload.run_id,
+      context_id: payload.context_id,
+    };
+  }
   if (scenario === "load_balancing") {
     return {
       governance_scenario: "load_balancing",
@@ -2810,6 +3263,9 @@ function renderTraceTree() {
 }
 
 function labelForActor(actor) {
+  if (actor === "delegated-agent") {
+    return "Expense Agent";
+  }
   if (actor === "support-agent") {
     return "Support Agent";
   }
@@ -3273,6 +3729,12 @@ function applyComponentState(component, state) {
       markNode("kong", state);
       return;
     }
+    if (component === "opa") {
+      markNode("kong", state === "complete" ? "active" : state);
+      markNode("opa", state);
+      markLine("kong-opa", state);
+      return;
+    }
     if (component === "orchestrator" || component === "support-agent" || component === "success-agent") {
       activateActorPath(component, state);
       return;
@@ -3365,6 +3827,7 @@ function setScenarioVisibility(name, visible) {
   const targetNode = nodes[name];
   if (targetNode) {
     targetNode.classList.toggle("scenario-hidden", !visible);
+    targetNode.classList.toggle("scenario-visible", visible);
   }
 }
 
@@ -3372,6 +3835,7 @@ function setLineVisibility(name, visible) {
   const targetLine = lineMap[name];
   if (targetLine) {
     targetLine.classList.toggle("scenario-hidden", !visible);
+    targetLine.classList.toggle("scenario-visible", visible);
   }
 }
 
@@ -3385,15 +3849,20 @@ function updateScenarioInfraVisibility(scenario) {
   const showPii = scenario === "pii_sanitizer";
   const showCompression = scenario === "prompt_compression";
   const showLakera = scenario === "lakera_guard";
-  const focusedScenario = showLoadBalancing || showTokenLimit || showPromptEnhancement || showRedis || showJudge || showPii || showCompression || showLakera;
+  const showOpa = scenario === "opa_authorization";
+  const showDelegatedAccess = scenario === "delegated_agent_access";
+  const focusedScenario = showLoadBalancing || showTokenLimit || showPromptEnhancement || showRedis || showJudge || showPii || showCompression || showLakera || showOpa || showDelegatedAccess;
 
   configureOptionalModelNode(scenario);
+  topology?.classList.toggle("opa-focused-scene", showOpa);
 
   setScenarioVisibility("redis", showRedis);
   setLineVisibility("kong-redis", showRedis);
 
   setScenarioVisibility("lakera", showLakera);
   setLineVisibility("kong-lakera", showLakera);
+  setScenarioVisibility("opa", showOpa);
+  setLineVisibility("kong-opa", showOpa);
 
   setScenarioVisibility("judge-model", showJudge);
   setLineVisibility("kong-judge", showJudge);
@@ -3403,22 +3872,29 @@ function updateScenarioInfraVisibility(scenario) {
 
   setScenarioVisibility("pii-service", showPii);
   setLineVisibility("kong-pii", showPii);
-  setScenarioVisibility("openai", true);
-  setLineVisibility("kong-openai", true);
-  setScenarioVisibility("orchestrator", !showConsumerCostTokenLimit);
-  setLineVisibility("kong-orchestrator", !showConsumerCostTokenLimit);
+  setScenarioVisibility("keycloak", showDelegatedAccess);
+  setLineVisibility("user-keycloak", showDelegatedAccess);
+  setLineVisibility("keycloak-kong", showDelegatedAccess);
+  setScenarioVisibility("openai", !showDelegatedAccess && !showOpa);
+  setLineVisibility("kong-openai", !showDelegatedAccess && !showOpa);
+  setScenarioVisibility("orchestrator", !showConsumerCostTokenLimit && !showDelegatedAccess && !showOpa);
+  setLineVisibility("kong-orchestrator", !showConsumerCostTokenLimit && !showDelegatedAccess && !showOpa);
 
   setScenarioVisibility("gemini", scenario === "load_balancing" || scenario === "llm_failover" || (!focusedScenario));
   setLineVisibility("kong-gemini", scenario === "load_balancing" || scenario === "llm_failover" || (!focusedScenario));
 
   setScenarioVisibility("support-agent", !focusedScenario);
-  setScenarioVisibility("success-agent", !focusedScenario);
-  setScenarioVisibility("mcp", !focusedScenario);
-  setScenarioVisibility("backend-api", !focusedScenario);
+  setScenarioVisibility("success-agent", !focusedScenario || showOpa);
+  setScenarioVisibility("mcp", !focusedScenario || showDelegatedAccess || showOpa);
+  setScenarioVisibility("backend-api", !focusedScenario || showDelegatedAccess);
   setLineVisibility("kong-support", !focusedScenario);
-  setLineVisibility("kong-success", !focusedScenario);
-  setLineVisibility("kong-mcp", !focusedScenario);
-  setLineVisibility("kong-backend", !focusedScenario);
+  setLineVisibility("kong-success", !focusedScenario || showOpa);
+  setLineVisibility("kong-mcp", !focusedScenario || showDelegatedAccess || showOpa);
+  setLineVisibility("kong-backend", !focusedScenario || showDelegatedAccess);
+  setScenarioVisibility("ui", !showDelegatedAccess && !showOpa);
+  setLineVisibility("user-ui", !showDelegatedAccess && !showOpa);
+  setLineVisibility("ui-kong", !showDelegatedAccess && !showOpa);
+  window.requestAnimationFrame(syncTopologyLines);
 }
 
 function activateActorPath(actor, state = "active") {
@@ -3868,9 +4344,12 @@ function renderFinalOutput(result) {
   const judgeProbe = result.llm_judge_probe;
   const ragProbe = result.rag_probe;
   const lakeraProbe = result.lakera_probe;
-  const isFocusedProbe = Boolean(loadBalancingProbe || tokenLimitProbe || promptEnhancementProbe || result.semantic_cache_probe || promptCompressionProbe || piiProbe || judgeProbe || ragProbe || lakeraProbe);
+  const delegatedProbe = result.delegated_access_probe;
+  const isFocusedProbe = Boolean(loadBalancingProbe || tokenLimitProbe || promptEnhancementProbe || result.semantic_cache_probe || promptCompressionProbe || piiProbe || judgeProbe || ragProbe || lakeraProbe || delegatedProbe);
   const summaryCopy = lakeraProbe
     ? t("outputModal.summary.lakera", null, "This output comes from the Lakera policy guard probe and should show whether Kong blocked the prompt before the model call.")
+    : delegatedProbe
+    ? "This focused probe sends the separate employee and Expense Agent tokens through Kong DataKit. DataKit exchanges them with Keycloak, then AI Gateway applies the delegated token's tool scopes to the selected MCP tool ACL."
     : ragProbe
     ? t("outputModal.summary.rag", null, "This answer comes from the orchestrator RAG probe using either the baseline route or the Kong RAG-injected route.")
     : loadBalancingProbe
@@ -3918,6 +4397,40 @@ function renderFinalOutput(result) {
           </div>
         </div>
       </section>
+      ${
+        delegatedProbe
+          ? `
+      <section class="output-section output-section-wide">
+        <strong>Delegated Token and MCP Tool Authorization</strong>
+        <p class="output-section-copy">Kong DataKit exchanged the employee and Expense Agent tokens with Keycloak before AI Gateway evaluated the selected MCP tool's delegated-scope ACL.</p>
+        <div class="output-subgrid">
+          <div class="output-subsection">
+            <span>Authorization Decision</span>
+            ${renderDefinitionList([
+              ["Persona", delegatedProbe.persona],
+              ["Requested tool", delegatedProbe.requested_tool],
+              ["Outcome", delegatedProbe.policy_outcome],
+              ["Visible tools", (delegatedProbe.visible_tools || []).join(", ") || "None"],
+              ["Denied response", delegatedProbe.denial],
+            ])}
+          </div>
+          <div class="output-subsection">
+            <span>Source Token (PKCE)</span>
+            ${renderDefinitionList(Object.entries(delegatedProbe.source_token || {}).map(([key, value]) => [key, value]))}
+          </div>
+          <div class="output-subsection">
+            <span>Actor Token (Client Credentials)</span>
+            ${renderDefinitionList(Object.entries(delegatedProbe.actor_token || {}).map(([key, value]) => [key, value]))}
+          </div>
+          <div class="output-subsection">
+            <span>Decoded Exchanged Token Claims (Banking API)</span>
+            <p class="output-section-copy">Kong keeps the exchanged bearer token server-side. This is the presentation-safe decoded authorization evidence received by the banking API.</p>
+            ${renderDefinitionList(Object.entries(delegatedProbe.exchanged_token || {}).map(([key, value]) => [key, value]))}
+          </div>
+        </div>
+      </section>`
+          : ""
+      }
       ${
         loadBalancingProbe
           ? `
@@ -4409,6 +4922,7 @@ function connectTraceSocket() {
 
   traceSocket.addEventListener("message", (event) => {
     const payload = JSON.parse(event.data);
+    recordSessionRunEvent(payload);
     if (payload.type === "run_started" || payload.type === "run_completed") {
       void refreshRunHistory(selectedRunViewId || payload.run_id);
     }
@@ -4459,6 +4973,62 @@ function handleTraceEvent(payload) {
       setFlowStage(labelForScenario(payload.scenario), payload.summary || "Governance scenario selected.");
       break;
     }
+
+    case "delegated_token_issued":
+      {
+        const parentId = ensureActorRoot("delegated-agent");
+        const node = upsertSystemNode(
+          `delegated-subject-token:${payload.timestamp}`,
+          parentId,
+          "Employee subject token issued",
+          "Authorization Code + PKCE issued the browser token sent to Kong as subject_token.",
+          payload,
+        );
+        node.output = payload.output;
+        node.status = "complete";
+      }
+      setFlowStage("Employee token issued", "Keycloak completed Authorization Code + PKCE and returned the employee's source token.");
+      markNode("user", "complete");
+      markNode("keycloak", "complete");
+      markLine("user-keycloak", "complete");
+      break;
+
+    case "delegated_actor_token_issued": {
+      const parentId = ensureActorRoot("delegated-agent");
+      const node = upsertSystemNode(
+        `delegated-actor-token:${payload.timestamp}`,
+        parentId,
+        "Expense Agent actor token issued",
+        "Keycloak issued the expense-agent-01 client-credentials token used as actor_token.",
+        payload,
+      );
+      node.output = payload.output;
+      node.status = "complete";
+      setFlowStage("Expense Agent token issued", "The separate client-credentials workload token is ready for the exchange.");
+      markNode("keycloak", "complete");
+      markLine("user-keycloak", "complete");
+      break;
+    }
+
+    case "delegated_exchange_started":
+      {
+        const parentId = ensureActorRoot("delegated-agent");
+        const node = upsertSystemNode(
+          `datakit-token-exchange:${payload.timestamp}`,
+          parentId,
+          "DataKit RFC 8693 exchange request",
+          "Kong sends subject_token and actor_token to Keycloak, requesting a Finance-specific audience and scopes.",
+          payload,
+        );
+        node.input = payload.input;
+        node.output = payload.output;
+        node.status = "complete";
+      }
+      setFlowStage("DataKit token exchange", "Kong sends the employee subject token and the Expense Agent actor token to Keycloak.");
+      markNode("keycloak", "active");
+      markNode("kong", "active");
+      markLine("keycloak-kong", "active");
+      break;
 
     case "planning":
       ensureActorRoot("orchestrator");
@@ -4863,6 +5433,36 @@ function handleTraceEvent(payload) {
     }
 
     case "policy_event": {
+      if (payload.stage === "delegated_tool_allowed" || payload.stage === "delegated_tool_denied") {
+        const allowed = payload.stage === "delegated_tool_allowed";
+        const parentId = ensureActorRoot("delegated-agent");
+        const exchangeNode = upsertSystemNode(
+          `datakit-token-exchange-result:${payload.timestamp}`,
+          parentId,
+          "DataKit token exchange result",
+          "Keycloak returned the delegated Finance claims. The raw bearer token remains at Kong and is not copied into the MCP response.",
+          payload,
+        );
+        exchangeNode.input = payload.output?.datakit_exchange_request;
+        exchangeNode.output = payload.output?.exchanged_token || { message: "No delegated-token evidence returned by the MCP upstream." };
+        exchangeNode.status = "complete";
+        setFlowStage(allowed ? "MCP tool allowed" : "MCP tool denied", payload.summary || "Kong completed delegated-scope tool authorization.");
+        markNode("kong", allowed ? "complete" : "error");
+        markLine("keycloak-kong", "complete");
+        if (allowed) {
+          markNode("mcp", "complete");
+          markLine("kong-mcp", "complete");
+          markNode("backend-api", "complete");
+          markLine("kong-backend", "complete");
+        } else {
+          hideTopologyActivity();
+          nodes.mcp?.classList.remove("active", "complete", "error");
+          nodes["backend-api"]?.classList.remove("active", "complete", "error");
+          lineMap["kong-mcp"]?.classList.remove("active", "complete", "error");
+          lineMap["kong-backend"]?.classList.remove("active", "complete", "error");
+        }
+        break;
+      }
       const parentId = parentIdForPolicyEvent(payload);
       const decoratorPolicy =
         payload.stage === "prompt_decoration"
@@ -5557,6 +6157,7 @@ async function play(overrides = {}) {
         </section>
       `;
     }
+    await refreshRunHistory(payload.run_id);
   } catch (error) {
     const runAlreadyCompleted =
       Boolean(traceState.nodes["final-response"]) ||
@@ -5629,6 +6230,12 @@ async function resetObservability({ silent = false } = {}) {
       throw new Error(`Observability reset failed (${response.status})`);
     }
     const result = await response.json();
+    sessionRunHistory = [];
+    try {
+      sessionStorage.removeItem(sessionRunHistoryKey);
+    } catch {
+      // Keep the reset action successful even if browser session storage is unavailable.
+    }
     clearRunHistoryOptions();
     resetTopology();
     resetTraceState();
@@ -5917,6 +6524,37 @@ lakeraModeOptions?.addEventListener("change", (event) => {
   }
 });
 
+delegatedPersonaOptions?.addEventListener("change", () => {
+  clearDelegatedCredentials();
+  renderSubsceneOptions(activeScenario);
+});
+
+delegatedToolOptions?.addEventListener("change", () => {
+  updateDelegatedAccessForm();
+});
+
+delegatedSourceToken?.addEventListener("input", () => {
+  renderDelegatedTokenViews();
+  updateDelegatedAccessForm();
+});
+
+delegatedLoginButton?.addEventListener("click", () => {
+  void startDelegatedLogin();
+});
+
+delegatedRunButton?.addEventListener("click", () => {
+  updateDelegatedAccessForm();
+  sceneModal.close();
+  void play({ governance_scenario: "delegated_agent_access" });
+});
+
+window.addEventListener("message", (event) => {
+  if (event.origin !== window.location.origin || event.data?.type !== delegatedLoginMessageType) {
+    return;
+  }
+  void publishDelegatedSourceToken(event.data.accessToken, event.data.persona);
+});
+
 resetButton.addEventListener("click", () => {
   playForm.reset();
   const selectedScenario = scenarioOptions?.querySelector('input[name="scenario_choice"]:checked');
@@ -6009,6 +6647,10 @@ connectTraceSocket();
 void refreshRunHistory(undefined, { autoLoad: true });
 applyScenePreset("acme_default");
 applyScenarioChoice("normal");
+void consumeDelegatedLoginCallback().catch((error) => {
+  setFlowStage("Keycloak login failed", error.message);
+  showNotice({ kicker: "Keycloak", title: "Login could not complete", message: error.message });
+});
 resetTraceState();
 setRunState("idle");
 if (traceExplorerStatus) {

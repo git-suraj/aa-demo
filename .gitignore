@@ -1,4 +1,6 @@
 .env
+.env.enterprise
+.env.konnect
 __pycache__/
 *.pyc
 throwaway.zip
@@ -8,6 +10,8 @@ metering.md
 opik-integration-plan.local.md
 # Generated at container start (and locally for dev) from ui/locales/<lang>.yaml
 ui/i18n-active.js
+# Local browser-inspection snapshots and console logs
+.playwright-mcp/
 # Konnect data-plane certificates / private keys are per-user secrets (see .env.example)
 kong/certs/*.crt
 kong/certs/*.key
@@ -15,3 +19,6 @@ kong/certs/*.pem
 kong/ai-gateway-certs/*.crt
 kong/ai-gateway-certs/*.key
 kong/ai-gateway-certs/*.pem
+kong/onprem/certs/*.crt
+kong/onprem/certs/*.key
+kong/onprem/certs/*.pem

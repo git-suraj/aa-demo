@@ -2,6 +2,77 @@ _defaults:
   kongctl:
     namespace: ai-gateway-mcp-servers
 ai_gateway_mcp_servers:
+  # Focused Delegated Agent Access scene. Kong validates the Keycloak token
+  # through the OIDC identity provider. DataKit evaluates the exchanged
+  # token's user-specific `delegated_tool_scopes` claim before proxying each
+  # MCP call because AI Gateway 2.0 does not currently expose the validated
+  # token claims to its native oauth_access_token ACL context.
+  - access:
+      # Keep OIDC validation on the MCP listener. No Consumer or tool ACLs are
+      # configured: DataKit authorizes the exchanged token scope first.
+      acl_attribute_type: consumer
+      identity_providers:
+        - delegated-keycloak-oidc
+    ai_gateway: !ref ai-gateway#id
+    config:
+      logging:
+        audits: true
+        payloads: true
+      max_request_body_size: 8192
+      route:
+        paths:
+          - /delegated-mcp
+        preserve_host: false
+        protocols:
+          - http
+          - https
+        strip_path: false
+      server:
+        forward_client_headers: true
+        timeout: 10000
+      url: http://identity-bank-api:8000
+    display_name: Delegated banking MCP
+    name: delegated-portfolio-mcp
+    ref: delegated-portfolio-mcp
+    tools:
+      - annotations:
+          read_only_hint: true
+          title: Delegated Customer Portfolio
+        description: Get the portfolio only for the customer bound into the delegated token.
+        method: GET
+        name: get_customer_portfolio
+        parameters:
+          - description: Customer ID permitted by the delegated token
+            in: path
+            name: customer_id
+            required: true
+            schema:
+              type: string
+        path: /portfolio/{customer_id}
+      - annotations:
+          destructive_hint: true
+          title: Initiate Payment
+        description: Initiate a payment for the customer bound into the delegated token.
+        method: POST
+        name: initiate_payment
+        path: /payments/initiate
+        request_body:
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - customer_id
+                  - amount_usd
+                properties:
+                  customer_id:
+                    description: Customer ID permitted by the delegated token
+                    type: string
+                  amount_usd:
+                    description: Payment amount in USD
+                    type: number
+    type: conversion-listener
+
   - access:
       acl_attribute_type: consumer
       identity_providers:

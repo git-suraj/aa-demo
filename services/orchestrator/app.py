@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import os
 import time
@@ -30,7 +31,7 @@ from services.common.llm import OrchestratorLLM
 from services.common.kong_gateway_inventory import consumer_objects
 from services.common.kong_gateway_inventory import find_route_object
 from services.common.kong_gateway_inventory import load_kong_gateway_inventory
-from services.common.mcp_client import KongMCPClient
+from services.common.mcp_client import KongMCPClient, MCPError
 from services.common.trace import TraceBroker
 from services.common.trace_context import current_trace_headers
 from services.common.trace_context import reset_trace_headers
@@ -49,6 +50,11 @@ app.add_middleware(
 )
 
 KONG_PROXY_URL = os.getenv("KONG_PROXY_URL", "http://kong-dp:8000").rstrip("/")
+DELEGATED_MCP_GATEWAY_URL = os.getenv("DELEGATED_MCP_GATEWAY_URL", "http://ai-gateway-dp:8000/delegated-mcp").rstrip("/")
+OPA_MCP_GATEWAY_URL = os.getenv("OPA_MCP_GATEWAY_URL", "http://kong-dp:8000/opa-mcp").rstrip("/")
+KEYCLOAK_TOKEN_URL = os.getenv("KEYCLOAK_TOKEN_URL", "http://keycloak:8080/realms/bank-demo/protocol/openid-connect/token")
+EXPENSE_AGENT_CLIENT_ID = os.getenv("EXPENSE_AGENT_CLIENT_ID", "expense-agent-01")
+EXPENSE_AGENT_CLIENT_SECRET = os.getenv("EXPENSE_AGENT_CLIENT_SECRET", "expense-agent-demo-secret")
 AGENT_API_KEY = os.getenv("AGENT_API_KEY", "orchestrator-demo-key")
 os.environ.setdefault("KONG_AI_PROXY_URL", f"{KONG_PROXY_URL}/ai/orchestrator")
 llm = OrchestratorLLM()
@@ -96,6 +102,12 @@ class PlayRequest(BaseModel):
     pii_sanitizer_mode: str = "placeholder"
     rag_mode: str = "before"
     lakera_mode: str = "content_moderation"
+    opa_tool: str = "draft_customer_reply"
+    delegated_access_mode: str = "portfolio_allowed"
+    delegated_persona: str = "suraj_1"
+    delegated_tool: str = "get_customer_portfolio"
+    source_access_token: str | None = None
+    actor_access_token: str | None = None
     llm_judge_prompt_choice: str = "escalation"
     llm_judge_user_prompt: str | None = None
     system_prompt: str | None = None
@@ -252,8 +264,199 @@ def scenario_summary(
         "lakera_guard": "Kong AI Lakera Guard is expected to block unsafe prompts and return detector categories when Lakera finds a policy violation.",
         "rag": "Kong AI RAG Injector is expected to ground the answer using retrieved fictional support KB content when the after route is selected.",
         "pii_sanitizer": "Kong AI PII Sanitizer is expected to anonymize sensitive fields in both the request sent upstream and the response returned to the client.",
+        "opa_authorization": "Kong sends the selected MCP tool call to Open Policy Agent, which allows the reply tool and denies the follow-up task before the MCP upstream is reached.",
+        "delegated_agent_access": "Kong DataKit evaluates the exchanged token's delegated scope before AI Gateway 2.0 validates and proxies the permitted MCP call.",
     }
     return summaries.get(scenario, summaries["normal"])
+
+
+def decode_jwt_claims(token: str | None) -> dict[str, Any]:
+    """Decode a JWT payload only for presentation; Kong verifies the token."""
+    if not token:
+        return {}
+    try:
+        encoded_payload = token.split(".")[1]
+        encoded_payload += "=" * (-len(encoded_payload) % 4)
+        decoded = base64.urlsafe_b64decode(encoded_payload)
+        payload = json.loads(decoded)
+        return payload if isinstance(payload, dict) else {}
+    except (IndexError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
+        return {}
+
+
+def presentation_token_claims(token: str | None) -> dict[str, Any]:
+    claims = decode_jwt_claims(token)
+    return {
+        "subject": claims.get("preferred_username") or claims.get("sub"),
+        "agent": claims.get("acting_agent") or claims.get("azp"),
+        "issuer": claims.get("iss"),
+        "audience": claims.get("aud"),
+        "scope": claims.get("scope"),
+        "expires_at": claims.get("exp"),
+        "fingerprint": f"…{token[-12:]}" if token else None,
+    }
+
+
+@app.post("/delegation/actor-token")
+@app.post("/orchestrator/delegation/actor-token")
+async def delegation_actor_token() -> dict[str, Any]:
+    """Issue the workload credential without exposing its client secret to the browser."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(
+            KEYCLOAK_TOKEN_URL,
+            data={"grant_type": "client_credentials", "client_id": EXPENSE_AGENT_CLIENT_ID, "client_secret": EXPENSE_AGENT_CLIENT_SECRET},
+        )
+    if response.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"Keycloak could not issue the Expense Agent token ({response.status_code}).")
+    payload = response.json()
+    return {"access_token": payload.get("access_token", ""), "token_type": payload.get("token_type", "Bearer"), "expires_in": payload.get("expires_in")}
+
+
+def mcp_content_payload(result: dict[str, Any]) -> dict[str, Any]:
+    for content in result.get("content", []) if isinstance(result, dict) else []:
+        text = content.get("text") if isinstance(content, dict) else None
+        if not isinstance(text, str):
+            continue
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    return {}
+
+
+async def run_delegated_access_probe(request: PlayRequest, run_id: str, context_id: str, started: float) -> dict[str, Any]:
+    if not request.source_access_token:
+        raise HTTPException(status_code=400, detail="Login with Keycloak before running a delegated MCP tool.")
+    if not request.actor_access_token:
+        raise HTTPException(status_code=400, detail="The Expense Agent actor token is required before running a delegated MCP tool.")
+
+    tool_name = request.delegated_tool
+    # AI Gateway's conversion listener exposes an OpenAPI request body as the
+    # MCP `body` argument. Keep the JSON payload nested so it matches the
+    # generated tool schema sent by `tools/list`.
+    if tool_name == "initiate_payment":
+        tool_arguments: dict[str, Any] = {"body": {"customer_id": "C-1042", "amount_usd": 125.00}}
+    else:
+        # Conversion-listener names path arguments with a `path_` prefix.
+        tool_arguments = {"path_customer_id": "C-1042"}
+
+    source_claims = presentation_token_claims(request.source_access_token)
+    actor_claims = presentation_token_claims(request.actor_access_token)
+    exchange_request = {
+        "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+        "subject_token": request.source_access_token,
+        "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
+        "actor_token": request.actor_access_token,
+        "actor_token_type": "urn:ietf:params:oauth:token-type:access_token",
+        "audience": "portfolio-mcp",
+        "scope": "mcp:portfolio:read mcp:payments:initiate",
+    }
+    await emit_component(run_id, "user", "active", actor="delegated-agent")
+    await emit_component(run_id, "keycloak", "active", actor="delegated-agent")
+    await emit(
+        run_id,
+        "delegated_token_issued",
+        actor="keycloak",
+        summary="Keycloak issued Alice's source token through Authorization Code + PKCE.",
+        output={"raw_jwt": request.source_access_token, "decoded": source_claims},
+    )
+    await emit(
+        run_id,
+        "delegated_actor_token_issued",
+        actor="keycloak",
+        summary="Keycloak issued the expense-agent-01 workload token through client credentials.",
+        output={"raw_jwt": request.actor_access_token, "decoded": actor_claims},
+    )
+    await emit_component(run_id, "keycloak", "complete", actor="delegated-agent")
+    await emit_component(run_id, "kong", "active", actor="delegated-agent")
+    await emit(
+        run_id,
+        "delegated_exchange_started",
+        actor="kong",
+        summary="Kong DataKit sends Alice's subject token and the Expense Agent actor token to Keycloak for RFC 8693 exchange.",
+        input=exchange_request,
+        output={"requested_tool": tool_name, "subject": source_claims, "actor": actor_claims},
+    )
+
+    client = KongMCPClient(
+        base_url=DELEGATED_MCP_GATEWAY_URL,
+        api_key="",
+        bearer_token=request.source_access_token,
+        client_name="delegated-access-demo",
+        run_id=run_id,
+        context_id=context_id,
+        extra_headers={"x-actor-token": request.actor_access_token},
+    )
+    visible_tools: list[str] = []
+    tool_result: dict[str, Any] = {}
+    denied_message: str | None = None
+    status_code: int | None = None
+    try:
+        discovered = await client.list_tools()
+        visible_tools = [tool.get("name") for tool in discovered if isinstance(tool, dict) and tool.get("name")]
+        await emit_component(run_id, "mcp", "active", actor="delegated-agent", tool=tool_name)
+        await emit(run_id, "delegated_tool_authorized", actor="kong", summary="Kong DataKit evaluated the exchanged token scope before the selected MCP tool call.", output={"tool": tool_name, "visible_tools": visible_tools})
+        tool_result = await client.call_tool(tool_name, tool_arguments)
+        await emit_component(run_id, "backend-api", "active", actor="delegated-agent", tool=tool_name)
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code
+        denied_message = exc.response.text
+    except Exception as exc:  # MCP tool denials are represented as JSON-RPC errors.
+        denied_message = str(exc)
+
+    upstream_payload = mcp_content_payload(tool_result)
+    exchanged_claims = upstream_payload.get("token_evidence") if isinstance(upstream_payload, dict) else None
+    # An MCP JSON-RPC tool error is still a successful HTTP exchange; classify
+    # it as a failed call rather than claiming that the tool ran successfully.
+    allowed = denied_message is None and not bool(tool_result.get("isError"))
+    if not allowed and denied_message is None and tool_result.get("isError"):
+        denied_message = str(tool_result.get("content") or "MCP tool returned an error.")
+    headline = f"{tool_name} allowed for {request.delegated_persona.replace('_', ' ').title()}" if allowed else f"{tool_name} denied for {request.delegated_persona.replace('_', ' ').title()}"
+    probe = {
+        "persona": request.delegated_persona,
+        "requested_tool": tool_name,
+        "tool_arguments": tool_arguments,
+        "policy_outcome": "allowed" if allowed else "denied",
+        "status_code": status_code,
+        "source_token": source_claims,
+        "actor_token": actor_claims,
+        "datakit_exchange_request": exchange_request,
+        "exchanged_token": exchanged_claims,
+        "visible_tools": visible_tools,
+        "tool_result": upstream_payload or tool_result,
+        "denial": denied_message,
+    }
+    await emit(
+        run_id,
+        "policy_event",
+        actor="kong",
+        stage="delegated_tool_allowed" if allowed else "delegated_tool_denied",
+        summary="Kong allowed the MCP tool call after the DataKit scope check." if allowed else "Kong DataKit denied the MCP tool call before the MCP backend was reached.",
+        output=probe,
+    )
+    await emit_component(run_id, "mcp", "complete" if allowed else "error", actor="delegated-agent", tool=tool_name)
+    await emit_component(run_id, "backend-api", "complete" if allowed else "idle", actor="delegated-agent", tool=tool_name)
+    final_response = {
+        "headline": headline,
+        "governance_scenario": "delegated_agent_access",
+        "delegated_access_probe": probe,
+        "executive_brief": {"summary": "The focused delegated-access scene completed without invoking the normal multi-agent workflow."},
+        "recommended_summary": "Delegated MCP access was evaluated from the exchanged OAuth token scope.",
+        "available_tools": visible_tools,
+        "called_mcp_tools": [tool_name] if allowed else [],
+        "tool_plan_steps": [],
+        "mcp_tools_by_agent": {"orchestrator": [], "support-agent": [], "success-agent": []},
+    }
+    await emit(run_id, "final_response", headline=final_response["headline"], output=final_response)
+    await emit_component(run_id, "dashboard", "complete")
+    await emit_component(run_id, "kong", "complete" if allowed else "error")
+    await emit_component(run_id, "user", "complete")
+    await emit_component(run_id, "keycloak", "complete")
+    await emit_component(run_id, "observability", "complete")
+    await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=final_response)
+    return {"run_id": run_id, "context_id": context_id, "result": final_response}
 
 
 def ai_route_path_for_scenario(
@@ -1693,11 +1896,12 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         rag_mode,
         lakera_mode,
     )
+    trace_input = request.model_dump()
     await emit(
         run_id,
         "run_started",
         summary=request.issue_summary,
-        input=request.model_dump(),
+        input=trace_input,
         governance_scenario=scenario,
         context_id=context_id,
     )
@@ -1717,6 +1921,38 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         },
         context_id=context_id,
     )
+    if scenario == "delegated_agent_access":
+        return await run_delegated_access_probe(request, run_id, context_id, started)
+    if scenario == "opa_authorization":
+        tool = request.opa_tool
+        arguments = (
+            {"query_account_name": "Acme Health", "query_csm": "Maya Patel", "query_issue_summary": request.issue_summary, "query_renewal_risk": "high", "query_technical_summary": request.product_issue}
+            if tool == "draft_customer_reply"
+            else {"query_account_name": "Acme Health", "query_owner": "Maya Patel", "query_due_date": "2026-09-10", "query_action_items": "Confirm ownership"}
+        )
+        await emit_component(run_id, "success-agent", "active", stage="opa_tool_probe")
+        await emit_component(run_id, "opa", "active", stage="opa_authorization")
+        client = KongMCPClient(OPA_MCP_GATEWAY_URL, "success-demo-key", "success-agent", run_id=run_id, context_id=context_id)
+        try:
+            result = await client.call_tool(tool, arguments)
+            outcome, message = "allowed", "OPA allowed the MCP tool call."
+        except (MCPError, httpx.HTTPError) as exc:
+            result = {"message": str(exc)}
+            outcome, message = "denied", "OPA denied the MCP tool call before the upstream API was invoked."
+        await emit_component(run_id, "opa", "complete" if outcome == "allowed" else "error", stage="opa_authorization")
+        if outcome == "allowed":
+            # The MCP call is emitted only after Kong has received OPA's allow
+            # decision. A deny terminates at the OPA plugin and must leave the
+            # MCP node and path inactive in the focused scene.
+            await emit(run_id, "tool_call_started", actor="success-agent", tool=tool, input=arguments)
+            await emit(run_id, "tool_call_completed", actor="success-agent", tool=tool, output=result)
+        await emit(run_id, "policy_event", actor="success-agent", stage="opa_authorization", summary=message, input={"tool": tool, "arguments": arguments}, output={"outcome": outcome, "opa_result": result})
+        response = {"headline": f"OPA {outcome} {tool}", "governance_scenario": scenario, "policy_outcome": "blocked" if outcome == "denied" else "allowed", "opa_probe": {"tool": tool, "outcome": outcome, "input": arguments, "output": result}, "executive_brief": {"summary": message}, "recommended_summary": message, "available_tools": [tool], "called_mcp_tools": [tool] if outcome == "allowed" else [], "tool_plan_steps": [], "mcp_tools_by_agent": {"orchestrator": [], "support-agent": [], "success-agent": [tool] if outcome == "allowed" else []}}
+        await emit(run_id, "final_response", headline=response["headline"], output=response)
+        for component in ["success-agent", "kong", *( ["mcp"] if outcome == "allowed" else [])]:
+            await emit_component(run_id, component, "complete")
+        await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=response)
+        return {"run_id": run_id, "context_id": context_id, "result": response}
     if scenario == "load_balancing":
         prompts = build_load_balancing_probe_prompts(request)
         stage = f"load_balancing_{load_balancing_mode}"

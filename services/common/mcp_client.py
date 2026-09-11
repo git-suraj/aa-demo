@@ -20,19 +20,23 @@ class KongMCPClient:
         api_key: str,
         client_name: str,
         timeout: float = 20.0,
+        bearer_token: str | None = None,
         run_id: str | None = None,
         context_id: str | None = None,
         task_id: str | None = None,
         message_id: str | None = None,
+        extra_headers: dict[str, str] | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.client_name = client_name
         self.timeout = timeout
+        self.bearer_token = bearer_token
         self.run_id = run_id
         self.context_id = context_id
         self.task_id = task_id
         self.message_id = message_id
+        self.extra_headers = extra_headers or {}
         self.session_id: str | None = None
         self._initialized = False
 
@@ -64,11 +68,14 @@ class KongMCPClient:
 
     def _headers(self) -> dict[str, str]:
         headers = {
-            "apikey": self.api_key,
             "content-type": "application/json",
             "accept": "application/json, text/event-stream",
             **self._trace_headers(),
         }
+        if self.bearer_token:
+            headers["authorization"] = f"Bearer {self.bearer_token}"
+        elif self.api_key:
+            headers["apikey"] = self.api_key
         if self.session_id:
             headers["mcp-session-id"] = self.session_id
         if self.run_id:
@@ -79,6 +86,7 @@ class KongMCPClient:
             headers["x-demo-task-id"] = self.task_id
         if self.message_id:
             headers["x-demo-message-id"] = self.message_id
+        headers.update({key: value for key, value in self.extra_headers.items() if value})
         return headers
 
     def _parse_response(self, response: httpx.Response) -> dict[str, Any]:

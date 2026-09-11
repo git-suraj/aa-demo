@@ -101,18 +101,21 @@
               <svg class="topology-lines" viewBox="0 0 1400 1120" preserveAspectRatio="none" aria-hidden="true">
                 <path id="line-user-ui" d="M278 110 L590 110" />
                 <path id="line-ui-kong" d="M700 182 L700 282" />
+                <path id="line-user-keycloak" class="scenario-optional-line" d="M278 110 L580 110" />
+                <path id="line-keycloak-kong" class="scenario-optional-line" d="M700 182 L700 282" />
                 <path id="line-kong-orchestrator" d="M570 332 L380 332" />
                 <path id="line-kong-support" d="M620 456 L620 590 L380 590" />
                 <path id="line-kong-success" d="M660 456 L660 782 L404 782" />
                 <path id="line-kong-openai" d="M830 340 L1088 186" />
                 <path id="line-kong-gemini" d="M830 390 L1088 380" />
-                <path id="line-kong-judge" d="M830 430 L936 430 L936 560" />
-                <path id="line-kong-mcp" d="M730 456 L936 696" />
-                <path id="line-kong-backend" d="M830 404 L1186 780" />
-                <path id="line-kong-redis" d="M830 396 L968 396 L968 520 L1090 520" />
-                <path id="line-kong-lakera" d="M830 410 L1004 410 L1004 560 L1090 560" />
-                <path id="line-kong-compress" d="M830 428 L980 428 L980 620 L1090 620" />
-                <path id="line-kong-pii" d="M830 420 L942 420 L942 560 L1090 560" />
+                <path id="line-kong-judge" class="scenario-optional-line" d="M830 430 L936 430 L936 560" />
+                <path id="line-kong-mcp" d="M830 430 L860 860" />
+                <path id="line-kong-backend" d="M830 430 L1186 860" />
+                <path id="line-kong-redis" class="scenario-optional-line" d="M830 396 L968 396 L968 520 L1090 520" />
+                <path id="line-kong-lakera" class="scenario-optional-line" d="M830 410 L1004 410 L1004 560 L1090 560" />
+                <path id="line-kong-compress" class="scenario-optional-line" d="M830 428 L980 428 L980 620 L1090 620" />
+                <path id="line-kong-pii" class="scenario-optional-line" d="M830 420 L942 420 L942 560 L1090 560" />
+                <path id="line-kong-opa" class="scenario-optional-line" d="M700 280 L700 256" />
                 <path id="line-kong-observability" class="telemetry-line" d="M700 456 L700 860" />
               </svg>
 
@@ -128,6 +131,13 @@
                 <span class="node-label" data-i18n="nodes.ui.label">Hosted UI</span>
                 <h3 data-i18n="nodes.ui.title">Dashboard</h3>
                 <p data-i18n="nodes.ui.desc">Served through Kong. Shows live path activation and trace state.</p>
+              </article>
+
+              <article class="topology-node keycloak-node scenario-optional" data-node="keycloak">
+                <button class="node-info-button" data-info-target="keycloak" type="button" aria-label="View Keycloak details">+</button>
+                <span class="node-label">Identity Provider</span>
+                <h3>Keycloak</h3>
+                <p>Authenticates the employee, issues a separate agent token, and returns the delegated credential.</p>
               </article>
 
               <article class="topology-node kong-node gateway-core" data-node="kong">
@@ -191,6 +201,12 @@
                 <span class="node-label" data-i18n="nodes.lakera.label">Policy Guard</span>
                 <h3 data-i18n="nodes.lakera.title">Lakera</h3>
                 <p data-i18n="nodes.lakera.desc">Used by Kong AI Lakera Guard to inspect prompts before they can reach the model.</p>
+              </article>
+
+              <article class="topology-node opa-node scenario-optional" data-node="opa">
+                <span class="node-label">Policy Decision</span>
+                <h3>Open Policy Agent</h3>
+                <p>Decides whether Kong may invoke the selected MCP tool.</p>
               </article>
 
               <article class="topology-node pii-node scenario-optional" data-node="pii-service">
@@ -338,6 +354,11 @@
             <input type="hidden" name="pii_sanitizer_mode" value="placeholder" />
             <input type="hidden" name="rag_mode" value="before" />
             <input type="hidden" name="lakera_mode" value="content_moderation" />
+            <input type="hidden" name="opa_tool" value="draft_customer_reply" />
+            <input type="hidden" name="delegated_persona" value="suraj_1" />
+            <input type="hidden" name="delegated_tool" value="get_customer_portfolio" />
+            <input type="hidden" name="actor_access_token" value="" />
+            <input type="hidden" name="source_access_token" value="" />
           </form>
           <section id="load-balancing-controls" class="probe-controls" hidden>
             <article class="probe-card">
@@ -462,6 +483,51 @@
               <button id="semantic-cache-clear-button" class="secondary semantic-cache-clear" type="button" data-i18n="probe.semanticCache.clear">Clear Semantic Cache</button>
               <p class="semantic-cache-copy" data-i18n="probe.semanticCache.clearCopy">Clears all semantic cache entries so the next first request starts from a clean cache.</p>
             </div>
+          </section>
+          <section id="delegated-access-controls" class="probe-controls" hidden>
+            <article class="probe-card delegated-access-card">
+              <span class="probe-label">Expense Agent On-Behalf-Of Access</span>
+              <p class="probe-copy">Sign in as the employee, inspect the separate human and agent credentials, select a tool, then run the RFC 8693 exchange through Kong DataKit.</p>
+              <aside class="delegated-credentials" role="note">
+                <strong>Local demo Keycloak credentials</strong>
+                <dl>
+                  <div><dt>Suraj 1</dt><dd><code>suraj.1@example.com</code><span>/</span><code>suraj.1</code></dd></div>
+                  <div><dt>Suraj 2</dt><dd><code>suraj.2@example.com</code><span>/</span><code>suraj.2</code></dd></div>
+                </dl>
+              </aside>
+              <aside class="delegated-expected-outcomes" role="note">
+                <strong>Expected tool outcomes</strong>
+                <ul>
+                  <li><b>Suraj 1</b>: <code>get_customer_portfolio</code> ✓ and <code>initiate_payment</code> ✓</li>
+                  <li><b>Suraj 2</b>: <code>get_customer_portfolio</code> ✓</li>
+                  <li><b>Suraj 2</b>: <code>initiate_payment</code> ✕ — Kong DataKit returns 403 before MCP or the backend API.</li>
+                </ul>
+              </aside>
+              <div id="delegated-persona-options" class="preset-options">
+                <label class="preset-option"><input type="radio" name="delegated_persona_choice" value="suraj_1" checked /><span>Suraj 1 — portfolio and payment</span></label>
+                <label class="preset-option"><input type="radio" name="delegated_persona_choice" value="suraj_2" /><span>Suraj 2 — portfolio only</span></label>
+              </div>
+              <button id="delegated-login-button" class="secondary" type="button">Login with Keycloak</button>
+              <div class="delegated-token-grid">
+                <label class="delegated-token-label" for="delegated-source-token">Employee subject token <span>raw JWT · Authorization Code + PKCE</span>
+                  <textarea id="delegated-source-token" class="probe-payload delegated-token" rows="11" spellcheck="false" readonly placeholder="Login to publish the Authorization Code + PKCE access token."></textarea>
+                </label>
+                <label class="delegated-token-label" for="delegated-decoded-token">Decoded employee token <span>subject_token sent to Kong</span>
+                  <textarea id="delegated-decoded-token" class="probe-payload delegated-token" rows="11" spellcheck="false" readonly placeholder="The decoded JWT header and claims appear here after login."></textarea>
+                </label>
+                <label class="delegated-token-label" for="delegated-actor-token">Expense Agent actor token <span>raw JWT · client credentials</span>
+                  <textarea id="delegated-actor-token" class="probe-payload delegated-token" rows="11" spellcheck="false" readonly placeholder="The registered expense-agent-01 workload token appears after login."></textarea>
+                </label>
+                <label class="delegated-token-label" for="delegated-actor-decoded-token">Decoded agent token <span>actor_token sent to Kong</span>
+                  <textarea id="delegated-actor-decoded-token" class="probe-payload delegated-token" rows="11" spellcheck="false" readonly placeholder="The decoded workload identity appears here after login."></textarea>
+                </label>
+              </div>
+              <div class="preset-options" id="delegated-tool-options">
+                <label class="preset-option"><input type="radio" name="delegated_tool_choice" value="get_customer_portfolio" checked /><span>Get customer portfolio</span></label>
+                <label class="preset-option"><input type="radio" name="delegated_tool_choice" value="initiate_payment" /><span>Initiate payment</span></label>
+              </div>
+              <button id="delegated-run-button" class="primary" type="button" disabled>Run MCP Tool Call</button>
+            </article>
           </section>
           <section id="semantic-guard-controls" class="probe-controls" hidden>
             <article class="probe-card">
@@ -1285,6 +1351,6 @@
          English baked into the markup and app.js is used unchanged. -->
     <script src="/i18n-active.js"></script>
     <script defer src="/i18n.js?v=20260601-i18n-2"></script>
-    <script defer src="/app.js?v=20260629-i18n-fix-1"></script>
+    <script defer src="/app.js?v=20260911-expense-obo-datakit-1"></script>
   </body>
 </html>
