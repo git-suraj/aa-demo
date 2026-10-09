@@ -170,6 +170,12 @@ def main() -> None:
     parser.add_argument("--deck-file", default=str(DEFAULT_DECK_FILE))
     parser.add_argument("--service-name", default=DEFAULT_RAG_SERVICE_NAME)
     parser.add_argument("--container", default=DEFAULT_CONTAINER)
+    parser.add_argument(
+        "--skip-chunks",
+        type=int,
+        default=0,
+        help="Skip this many generated chunks before ingesting (useful when resuming a partial run).",
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -182,6 +188,11 @@ def main() -> None:
     chunks = build_chunks(source_dir)
     if not chunks:
         raise SystemExit("No KB chunks generated")
+    if args.skip_chunks < 0:
+        raise SystemExit("--skip-chunks must be zero or greater")
+    chunks = chunks[args.skip_chunks :]
+    if not chunks:
+        raise SystemExit("No chunks remain after --skip-chunks")
 
     plugin_id = args.plugin_id or resolve_plugin_id_from_deck(
         pathlib.Path(args.deck_file) if pathlib.Path(args.deck_file).is_absolute() else (REPO_ROOT / args.deck_file),

@@ -2,7 +2,7 @@ _defaults:
   kongctl:
     namespace: ai-gateway-identity-providers
 
-ai_gateway_identity_providers:
+ai_gateway_auth_strategies:
   # The delegated MCP server attaches this provider to validate the token
   # emitted by the native DataKit RFC 8693 exchange policy.
   - ai_gateway: !ref ai-gateway#id

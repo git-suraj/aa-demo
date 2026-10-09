@@ -5,6 +5,7 @@ This repo is a Konnect hybrid demo for showing how Kong governs both agent-to-ag
 ## Contents
 
 - [Prerequisites](#prerequisites)
+- [Configure the two Konnect control planes](#configure-the-two-konnect-control-planes)
 - [How to start the demo](#how-to-start-the-demo)
 - [What the project does](#what-the-project-does)
 - [Current UI](#current-ui)
@@ -84,6 +85,92 @@ What the startup flow expects:
   - Grafana `3001`
   - Opik `5173`
   - Jaeger `16686`
+
+## Configure the two Konnect control planes
+
+This branch intentionally runs two different data planes against two different
+Konnect control planes. Keep their `.env` values and certificate pairs separate.
+Using the AI Gateway 2.0 control-plane details for both data planes causes the
+legacy data plane to register there as an additional node and prevents the OPA
+scene from using its intended configuration.
+
+| Data plane | Used for | Control plane and `.env` variables | Certificate directory |
+| --- | --- | --- | --- |
+| `kong-dp` | The legacy Kong Gateway 3.14 routes, including the OPA MCP scene and RAG ingestion | The legacy control plane: `KONNECT_CONTROL_PLANE_NAME`, `KONNECT_CP_ID`, `KONG_CLUSTER_CONTROL_PLANE`, `KONG_CLUSTER_SERVER_NAME`, `KONG_CLUSTER_TELEMETRY_ENDPOINT`, and `KONG_CLUSTER_TELEMETRY_SERVER_NAME` | `kong/certs` |
+| `ai-gateway-dp` | Native AI Gateway 2.0 models, policies, MCP servers, and DataKit flows | The AI Gateway 2.0 control plane: `AIGW_GATEWAY_ID`, `AIGW_CLUSTER_CONTROL_PLANE`, `AIGW_CLUSTER_SERVER_NAME`, `AIGW_CLUSTER_TELEMETRY_ENDPOINT`, and `AIGW_CLUSTER_TELEMETRY_SERVER_NAME` | `kong/ai-gateway-certs` |
+
+### Update `.env`
+
+Start with `.env.example`, then replace every placeholder below with values from
+your own Konnect control planes. Do not copy the example IDs or host names into
+another environment.
+
+```dotenv
+# Konnect credentials used by decK, kongctl, and the bootstrap scripts.
+KONNECT_TOKEN=YOUR_KONNECT_PAT
+KONGCTL_DEFAULT_KONNECT_PAT=YOUR_KONNECT_PAT
+
+# Legacy Kong Gateway 3.14 control plane. This is where kong-dp connects.
+KONNECT_CONTROL_PLANE_NAME=YOUR_LEGACY_CONTROL_PLANE_NAME
+KONNECT_CP_ID=YOUR_LEGACY_CONTROL_PLANE_ID
+KONG_CLUSTER_CONTROL_PLANE=YOUR_LEGACY_CP_HOST:443
+KONG_CLUSTER_SERVER_NAME=YOUR_LEGACY_CP_HOST
+KONG_CLUSTER_TELEMETRY_ENDPOINT=YOUR_LEGACY_TELEMETRY_HOST:443
+KONG_CLUSTER_TELEMETRY_SERVER_NAME=YOUR_LEGACY_TELEMETRY_HOST
+
+# Native AI Gateway 2.0 control plane. This is where ai-gateway-dp connects.
+AIGW_GATEWAY_ID=YOUR_AI_GATEWAY_ID
+AIGW_CLUSTER_CONTROL_PLANE=YOUR_AI_GATEWAY_CP_HOST:443
+AIGW_CLUSTER_SERVER_NAME=YOUR_AI_GATEWAY_CP_HOST
+AIGW_CLUSTER_TELEMETRY_ENDPOINT=YOUR_AI_GATEWAY_TELEMETRY_HOST:443
+AIGW_CLUSTER_TELEMETRY_SERVER_NAME=YOUR_AI_GATEWAY_TELEMETRY_HOST
+```
+
+`KONNECT_CP_ID` must identify the same legacy control plane named by
+`KONNECT_CONTROL_PLANE_NAME`. `AIGW_GATEWAY_ID` is the native AI Gateway 2.0
+gateway entity in the separate AI Gateway control plane. Obtain the API and
+telemetry hosts from the matching control plane's data-plane connection details.
+
+The PAT must be able to manage the legacy control plane and the AI Gateway 2.0
+resources. Set `KONNECT_SYSTEM_TOKEN` as well if you run the Metering and
+Billing scenario.
+
+### Add the two certificate pairs
+
+Generate or download a Konnect-issued data-plane certificate pair from each
+control plane. Create the directories and place each pair exactly as follows:
+
+```text
+# Certificate issued for the legacy Kong Gateway 3.14 control plane
+kong/certs/tls.crt
+kong/certs/tls.key
+
+# Certificate issued for the native AI Gateway 2.0 control plane
+kong/ai-gateway-certs/tls.crt
+kong/ai-gateway-certs/tls.key
+```
+
+The pairs are not interchangeable. `docker-compose.yml` mounts `kong/certs`
+only into `kong-dp` and mounts `kong/ai-gateway-certs` only into
+`ai-gateway-dp`. Keep the certificate files out of Git and restrict access to
+the private keys:
+
+```bash
+chmod 600 kong/certs/tls.key kong/ai-gateway-certs/tls.key
+```
+
+### Verify the topology
+
+After `./scripts/start_rag_demo.sh` completes, verify both services locally:
+
+```bash
+docker compose ps kong-dp ai-gateway-dp
+```
+
+In Konnect, the legacy control plane should show `kong-dp` and the AI Gateway
+2.0 control plane should show only `ai-gateway-dp`. If both appear in the AI
+Gateway 2.0 control plane, recheck the `KONG_CLUSTER_*` values and the pair in
+`kong/certs` before restarting the stack.
 
 ## How to start the demo
 
@@ -1957,24 +2044,11 @@ KONNECT_TOKEN=YOUR_KONNECT_PAT
 KONNECT_CONTROL_PLANE_NAME=AA Demo
 ```
 
-### 3. Place the hybrid certs
+### 3. Place both data-plane certificate pairs
 
-```bash
-mkdir -p kong/certs
-```
-
-Put your Konnect data plane cert and key here:
-
-```text
-kong/certs/tls.crt
-kong/certs/tls.key
-```
-
-Important:
-
-- the startup script can create or reuse the Konnect control plane entity automatically
-- but your hybrid data plane still depends on the correct Konnect endpoint and certificates
-- `KONG_CLUSTER_CONTROL_PLANE`, `KONG_CLUSTER_SERVER_NAME`, `kong/certs/tls.crt`, and `kong/certs/tls.key` must match the control plane your data plane should join
+Follow [Configure the two Konnect control planes](#configure-the-two-konnect-control-planes).
+This branch needs one certificate pair under `kong/certs` for `kong-dp` and a
+different pair under `kong/ai-gateway-certs` for `ai-gateway-dp`.
 
 ### 4. Export the env vars for decK
 

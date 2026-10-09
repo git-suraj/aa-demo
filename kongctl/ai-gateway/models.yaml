@@ -47,7 +47,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -113,7 +113,7 @@ ai_gateway_models:
         weight: 50
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -187,7 +187,7 @@ ai_gateway_models:
         weight: 50
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -239,7 +239,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -288,7 +288,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -336,7 +336,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -384,7 +384,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -419,7 +419,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -467,7 +467,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -516,7 +516,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -565,7 +565,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -614,7 +614,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -663,7 +663,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -712,7 +712,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -761,7 +761,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -808,7 +808,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -857,7 +857,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -904,7 +904,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -953,7 +953,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -1002,7 +1002,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -1087,7 +1087,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -1149,7 +1149,7 @@ ai_gateway_models:
         weight: 50
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -1198,7 +1198,7 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
   - ai_gateway: !ref ai-gateway#id
     capabilities:
@@ -1247,5 +1247,5 @@ ai_gateway_models:
         weight: 100
     type: model
     access:
-      identity_providers:
+      auth_strategies:
         - demo-key-auth
